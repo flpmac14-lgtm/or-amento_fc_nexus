@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile
 
-from app.pipeline import processar_pdf, status_dependencias
+from app.pipeline import processar_pdf, processar_pdfs, status_dependencias
 
 app = FastAPI(
     title="FC Nexus - Extrator de Desenhos",
@@ -32,3 +32,23 @@ async def extract(file: UploadFile) -> dict:
         pdf_path = Path(tmp) / file.filename
         pdf_path.write_bytes(conteudo)
         return processar_pdf(str(pdf_path))
+
+
+@app.post("/extract-varios")
+async def extract_varios(files: list[UploadFile]) -> dict:
+    """Igual a /extract, mas aceita o desenho principal + anexos (ex: BOM
+    separada em formato SAP — ver app/extraction/bom_sap_export.py) num
+    orçamento só. Identificação sai do primeiro arquivo com confiança;
+    BOM é a soma da BOM de todos."""
+    for file in files:
+        if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"Envie apenas PDFs (recebido: {file.filename})")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        caminhos = []
+        for file in files:
+            conteudo = await file.read()
+            pdf_path = Path(tmp) / file.filename
+            pdf_path.write_bytes(conteudo)
+            caminhos.append(str(pdf_path))
+        return processar_pdfs(caminhos)

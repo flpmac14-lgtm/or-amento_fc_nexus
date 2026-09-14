@@ -103,6 +103,20 @@ def item_baixa_confianca():
     }
 
 
+def item_peca_comprada_com_peso_informado():
+    # Formato real de anexo de BOM SAP (ver bom_sap_export.py): peça
+    # acabada/comprada, sem geometria/norma — mas com peso já pronto.
+    return {
+        "item_numero": campo("0130"),
+        "descricao": campo("ANCHOR BOLT"),
+        "tipo_geometria": campo(None, confianca=0.0),
+        "material": campo("133823914", confianca=0.5),
+        "norma": campo(None, confianca=0.0),
+        "quantidade": campo(24),
+        "peso_kg": campo(0.5),
+    }
+
+
 def test_calcula_peso_de_chapa_perfil_e_barra_redonda():
     resultado_extracao = {
         "bom": [item_chapa_retangular_a36(), item_perfil_w310(), item_barra_redonda_sae1020()],
@@ -166,6 +180,22 @@ def test_item_com_baixa_confianca_entra_no_custo_mas_fica_sinalizado():
     assert len(resultado.entrada["materia_prima"]) == 1
     assert len(resultado.itens_para_revisao) == 1
     assert resultado.itens_para_revisao[0].confianca < 0.6
+
+
+def test_item_com_peso_informado_usa_direto_sem_geometria_e_vai_para_revisao_de_preco():
+    # Peça sem tipo_geometria/norma (acabada/comprada) mas com peso_kg
+    # informado pela fonte: o peso é usado direto (não tenta geometria),
+    # mas como não tem matéria-prima associada, cai em revisão de preço —
+    # comportamento correto, não é possível calcular R$/kg pra "ANCHOR BOLT".
+    resultado_extracao = {"bom": [item_peca_comprada_com_peso_informado()], "caracteristicas": {}}
+
+    resultado = montar_entrada_orcamento(resultado_extracao, estimativas={})
+
+    assert resultado.entrada["materia_prima"] == []
+    assert len(resultado.itens_para_revisao) == 1
+    revisao = resultado.itens_para_revisao[0]
+    assert revisao.item_numero == "0130"
+    assert "sem matéria-prima associada" in revisao.motivo
 
 
 def test_preco_kg_override_tem_prioridade_sobre_fixture():

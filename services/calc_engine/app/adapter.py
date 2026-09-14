@@ -72,6 +72,16 @@ def _calcular_peso_item(item: dict) -> tuple[float | None, str | None, float, st
         _confianca(item.get("quantidade")),
     ]
 
+    # Peso já informado pela fonte (ex: anexo de BOM em formato SAP, que
+    # traz "Weight KG/unit" pronto pra peças acabadas/compradas — ver
+    # services/extractor/app/extraction/bom_sap_export.py) — usa direto em
+    # vez de tentar calcular por geometria, que esses itens não têm.
+    peso_unitario_informado = _valor(item.get("peso_kg"))
+    if peso_unitario_informado is not None:
+        peso_total = peso_unitario_informado * quantidade
+        confiancas.append(_confianca(item.get("peso_kg")))
+        return peso_total, f"{peso_unitario_informado:.3f} kg/un (informado) × qtd {quantidade} = {peso_total:.2f} kg", _media(confiancas), None
+
     if tipo is None:
         return None, None, 0.0, "Tipo de geometria não identificado no desenho"
 
@@ -162,9 +172,11 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         )
 
         if preco_kg is None:
-            itens_para_revisao.append(
-                ItemParaRevisao(item_numero, f"Sem preço/kg cadastrado para {norma} ({tipo})", confianca_geometria)
-            )
+            if norma is None and tipo is None:
+                motivo = "Peça sem matéria-prima associada (acabada/comprada/subcontratada) — precisa de preço manual"
+            else:
+                motivo = f"Sem preço/kg cadastrado para {norma} ({tipo})"
+            itens_para_revisao.append(ItemParaRevisao(item_numero, motivo, confianca_geometria))
             continue
 
         materia_prima.append(

@@ -60,6 +60,7 @@ def orcamento(entrada: dict) -> dict:
 @app.post("/orcamento-de-pdf")
 async def orcamento_de_pdf(
     file: UploadFile,
+    anexos: list[UploadFile] | None = None,
     peso_liquido_kg: float | None = None,
     area_pintura_m2: float | None = None,
     quantidade_posicoes_engenharia: float | None = None,
@@ -69,14 +70,23 @@ async def orcamento_de_pdf(
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
 
-    conteudo = await file.read()
+    todos_arquivos = [file] + [a for a in (anexos or []) if a.filename]
+    for arquivo in todos_arquivos:
+        if not arquivo.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"Envie apenas PDFs (recebido: {arquivo.filename})")
+
+    arquivos_upload = [(a.filename, await a.read(), "application/pdf") for a in todos_arquivos]
+
+    # Um arquivo só usa /extract (endpoint estável, já existia); mais de um
+    # (desenho + anexo de BOM separada — ver README do extractor) usa
+    # /extract-varios, que junta identificação + BOM dos vários arquivos.
+    endpoint = "/extract" if len(arquivos_upload) == 1 else "/extract-varios"
+    campo_arquivo = "file" if len(arquivos_upload) == 1 else "files"
+    files_payload = [(campo_arquivo, a) for a in arquivos_upload]
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{EXTRACTOR_URL}/extract",
-                files={"file": (file.filename, conteudo, "application/pdf")},
-            )
+            resp = await client.post(f"{EXTRACTOR_URL}{endpoint}", files=files_payload)
             resp.raise_for_status()
             resultado_extracao = resp.json()
     except httpx.ConnectError as e:

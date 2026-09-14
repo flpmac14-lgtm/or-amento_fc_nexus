@@ -133,12 +133,29 @@ descobertas desse teste real:
     circular, barra redonda, perfil) a partir das colunas presentes, e
     **descarta tabelas sem cabeçalho reconhecível** em vez de adivinhar
     itens sem base — ver limite abaixo
+  - `app/extraction/bom_sap_export.py` — BOM que vem como **anexo
+    separado**, não no desenho: descoberta real na pasta de referência
+    (Andritz, orçamentos MAC_0799.26/MAC_0820.26) — o cliente manda um PDF
+    à parte exportado do SAP/PLM dele ("WBS - Bill of Material"), texto
+    nativo de largura fixa, sem grade nenhuma (por isso `bom_table.py`
+    nunca acha nada ali). Esse formato já traz o peso por peça pronto
+    (`ItemBom.peso_kg`, campo novo) em vez de geometria — os itens
+    costumam ser peça acabada/comprada ("GUARDA-CORPO...", "ANCHOR
+    BOLT"), não matéria-prima bruta, então ficam sem `norma`/
+    `tipo_geometria` de propósito (não dá pra inferir isso a partir da
+    descrição de uma peça comprada) e vão para revisão de preço manual
   - `app/ai_fallback/client.py` — stub do fallback de IA externa, desligado
     por padrão, só ativa com `EXTRACTOR_AI_FALLBACK_ENABLED=1` + chave de API
-  - `app/pipeline.py` — orquestra tudo e calcula confiança geral
-  - `tests/test_bom_parser.py` e `tests/test_bom_table.py` — 17 testes,
-    incluindo um PDF sintético (tabela real com grade + texto, gerada via
-    PyMuPDF) e casos com strings reais de uma BOM real da Andritz
+  - `app/pipeline.py` — orquestra tudo; `processar_pdfs` (plural) aceita
+    **mais de um PDF por orçamento** (desenho principal + anexos, ex: a
+    BOM separada acima) e junta identificação + BOM de todos;
+    `processar_pdf` (um arquivo só) continua existindo por compatibilidade
+  - `POST /extract-varios` — mesmo `/extract`, mas recebe vários arquivos
+  - `tests/test_bom_parser.py`, `tests/test_bom_table.py` e
+    `tests/test_bom_sap_export.py` — 22 testes, incluindo um PDF sintético
+    (tabela real com grade + texto, gerada via PyMuPDF) e casos com
+    strings reais de duas BOMs reais da Andritz (uma em tabela, outra em
+    anexo SAP)
 - `services/calc_engine/` — motor de cálculo determinístico (peso, custo por
   processo, custo industrial, impostos e preço de venda), lendo os mesmos
   parâmetros semeados acima:
@@ -290,9 +307,9 @@ desta sessão, não um bug do app). Vale testar de novo manualmente.
    real ao importar: ~8 linhas do ERP tinham `PESOLIQ` zerado e preço/kg
    absurdo (chapa grossa lançada por peça, não por peso) — o script descarta
    automaticamente qualquer preço acima de R$ 50/kg (`PRECO_KG_MAX_RAZOAVEL`)
-   em vez de confiar cegamente na origem. Faltam ainda: `AISI 304` em
-   barra/perfil (só 2-3 compras cada, não cadastrado ainda em `materiais`)
-   e rodar o script de novo periodicamente pra manter os preços atualizados.
+   em vez de confiar cegamente na origem. `AISI 304` em barra/perfil também
+   já foi completado no catálogo (migration 0004). Falta rodar o script de
+   novo periodicamente pra manter os preços atualizados (não agendado).
 2. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de IA visual (interpretação de tabela dentro de
@@ -304,14 +321,23 @@ desta sessão, não um bug do app). Vale testar de novo manualmente.
    descrição (ex: perfis em polegada fracionária como `PERFIL TIPO "U" 3" x
    1/4"`). Cantoneira/perfil L não tem fórmula de peso no motor geométrico
    ainda — fica sinalizada para revisão.
-4. A extração de tabela **não roda sobre o texto que vem do OCR** — só sobre
-   texto nativo do PDF via `pdfplumber`. Para desenhos vetorizados como o
-   A752193, isso significa que a BOM continua vazia mesmo com OCR ativo.
-   Ensinar `bom_table.py` (ou um módulo novo) a reconhecer uma tabela dentro
-   do texto solto que o OCR devolve é o próximo ganho real de cobertura.
+4. ~~A extração de tabela não roda sobre o texto que vem do OCR — a BOM do
+   A752193 continua vazia mesmo com OCR ativo.~~ **Investigado e
+   corrigido, mas não do jeito que a hipótese original previa**: testei
+   OCR nas páginas do A752193 (Weir) e não tem tabela nenhuma ali — só
+   vistas técnicas com balões de item apontando pra features do desenho.
+   Achando onde a BOM de verdade mora em desenhos reais: (a) desenhos com
+   "cada peça no seu próprio arquivo" têm o material direto no rodapé
+   (`MATERIAL: CHAPA #1/4" x 50 x 50 AISI-304`) — ainda não tem parser
+   pra isso; (b) desenhos que vêm com **anexo de BOM separado** (achado
+   real: pasta Andritz MAC_0799.26/MAC_0820.26) exportam de um SAP/PLM em
+   texto de largura fixa, sem grade — isso **já está implementado**:
+   `app/extraction/bom_sap_export.py` + `processar_pdfs`/`POST
+   /extract-varios` (múltiplos arquivos por orçamento), validado com 2
+   anexos reais (13 itens extraídos, pesos batendo com o documento
+   original). Falta o caso (a) e cobrir mais variações do formato SAP se
+   aparecerem em outros pedidos.
 5. Regra simples + histórico já estão combinados (`app/estimativa_horas.py`,
    opt-in via `usar_historico_horas`) — falta adicionar um critério de
    similaridade além do peso (material, tipo de peça) pra reduzir o ruído
-   descoberto na validação (ver README do calc_engine). Falta também trocar
-   a fixture de materiais/preços (`materiais_fixture.py`) por consulta real
-   ao Supabase.
+   descoberto na validação (ver README do calc_engine).

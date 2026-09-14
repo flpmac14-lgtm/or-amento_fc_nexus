@@ -54,6 +54,11 @@ class ItemBom(BaseModel):
     norma: CampoExtraido[str] = CampoExtraido()
     usinado: CampoExtraido[bool] = CampoExtraido(valor=False)
     quantidade: CampoExtraido[float] = CampoExtraido()
+    # Peso da peça já informado pela fonte (ex: export SAP com "Weight
+    # KG/unit") — quando presente, o adapter usa direto em vez de tentar
+    # calcular por geometria. Comum em BOM de peça acabada/comprada, onde
+    # não tem tipo_geometria/norma pra calcular (ver bom_sap_export.py).
+    peso_kg: CampoExtraido[float] = CampoExtraido()
 
 
 class ResultadoExtracao(BaseModel):
