@@ -20,11 +20,14 @@ from __future__ import annotations
 import os
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapter import montar_entrada_orcamento
 from app.orcamento import montar_orcamento
+
+load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
 
 EXTRACTOR_URL = os.environ.get("EXTRACTOR_URL", "http://localhost:8001")
 

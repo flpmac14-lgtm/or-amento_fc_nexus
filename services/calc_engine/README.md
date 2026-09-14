@@ -95,10 +95,11 @@ python -m venv .venv
 
 `app/adapter.py` já liga os dois serviços: recebe o JSON que
 `services/extractor` devolve (`ResultadoExtracao.model_dump()`), calcula o
-peso de cada item da BOM pelo motor geométrico (usando a fixture de
-materiais/perfis em `app/materiais_fixture.py` — placeholder para as tabelas
-reais `materiais`/`perfis`/`historico_compras` do Supabase) e monta a
-entrada de `app.orcamento.montar_orcamento`.
+peso de cada item da BOM pelo motor geométrico (usando
+`app/repositorio_materiais.py` — consulta real às tabelas `materiais`,
+`perfis` e `historico_compras` do Supabase quando `SUPABASE_DB_URL` está no
+ambiente, com fallback pra fixture local em `app/materiais_fixture.py`
+quando não está) e monta a entrada de `app.orcamento.montar_orcamento`.
 
 Os dois serviços continuam desacoplados de propósito: o adaptador só lê o
 dict JSON, nunca importa os modelos Pydantic do extractor — é o mesmo
@@ -117,11 +118,22 @@ O que ainda falta:
   acima), o que é literalmente a "Camada 3" da especificação.
 - Área de pintura e quantidade de posições de engenharia continuam como
   `estimativas` manuais — não têm histórico equivalente ainda.
-- A fixture de materiais/preços é só um ponto de partida; precisa virar
-  consulta real ao Supabase (`historico_compras` para preço, `materiais`/
-  `perfis` para densidade e kg/m).
+- A consulta real ao Supabase já existe (`app/repositorio_materiais.py`),
+  mas `historico_compras` ainda está vazia no banco — nenhum preço real
+  cadastrado ainda. Enquanto isso, todo item cai em `itens_para_revisao`
+  por "Sem preço/kg cadastrado" quando `SUPABASE_DB_URL` está ativa. Preço
+  hoje é só a estratégia "último comprado"; falta média das últimas
+  3 compras, média 30/60/90 dias e fornecedor preferencial.
 - `services/extractor` já extrai BOM em tabela (`app/extraction/bom_table.py`,
   validado com desenho real da Andritz) e o adaptador já consome isso.
+
+## Banco real (Supabase)
+
+Copie `.env.example` para `.env` e preencha `SUPABASE_DB_URL` com a
+connection string do projeto (Project Settings → Database → Connection
+string, modo "Transaction pooler"). Sem essa variável, o motor usa a
+fixture local (`app/materiais_fixture.py`) — é o mesmo comportamento de
+antes, os testes continuam rodando sem precisar de banco nenhum.
 
 ## API HTTP (`app/main.py`)
 

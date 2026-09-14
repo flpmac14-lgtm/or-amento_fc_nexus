@@ -161,8 +161,16 @@ descobertas desse teste real:
     item via geometria e sinalizando para revisão humana (`itens_para_revisao`)
     o que não tem geometria, material ou preço suficientes — ou confiança
     abaixo de 0,6
-  - `app/materiais_fixture.py` — placeholder local de densidade/kg-m/preço
-    (substituir por consulta real a `materiais`/`perfis`/`historico_compras`)
+  - `app/materiais_fixture.py` — placeholder local de densidade/kg-m/preço,
+    usado como fallback offline (testes, ou quando `SUPABASE_DB_URL` não
+    está configurada)
+  - `app/repositorio_materiais.py` — consulta real às tabelas `materiais`,
+    `perfis` e `historico_compras` do Supabase quando `SUPABASE_DB_URL`
+    está no ambiente (mesma assinatura da fixture, `adapter.py` não sabe
+    qual fonte está em uso). Preço usa a estratégia mais simples, "último
+    comprado" (compra mais recente em `historico_compras`); sem compra
+    registrada, o item é sinalizado para revisão em vez de usar um preço
+    inventado — ver README do calc_engine
   - `app/historico.py` + `data/historico_referencia.json` — camada 2 de
     estimativa de horas: dataset real com os totais (peso, horas previstas,
     custo, preço de venda) de **35 orçamentos reais** da Macfab (Weir,
@@ -271,7 +279,13 @@ desta sessão, não um bug do app). Vale testar de novo manualmente.
 
 ## Pendências para os próximos passos
 
-1. **Criar/conectar um projeto Supabase real** e rodar as migrations.
+1. ~~Criar/conectar um projeto Supabase real e rodar as migrations.~~ **Feito**:
+   projeto `fc-nexus-orcamentos` criado (região `sa-east-1`), migrations
+   0001/0002 aplicadas, `calc_engine` já consulta `materiais`/`perfis`/
+   `historico_compras` reais quando `SUPABASE_DB_URL` está configurada (ver
+   `app/repositorio_materiais.py`). Falta popular `historico_compras` com
+   preços reais — hoje a tabela está vazia (de propósito: sem compra real
+   registrada, o item vai para revisão em vez de usar um preço inventado).
 2. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de IA visual (interpretação de tabela dentro de

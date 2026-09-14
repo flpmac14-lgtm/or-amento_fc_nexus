@@ -17,8 +17,8 @@ from dataclasses import dataclass
 @dataclass
 class InfoMaterial:
     densidade_kg_m3: float
-    fator_barra_redonda_kg_m: float
-    preco_kg_padrao: float
+    fator_barra_redonda_kg_m: float | None
+    preco_kg_padrao: float | None
 
 
 MATERIAIS: dict[tuple[str, str], InfoMaterial] = {

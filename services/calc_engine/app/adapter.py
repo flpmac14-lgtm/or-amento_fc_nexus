@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app import geometria
-from app.materiais_fixture import buscar_info_material, buscar_peso_kg_m_perfil
+from app.repositorio_materiais import buscar_info_material, buscar_peso_kg_m_perfil
 
 LIMIAR_CONFIANCA_ITEM = 0.6
 
