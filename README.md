@@ -51,9 +51,18 @@ OCR individualmente.
 No mesmo teste, o que já é extraível sem OCR nesta folha (texto nativo puro):
 pedido/PO (`4501690746-10, 4501690746-20`), código do equipamento
 (`MAC_573.26`) e a especificação de pintura (`ESP. TOTAL: 225um`, demãos
-INTERGARD/INTERSEAL). Número do desenho, revisão e BOM dependem de OCR nas
-outras páginas — ainda não testado ponta a ponta porque o binário do
-Tesseract não está instalado nesta máquina (ver "Pendências").
+INTERGARD/INTERSEAL).
+
+**Atualização: Tesseract já foi instalado nesta máquina e o OCR foi testado
+de verdade contra as páginas que precisavam dele.** Resultado: o número do
+desenho (`A752193`) passou a ser extraído corretamente (confiança 0,9) só
+com o texto que o OCR trouxe da página 2 — algo como "ITEM22", "ITEM26",
+cotas (1750, 1019, 253,5...) e o bloco de título completo ("DC BASEPLATE-TU-
+FRM-M1PSF80N-400HG-AT140/100...", "A752193") saíram legíveis. A BOM
+continua vazia nesse desenho porque `app/extraction/bom_table.py` só lê
+tabelas via `pdfplumber` (texto nativo do PDF) — não tenta reconhecer
+tabela a partir do texto solto que o OCR devolve. Isso é um passo natural
+seguinte, não implementado ainda.
 
 O mesmo vale para a extração de BOM em tabela (`app/extraction/bom_table.py`):
 rodando `pdfplumber` contra esse PDF real, ele até acha a grade da tabela
@@ -141,6 +150,10 @@ descobertas desse teste real:
   - `app/comercial.py` — margem, alíquota por cenário, preço de venda com/sem
     impostos, R$/kg
   - `app/orcamento.py` — orquestra tudo
+  - `app/main.py` — API HTTP (FastAPI) pra testar sem esperar o frontend:
+    `POST /orcamento` (entrada pronta → orçamento) e `POST /orcamento-de-pdf`
+    (PDF → chama o extractor via HTTP → adapter → orçamento). Ver README do
+    calc_engine
   - `app/adapter.py` — liga o extractor ao motor: transforma o JSON de
     `ResultadoExtracao` em entrada de `montar_orcamento`, calculando peso por
     item via geometria e sinalizando para revisão humana (`itens_para_revisao`)
@@ -206,23 +219,44 @@ python -m venv .venv
 `POST http://localhost:8001/extract` com um PDF em `multipart/form-data`
 (campo `file`) devolve o JSON estruturado com confiança por campo.
 
+## OCR (Tesseract) — instalado e testado nesta máquina
+
+Instalado via `winget install UB-Mannheim.TesseractOCR`. Como esta conta de
+usuário não tem permissão de escrita em `Program Files\Tesseract-OCR\
+tessdata`, o pacote de português (`por.traineddata`, baixado de
+`github.com/tesseract-ocr/tessdata`) foi colocado numa pasta própria do
+usuário (`%LOCALAPPDATA%\Tesseract-tessdata`, junto com cópias de
+`eng.traineddata`/`osd.traineddata`), com a variável `TESSDATA_PREFIX`
+apontando pra lá — e `C:\Program Files\Tesseract-OCR` adicionado ao `PATH`
+do usuário. As duas variáveis foram persistidas (`setx`/registro), então
+qualquer terminal **novo** já enxerga o Tesseract automaticamente; só não
+valem para sessões de terminal que já estavam abertas antes da instalação.
+
+Testado de verdade contra a página 2 do A752193 (que tinha 0 caracteres de
+texto nativo): o OCR trouxe texto legível (números de item, cotas, bloco de
+título completo) e o `numero_desenho` (`A752193`) passou a ser extraído
+corretamente pela primeira vez — ver "Descoberta importante" acima.
+
 ## Pendências para os próximos passos
 
-1. **Instalar Tesseract OCR** nesta máquina (ou no ambiente de deploy) para
-   testar o pipeline ponta a ponta nas páginas que dependem de OCR.
-2. **Instalar Node.js** para gerar o frontend Next.js (`apps/web`).
-3. **Criar/conectar um projeto Supabase real** e rodar as migrations.
-4. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
+1. **Instalar Node.js** para gerar o frontend Next.js (`apps/web`).
+2. **Criar/conectar um projeto Supabase real** e rodar as migrations.
+3. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
-   campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
-   revisão em folhas sem texto nativo).
-5. `services/extractor` já extrai BOM em tabela e já foi validado contra um
+   campos que hoje dependem de IA visual (interpretação de tabela dentro de
+   imagem, por exemplo).
+4. `services/extractor` já extrai BOM em tabela e já foi validado contra um
    desenho real com texto nativo (Andritz, ver acima) — não depende só de
    OCR. Falta afinar `table_settings` do pdfplumber pra tabelas que se
    misturam com o desenho técnico na mesma folha, e cobrir mais formatos de
    descrição (ex: perfis em polegada fracionária como `PERFIL TIPO "U" 3" x
    1/4"`). Cantoneira/perfil L não tem fórmula de peso no motor geométrico
    ainda — fica sinalizada para revisão.
+5. A extração de tabela **não roda sobre o texto que vem do OCR** — só sobre
+   texto nativo do PDF via `pdfplumber`. Para desenhos vetorizados como o
+   A752193, isso significa que a BOM continua vazia mesmo com OCR ativo.
+   Ensinar `bom_table.py` (ou um módulo novo) a reconhecer uma tabela dentro
+   do texto solto que o OCR devolve é o próximo ganho real de cobertura.
 6. Regra simples + histórico já estão combinados (`app/estimativa_horas.py`,
    opt-in via `usar_historico_horas`) — falta adicionar um critério de
    similaridade além do peso (material, tipo de peça) pra reduzir o ruído

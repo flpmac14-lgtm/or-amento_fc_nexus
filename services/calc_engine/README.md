@@ -14,9 +14,8 @@ o problema em três camadas descrito na especificação:
    orçamentos passados com peso parecido)
 3. Ajuste por IA avaliando complexidade geométrica (ainda não existe)
 
-As camadas 1 e 2 já existem e são independentes uma da outra — quem decide
-como combiná-las (usar só a regra, só o histórico, ou uma mescla) ainda é
-quem chama o motor, não o motor em si.
+As camadas 1 e 2 já existem e já estão combinadas (`app/estimativa_horas.py`,
+opt-in via `usar_historico_horas` — ver seção abaixo).
 
 ## Validação
 
@@ -123,3 +122,32 @@ O que ainda falta:
   `perfis` para densidade e kg/m).
 - `services/extractor` já extrai BOM em tabela (`app/extraction/bom_table.py`,
   validado com desenho real da Andritz) e o adaptador já consome isso.
+
+## API HTTP (`app/main.py`)
+
+Pra poder testar sem esperar o frontend (Node.js ainda não instalado):
+
+```bash
+./.venv/Scripts/uvicorn app.main:app --port 8002
+```
+
+- `GET /health`
+- `POST /orcamento` — recebe a entrada já pronta (o dict que
+  `montar_orcamento` espera) e devolve o orçamento calculado. Uso direto do
+  motor, sem passar por PDF nenhum.
+- `POST /orcamento-de-pdf` — recebe um PDF, chama `services/extractor` via
+  HTTP (configurável por `EXTRACTOR_URL`, default `http://localhost:8001`,
+  então o extractor precisa estar rodando também), monta a entrada com
+  `adapter.py` e calcula o orçamento. Parâmetros opcionais no form:
+  `peso_liquido_kg`, `area_pintura_m2`, `quantidade_posicoes_engenharia`,
+  `cenario_comercial`, `usar_historico_horas`.
+
+Abra `http://localhost:8002/docs` (Swagger UI) pra testar pelo navegador —
+"Try it out" em `/orcamento-de-pdf` aceita upload de arquivo direto na tela.
+
+Essa combinação num endpoint só é uma conveniência de demonstração local —
+em produção a orquestração PDF → extração → orçamento provavelmente mora no
+backend do app principal (Next.js/Supabase), não aqui; os dois serviços
+continuam desacoplados de propósito (conversam por HTTP, não por import
+direto — inclusive porque os dois usam o nome de pacote `app` internamente,
+então nunca devem rodar no mesmo processo Python).
