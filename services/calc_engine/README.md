@@ -53,6 +53,37 @@ Em produção este dataset deve ser substituído por consulta à tabela
 `historico_realizado` do Supabase (que também guarda orçado × realizado por
 processo, não só o total do orçamento).
 
+## Combinando regra simples + histórico
+
+`app/estimativa_horas.py` define a regra de combinação (antes deixada em
+aberto): **média ponderada pela confiança do histórico**, não um corte
+abrupto —
+
+```
+horas_final = confiança_histórico × horas_histórico
+            + (1 − confiança_histórico) × horas_regra_simples
+```
+
+Fica opt-in: `montar_orcamento(entrada)` só usa essa combinação quando
+`entrada["usar_historico_horas"] = True` (via `adapter.py`,
+`estimativas["usar_historico_horas"]`). Sem essa flag, o comportamento é
+idêntico ao de antes — é por isso que `test_orcamento_a752193.py` continua
+batendo exatamente com a planilha sem precisar saber que o histórico existe.
+
+**Descoberta ao validar com o dataset real**: peso sozinho é um preditor
+fraco de complexidade. Consultando o peso do A752193 (3319 kg, baseplate
+soldada simples, 52 h/ton na realidade), a amostra de peso parecido também
+traz um inserto de moinho fortemente usinado (229 h/ton) e uma plataforma
+complexa (322 h/ton) — peso semelhante, trabalho bem diferente. A mediana
+dessa amostra pequena puxa a sugestão bem acima do valor real. Isso não é
+um bug: é a lacuna que a "Camada 3" da especificação (IA avaliando
+complexidade geométrica — quantidade de peças, soldas, tolerâncias) deveria
+preencher. A confiança aqui reflete tamanho/largura da amostra, não a
+qualidade da similaridade — por isso o resultado da combinação pode
+legitimamente ficar longe da regra simples quando a amostra é pequena ou
+heterogênea, e por isso a combinação nunca ignora a regra simples por
+completo (só pondera).
+
 ## Rodar
 
 ```bash
@@ -82,11 +113,9 @@ que o sistema não conseguiu resolver sozinho). Itens com confiança abaixo de
 0,6 entram no custo mas também ficam sinalizados.
 
 O que ainda falta:
-- `sugerir_horas_caldeiraria` ainda não está ligado ao `adapter.py`/
-  `orcamento.py` — hoje as horas continuam entrando como `estimativas`
-  manuais em `montar_entrada_orcamento`. Falta decidir como combinar regra
-  simples + histórico (usar o histórico quando a amostra for boa? mostrar
-  os dois e deixar o orçamentista escolher?).
+- A combinação regra+histórico ainda usa só peso como critério de
+  similaridade — falta considerar material/tipo de peça (ver "Descoberta"
+  acima), o que é literalmente a "Camada 3" da especificação.
 - Área de pintura e quantidade de posições de engenharia continuam como
   `estimativas` manuais — não têm histórico equivalente ainda.
 - A fixture de materiais/preços é só um ponto de partida; precisa virar

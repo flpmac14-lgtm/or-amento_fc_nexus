@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from app import processos
 from app.comercial import formar_preco
+from app.estimativa_horas import estimar_horas_caldeiraria
 from app.parametros_padrao import ALIQUOTAS_COMPRA_POR_TIPO, PARAMETROS_PADRAO
 from app.schemas import LinhaCusto, ResultadoOrcamento
 
@@ -70,7 +71,15 @@ def montar_orcamento(entrada: dict, params: dict | None = None) -> ResultadoOrca
 
     linhas.append(processos.corte(peso_liquido_kg, params))
 
-    linha_caldeiraria = processos.caldeiraria(peso_liquido_kg, params)
+    if entrada.get("usar_historico_horas"):
+        estimativa = estimar_horas_caldeiraria(peso_liquido_kg, params, entrada.get("historico_horas"))
+        linha_caldeiraria = processos.caldeiraria(
+            peso_liquido_kg, params,
+            horas_override=estimativa["horas_caldeiraria"],
+            memoria_override=estimativa["memoria"],
+        )
+    else:
+        linha_caldeiraria = processos.caldeiraria(peso_liquido_kg, params)
     linhas.append(linha_caldeiraria)
     linhas.append(processos.jateamento_pintura_mo(linha_caldeiraria.horas, params))
 

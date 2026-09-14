@@ -134,6 +134,11 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         - cenario_comercial
         - preco_kg_override: {(norma, tipo_geometria): preco} opcional, para não
           depender só do preço padrão da fixture
+        - usar_historico_horas: bool (default False) — quando True, horas de
+          caldeiraria combinam a regra simples com o histórico Macfab (ver
+          app.estimativa_horas) em vez de usar só a regra
+        - historico_horas: dataset alternativo pro histórico (default: o
+          dataset real em data/historico_referencia.json)
     """
     itens_para_revisao: list[ItemParaRevisao] = []
     materia_prima: list[dict] = []
@@ -183,6 +188,8 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         "area_pintura_m2": estimativas.get("area_pintura_m2"),
         "quantidade_posicoes_engenharia": estimativas.get("quantidade_posicoes_engenharia"),
         "cenario_comercial": estimativas.get("cenario_comercial", "venda_fabricacao"),
+        "usar_historico_horas": estimativas.get("usar_historico_horas", False),
+        "historico_horas": estimativas.get("historico_horas"),
     }
 
     return ResultadoAdaptacao(entrada=entrada, itens_para_revisao=itens_para_revisao)

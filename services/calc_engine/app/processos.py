@@ -39,18 +39,27 @@ def corte(peso_liquido_kg: float, params: dict) -> LinhaCusto:
     )
 
 
-def caldeiraria(peso_liquido_kg: float, params: dict) -> LinhaCusto:
-    fator = params["caldeiraria_fator_h_kg"]
+def caldeiraria(peso_liquido_kg: float, params: dict, horas_override: float | None = None, memoria_override: list[str] | None = None) -> LinhaCusto:
+    """Por padrão usa a regra simples (peso × fator h/kg — camada 1). Passe
+    `horas_override` para usar um valor já decidido por outra camada (ex:
+    app.estimativa_horas, que combina isso com o histórico Macfab) sem
+    duplicar a lógica de custo/memória daqui."""
     valor_hora = params["caldeiraria_valor_hora"]
-    horas = peso_liquido_kg * fator
+
+    if horas_override is not None:
+        horas = horas_override
+        memoria = memoria_override or [f"{horas:.2f} h (estimativa combinada, ver app.estimativa_horas)"]
+    else:
+        fator = params["caldeiraria_fator_h_kg"]
+        horas = peso_liquido_kg * fator
+        memoria = [f"{peso_liquido_kg} kg × {fator} h/kg = {horas:.2f} h"]
+
     bruto = horas * valor_hora
+    memoria = memoria + [f"{horas:.2f} h × R$ {valor_hora}/h = R$ {bruto:.2f}"]
     return _linha(
         "caldeiraria", "Caldeiraria (corte, dobra, montagem, solda, desempeno, inspeção)",
         bruto, "caldeiraria", params, horas=round(horas, 2),
-        memoria=[
-            f"{peso_liquido_kg} kg × {fator} h/kg = {horas:.2f} h",
-            f"{horas:.2f} h × R$ {valor_hora}/h = R$ {bruto:.2f}",
-        ],
+        memoria=memoria,
     )
 
 

@@ -14,6 +14,15 @@ Trabalha com horas por TONELADA (não horas absolutas) porque isso normaliza
 peças de peso diferente mas processo parecido — é a mesma métrica que a
 própria planilha Macfab já calcula (aba "RESUMO DO ORÇAMENTO", célula R32).
 
+Importante: as "horas" do dataset são de MÃO DE OBRA PRÓPRIA como um todo
+(caldeiraria + jateamento/pintura MO combinados — célula R31 da planilha,
+que soma U4 e U7 da aba de cada item), não só caldeiraria. Quem for usar a
+sugestão para estimar horas de caldeiraria isoladamente precisa reverter a
+proporção fixa de jateamento/pintura (ver
+`app.processos.jateamento_pintura_mo`: horas_jato = horas_caldeiraria ÷ 24,
+logo horas_mo_propria = horas_caldeiraria × 25/24) — é o que
+`app.estimativa_horas` faz.
+
 Dataset: `data/historico_referencia.json`, extraído dos totais consolidados
 de 35 orçamentos reais da pasta "Parametros de orçamento macfab" (peso,
 horas previstas, custo industrial, preço de venda — sem BOM/itens
@@ -47,8 +56,9 @@ def _similares_por_peso(peso_ton: float, historico: list[dict], faixa_toneladas:
     ]
 
 
-def sugerir_horas_caldeiraria(peso_liquido_kg: float, historico: list[dict] | None = None) -> dict:
-    """Devolve média/mediana de horas-por-tonelada de orçamentos com peso
+def sugerir_horas_mo_propria(peso_liquido_kg: float, historico: list[dict] | None = None) -> dict:
+    """Devolve média/mediana de horas-por-tonelada de mão de obra própria
+    (caldeiraria + jateamento/pintura MO combinados) de orçamentos com peso
     parecido, a sugestão de horas para o peso informado, e o nível de
     confiança (maior quanto mais amostras próximas e mais estreita a faixa
     de peso usada)."""
@@ -69,7 +79,7 @@ def sugerir_horas_caldeiraria(peso_liquido_kg: float, historico: list[dict] | No
             "faixa_toneladas_usada": None,
             "media_horas_por_tonelada": None,
             "mediana_horas_por_tonelada": None,
-            "horas_sugeridas": None,
+            "horas_mo_propria_sugeridas": None,
             "confianca": 0.0,
             "amostra": [],
         }
@@ -81,7 +91,7 @@ def sugerir_horas_caldeiraria(peso_liquido_kg: float, historico: list[dict] | No
     valores = [r["horas_por_tonelada"] for r in similares]
     media = statistics.mean(valores)
     mediana = statistics.median(valores)
-    horas_sugeridas = mediana * peso_ton
+    horas_mo_propria_sugeridas = mediana * peso_ton
 
     confianca_amostra = min(1.0, len(similares) / 8)
     confianca_faixa = 1.0 - (FAIXAS_TONELADAS.index(faixa_usada) / len(FAIXAS_TONELADAS))
@@ -92,7 +102,7 @@ def sugerir_horas_caldeiraria(peso_liquido_kg: float, historico: list[dict] | No
         "faixa_toneladas_usada": faixa_usada,
         "media_horas_por_tonelada": round(media, 2),
         "mediana_horas_por_tonelada": round(mediana, 2),
-        "horas_sugeridas": round(horas_sugeridas, 2),
+        "horas_mo_propria_sugeridas": round(horas_mo_propria_sugeridas, 2),
         "confianca": confianca,
         "amostra": [
             {"projeto": r.get("projeto"), "cliente": r.get("cliente"),

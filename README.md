@@ -152,11 +152,18 @@ descobertas desse teste real:
     estimativa de horas: dataset real com os totais (peso, horas previstas,
     custo, preço de venda) de **35 orçamentos reais** da Macfab (Weir,
     Andritz, Dana, Siemens, FTSX, Indesa), extraídos das planilhas de
-    referência. `sugerir_horas_caldeiraria(peso_kg)` busca orçamentos de
+    referência. `sugerir_horas_mo_propria(peso_kg)` busca orçamentos de
     peso parecido e devolve média/mediana de horas por tonelada + sugestão,
-    expandindo a faixa de busca até ter amostra suficiente. Ainda não está
-    ligado ao `adapter.py` (falta decidir como combinar com a regra simples
-    de `processos.py` — ver README do calc_engine)
+    expandindo a faixa de busca até ter amostra suficiente
+  - `app/estimativa_horas.py` — liga regra simples (camada 1) e histórico
+    (camada 2): combina os dois por média ponderada pela confiança do
+    histórico. Opt-in via `entrada["usar_historico_horas"]` em
+    `montar_orcamento` — sem a flag, comportamento idêntico a antes.
+    Descoberta ao validar: peso sozinho é preditor fraco de complexidade
+    (uma baseplate simples e um inserto muito usinado podem pesar o mesmo e
+    levar horas bem diferentes) — é a lacuna que a "Camada 3" (IA avaliando
+    complexidade) da especificação deveria preencher; ver README do
+    calc_engine para o exemplo numérico
   - `tests/test_orcamento_a752193.py` — reconstrói o orçamento real
     MAC_0573.26/A752193 item a item e bate **exatamente** com a planilha:
     custo industrial R$ 58.027,43, venda R$ 116.054,86, R$ 34,97/kg
@@ -165,7 +172,9 @@ descobertas desse teste real:
     cadastro, preço ausente, baixa confiança) e integração ponta a ponta
   - `tests/test_historico.py` — valida a busca por peso parecido e a
     mediana de horas/tonelada, com checagem de sanidade contra o dataset real
-  - 19 testes passando ao todo
+  - 24 testes passando ao todo (incluindo `test_estimativa_horas.py`, que
+    valida a combinação regra+histórico e confirma que o comportamento sem
+    a flag `usar_historico_horas` fica idêntico a antes)
 - `apps/web/` — ainda não gerado (Node.js não está instalado nesta máquina);
   ver `apps/web/README.md` para os próximos passos.
 
@@ -214,9 +223,9 @@ python -m venv .venv
    descrição (ex: perfis em polegada fracionária como `PERFIL TIPO "U" 3" x
    1/4"`). Cantoneira/perfil L não tem fórmula de peso no motor geométrico
    ainda — fica sinalizada para revisão.
-6. A camada 2 de estimativa de horas (`services/calc_engine/app/historico.py`)
-   já existe, com dataset real de 35 orçamentos — falta ligá-la ao
-   `adapter.py`, o que exige decidir como combinar com a regra simples de
-   `processos.py` (usar histórico quando a amostra for boa? mostrar os
-   dois?). Falta também trocar a fixture de materiais/preços
-   (`materiais_fixture.py`) por consulta real ao Supabase.
+6. Regra simples + histórico já estão combinados (`app/estimativa_horas.py`,
+   opt-in via `usar_historico_horas`) — falta adicionar um critério de
+   similaridade além do peso (material, tipo de peça) pra reduzir o ruído
+   descoberto na validação (ver README do calc_engine). Falta também trocar
+   a fixture de materiais/preços (`materiais_fixture.py`) por consulta real
+   ao Supabase.
