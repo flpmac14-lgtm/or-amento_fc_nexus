@@ -1,0 +1,141 @@
+# FC Nexus — Orçamento Industrial I.A.
+
+Sistema que recebe desenhos técnicos em PDF e devolve uma análise completa
+de fabricação, custo industrial e preço sugerido de venda — sem exigir que
+o orçamentista preencha manualmente matéria-prima, peso, horas, pintura,
+solda etc. O usuário só revisa os itens que o sistema classificar com
+confiança baixa.
+
+## Regra central do projeto
+
+**A IA nunca calcula peso, custo, hora ou preço.** Ela só interpreta o
+desenho e devolve dados estruturados com um nível de confiança por campo.
+Todo cálculo é feito por fórmulas determinísticas do motor matemático do
+próprio sistema, usando dados cadastrados (preços, produtividade, custos/hora,
+impostos) e histórico real de produção. Isso é o que torna o orçamento
+auditável: cada valor final deve poder mostrar "Ver cálculo" com a memória
+exata de como chegou naquele número.
+
+## Arquitetura híbrida (grátis primeiro, IA como fallback)
+
+```
+PDF
+ └─ Camada 1: texto nativo (PyMuPDF)
+      └─ Camada 2: OCR local (Tesseract) nas páginas sem texto suficiente
+           └─ Camada 3: heurísticas/regex → JSON estruturado + confiança por campo
+                └─ confiança suficiente? ── sim → motor de cálculo
+                                        └── não → IA externa (OpenAI/Claude) SOMENTE
+                                                  como complemento pontual, nunca
+                                                  para calcular valores finais
+```
+
+OpenAI/Claude **não são chamados em todo orçamento** — só quando o pipeline
+local fica com confiança baixa em campos essenciais. A arquitetura também
+deixa aberto o caminho para um modelo multimodal local/open-source no futuro,
+eliminando de vez o custo de API por orçamento.
+
+Ver memória do projeto: decisão registrada em
+`arquitetura_hibrida_ia_fallback` para detalhes e justificativa.
+
+## Descoberta importante já validada com um desenho real
+
+Testado contra `A752193_0 - 4501690746-10 e 20.pdf` (desenho real da Macfab,
+cliente Weir, MAC_573.26): a folha principal do PDF tem o texto desenhado
+como curvas vetoriais, não como texto extraível — `PyMuPDF.get_text()` volta
+quase vazio mesmo com a folha cheia de anotações visíveis. Ou seja, **o OCR
+não é um fallback raro, é essencial** para a maioria dos desenhos reais desta
+carteira. O pipeline já foi desenhado para verificar densidade de texto por
+página (não só "existe algum texto no PDF?") e mandar cada página fraca para
+OCR individualmente.
+
+No mesmo teste, o que já é extraível sem OCR nesta folha (texto nativo puro):
+pedido/PO (`4501690746-10, 4501690746-20`), código do equipamento
+(`MAC_573.26`) e a especificação de pintura (`ESP. TOTAL: 225um`, demãos
+INTERGARD/INTERSEAL). Número do desenho, revisão e BOM dependem de OCR nas
+outras páginas — ainda não testado ponta a ponta porque o binário do
+Tesseract não está instalado nesta máquina (ver "Pendências").
+
+## O que já existe neste repositório
+
+- `supabase/migrations/0001_init.sql` — schema completo (materiais, perfis,
+  chapas, fornecedores, histórico de compras, máquinas, custos/hora,
+  processos, produtividade, consumíveis de solda, tintas, rendimentos de
+  pintura, tratamentos, NDT, custos indiretos, regras de orçamento, impostos,
+  clientes, orçamentos, itens, processos do orçamento, histórico realizado).
+- `supabase/migrations/0002_seed_regras.sql` — parâmetros **reais** extraídos
+  da planilha de referência da Macfab (`FAB ORÇ - WEIR - MAC_0573.26 A752193
+  BASE - R0.xlsx`), incluindo as fórmulas exatas hoje usadas:
+  - Corte = peso líquido × R$ 1,50/kg
+  - Caldeiraria = peso líquido × 0,05 h/kg × R$ 60/h
+  - Jateamento/pintura (MO) = horas de caldeiraria ÷ 24 × R$ 60/h
+  - Solda: consumível = 3% do peso líquido × R$ 25/kg; gás = metade do peso
+    do consumível × R$ 40
+  - Pintura (material): litros por demão = área × 0,04 L/m² (fundo R$500/L,
+    acabamento R$450/L)
+  - NDT = peso líquido × R$ 0,50/kg
+  - Engenharia = quantidade de posições/desenhos (hoje manual) × R$ 60
+  - Embalagem = peso líquido × R$ 0,20/kg; Transporte = × R$ 0,25/kg;
+    Energia = × R$ 0,25/kg
+  - Fator de margem (markup) = 100% sobre o custo industrial (configurável)
+  - Alíquota efetiva de venda por cenário: fabricação 25,585%, industrialização
+    9,25%, serviço 14,33%
+  - Impostos de compra: ICMS 18% + PIS/COFINS 9,25% deduzidos do bruto
+- `services/extractor/` — serviço Python (FastAPI) do pipeline híbrido acima:
+  - `app/extraction/text_extract.py` — texto nativo via PyMuPDF + detecção de
+    densidade por página
+  - `app/extraction/ocr.py` — OCR via Tesseract (com verificação de binário
+    disponível, degrada com segurança se não instalado)
+  - `app/extraction/bom_parser.py` — heurísticas de regex calibradas com o
+    desenho real (norma ASTM/AISI, perfil W, PO, código de equipamento,
+    especificação de pintura, indicação MACHINED)
+  - `app/ai_fallback/client.py` — stub do fallback de IA externa, desligado
+    por padrão, só ativa com `EXTRACTOR_AI_FALLBACK_ENABLED=1` + chave de API
+  - `app/pipeline.py` — orquestra tudo e calcula confiança geral
+  - `tests/test_bom_parser.py` — testes unitários rodando contra o texto real
+    do desenho A752193 (5 passando)
+- `apps/web/` — ainda não gerado (Node.js não está instalado nesta máquina);
+  ver `apps/web/README.md` para os próximos passos.
+
+## Bibliotecas (todas gratuitas/open source)
+
+| Finalidade              | Biblioteca            |
+|--------------------------|------------------------|
+| Ler PDF vetorial          | PyMuPDF (fitz)         |
+| Extrair tabelas/textos    | pdfplumber             |
+| Manipular PDF             | pypdf                  |
+| OCR                       | Tesseract (pytesseract)|
+| Imagem/desenho            | OpenCV                 |
+| Cálculos                  | Python / NumPy         |
+| Manipulação de dados      | Pandas                 |
+| Excel (leitura de referência) | openpyxl           |
+| Banco                     | Supabase/PostgreSQL    |
+| IA local futuramente      | modelo multimodal open-source |
+
+## Como rodar o serviço de extração
+
+```bash
+cd services/extractor
+python -m venv .venv
+./.venv/Scripts/pip install -r requirements.txt   # Windows
+./.venv/Scripts/python -m pytest tests/ -q
+./.venv/Scripts/uvicorn app.main:app --reload --port 8001
+```
+
+`POST http://localhost:8001/extract` com um PDF em `multipart/form-data`
+(campo `file`) devolve o JSON estruturado com confiança por campo.
+
+## Pendências para os próximos passos
+
+1. **Instalar Tesseract OCR** nesta máquina (ou no ambiente de deploy) para
+   testar o pipeline ponta a ponta nas páginas que dependem de OCR.
+2. **Instalar Node.js** para gerar o frontend Next.js (`apps/web`).
+3. **Criar/conectar um projeto Supabase real** e rodar as migrations.
+4. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
+   fallback — o sistema funciona sem ela, só com confiança mais baixa nos
+   campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
+   revisão em folhas sem texto nativo).
+5. Motor de cálculo (peso/custo/horas/impostos/preço) ainda não implementado
+   — as fórmulas já estão documentadas e semeadas no banco
+   (`regras_orcamento`, `custos_indiretos`, `produtividade_processos`,
+   `soldagem_consumiveis`, `ndt`, `impostos`), faltando o código que as lê e
+   aplica sobre os itens extraídos.
