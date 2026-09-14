@@ -1,10 +1,15 @@
 """Exporta o orçamento como planilha Excel EDITÁVEL — ao contrário do
 relatório de impressão (que é só leitura), aqui os valores importantes
-(peso, taxas por processo, alíquotas) ficam em células próprias na aba
-"Parâmetros" e as outras abas referenciam essas células por fórmula, não
-por valor fixo. Mudar um parâmetro recalcula tudo, igual no motor real —
-é a mesma matemática de app/processos.py e app/comercial.py, só que
-reescrita como fórmula do Excel em vez de Python.
+(peso, taxas por processo, alíquotas) ficam em células próprias (painel
+"Parâmetros" à direita, colunas I:J) e o relatório em si (colunas A:G)
+referencia essas células por fórmula, não por valor fixo. Mudar um
+parâmetro recalcula tudo — é a mesma matemática de app/processos.py e
+app/comercial.py, só que reescrita como fórmula do Excel em vez de Python.
+
+Tudo numa aba só (pedido do usuário): o relatório (A:G) é o que aparece
+ao imprimir/exportar em PDF do Excel (`print_area` cobre só essas
+colunas, layout A4 retrato); o painel de parâmetros fica ao lado, visível
+e editável na mesma aba, mas fora da área de impressão.
 
 O que NÃO vira fórmula (fica como número editável direto, sem derivação):
 usinagem (lista de operações ad hoc) e itens_padrao (idem) — não têm uma
@@ -16,50 +21,90 @@ simples peso×fator.
 from __future__ import annotations
 
 import io
+from datetime import datetime
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.worksheet.page import PageMargins
 
 from app.parametros_padrao import ALIQUOTAS_COMPRA_POR_TIPO, PARAMETROS_PADRAO
 
-MOEDA = '#,##0.00'
-PERCENTUAL = '0.00%'
+MOEDA = '"R$" #,##0.00'
+PERCENTUAL = "0.00%"
 
-_FUNDO_CABECALHO = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
-_FONTE_CABECALHO = Font(color="F1F5F9", bold=True)
-_FONTE_TOTAL = Font(bold=True)
+_AZUL_ESCURO = "0F172A"
+_AZUL_MEDIO = "1E293B"
+_CIANO = "0891B2"
+_CINZA_CLARO = "E2E8F0"
+_BRANCO = "FFFFFF"
+
+_FONTE_TITULO = Font(color=_BRANCO, bold=True, size=16)
+_FONTE_SUBTITULO = Font(color=_CINZA_CLARO, size=10, italic=True)
+_FONTE_SECAO = Font(color=_BRANCO, bold=True, size=11)
+_FONTE_CABECALHO_TABELA = Font(bold=True, size=10)
+_FONTE_TOTAL = Font(bold=True, size=10)
+_FONTE_RESUMO_ROTULO = Font(size=10)
+_FONTE_RESUMO_VALOR = Font(bold=True, size=10)
+_FONTE_PRECO_FINAL = Font(color=_BRANCO, bold=True, size=15)
+_FONTE_PARAMETROS_TITULO = Font(bold=True, size=10, color=_BRANCO)
+
+_FILL_TITULO = PatternFill(start_color=_AZUL_ESCURO, end_color=_AZUL_ESCURO, fill_type="solid")
+_FILL_SECAO = PatternFill(start_color=_AZUL_MEDIO, end_color=_AZUL_MEDIO, fill_type="solid")
+_FILL_CABECALHO_TABELA = PatternFill(start_color=_CINZA_CLARO, end_color=_CINZA_CLARO, fill_type="solid")
+_FILL_PRECO_FINAL = PatternFill(start_color=_CIANO, end_color=_CIANO, fill_type="solid")
+_FILL_PARAMETROS_TITULO = PatternFill(start_color=_AZUL_MEDIO, end_color=_AZUL_MEDIO, fill_type="solid")
+
+_BORDA_FINA = Border(*(Side(style="thin", color="CBD5E1") for _ in range(4)))
+
+_COL_PARAM_VALOR = "J"
 
 
-def _cabecalho(ws, linha: int, titulos: list[str]) -> None:
-    for col, titulo in enumerate(titulos, start=1):
-        celula = ws.cell(row=linha, column=col, value=titulo)
-        celula.fill = _FUNDO_CABECALHO
-        celula.font = _FONTE_CABECALHO
+def _mesclar_e_estilizar(ws, linha: int, col_ini: str, col_fim: str, valor, fonte: Font, fill: PatternFill, alinhamento: str = "left") -> None:
+    ws.merge_cells(f"{col_ini}{linha}:{col_fim}{linha}")
+    celula = ws[f"{col_ini}{linha}"]
+    celula.value = valor
+    celula.font = fonte
+    celula.fill = fill
+    celula.alignment = Alignment(horizontal=alinhamento, vertical="center")
+    for indice_col in range(column_index_from_string(col_ini), column_index_from_string(col_fim) + 1):
+        ws[f"{get_column_letter(indice_col)}{linha}"].fill = fill
 
 
-def _ajustar_largura(ws, larguras: dict[str, int]) -> None:
-    for col, largura in larguras.items():
-        ws.column_dimensions[col].width = largura
+def _cabecalho_tabela(ws, linha: int, titulos: list[str]) -> None:
+    for i, titulo in enumerate(titulos):
+        celula = ws.cell(row=linha, column=i + 1, value=titulo)
+        celula.font = _FONTE_CABECALHO_TABELA
+        celula.fill = _FILL_CABECALHO_TABELA
+        celula.border = _BORDA_FINA
+        celula.alignment = Alignment(horizontal="left" if i == 0 else "center")
+
+
+def _bordar_linha(ws, linha: int, n_colunas: int) -> None:
+    for col in range(1, n_colunas + 1):
+        ws.cell(row=linha, column=col).border = _BORDA_FINA
 
 
 def _montar_parametros(ws, entrada: dict, params: dict, comercial) -> dict[str, int]:
-    """Escreve a aba de parâmetros e devolve {chave: numero_da_linha} pra
-    as outras abas referenciarem por fórmula."""
-    _cabecalho(ws, 1, ["Parâmetro", "Valor"])
+    """Escreve o painel de parâmetros (colunas I:J) e devolve
+    {chave: numero_da_linha} pro relatório referenciar por fórmula."""
+    _mesclar_e_estilizar(
+        ws, 1, "I", "J", "PARÂMETROS (editável)", _FONTE_PARAMETROS_TITULO, _FILL_PARAMETROS_TITULO, "center"
+    )
     linhas: dict[str, int] = {}
     r = 2
 
     def add(chave: str, rotulo: str, valor, fmt: str | None = None):
         nonlocal r
-        ws.cell(row=r, column=1, value=rotulo)
-        celula = ws.cell(row=r, column=2, value=valor)
+        ws.cell(row=r, column=9, value=rotulo).font = Font(size=9)
+        celula = ws.cell(row=r, column=10, value=valor)
+        celula.font = Font(size=9, bold=True)
         if fmt:
             celula.number_format = fmt
         linhas[chave] = r
         r += 1
 
-    add("peso_liquido_kg", "Peso líquido (kg)", entrada["peso_liquido_kg"], MOEDA)
+    add("peso_liquido_kg", "Peso líquido (kg)", entrada["peso_liquido_kg"], "0.00")
     add("fator_margem", "Fator de margem de venda", params["fator_margem_venda"], "0.00")
     add("corte_valor_kg", "Corte — R$/kg", params["corte_valor_kg"], MOEDA)
     add("caldeiraria_fator_h_kg", "Caldeiraria — fator h/kg", params["caldeiraria_fator_h_kg"], "0.0000")
@@ -85,40 +130,13 @@ def _montar_parametros(ws, entrada: dict, params: dict, comercial) -> dict[str, 
     add("energia_valor_kg", "Energia — R$/kg", params["energia_valor_kg"], MOEDA)
     add("aliquota_venda", f"Alíquota de venda ({comercial.cenario_comercial})", comercial.aliquota_venda, PERCENTUAL)
 
-    _ajustar_largura(ws, {"A": 44, "B": 16})
+    ws.column_dimensions["I"].width = 40
+    ws.column_dimensions["J"].width = 14
     return linhas
 
 
 def _ref(linhas: dict[str, int], chave: str) -> str:
-    return f"Parâmetros!$B${linhas[chave]}"
-
-
-def _montar_materia_prima(ws, itens: list[dict]) -> str | None:
-    """Devolve a referência da célula de total líquido (ou None se vazio)."""
-    _cabecalho(ws, 1, ["Descrição", "Peso (kg)", "Preço/kg", "Bruto", "ICMS", "PIS/COFINS", "Líquido"])
-    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["materia_prima"]
-
-    r = 2
-    for item in itens:
-        ws.cell(row=r, column=1, value=item["descricao"])
-        ws.cell(row=r, column=2, value=item["peso_kg"]).number_format = "0.00"
-        ws.cell(row=r, column=3, value=item["preco_kg"]).number_format = MOEDA
-        ws.cell(row=r, column=4, value=f"=B{r}*C{r}").number_format = MOEDA
-        ws.cell(row=r, column=5, value=icms).number_format = PERCENTUAL
-        ws.cell(row=r, column=6, value=pis_cofins).number_format = PERCENTUAL
-        ws.cell(row=r, column=7, value=f"=D{r}*(1-E{r}-F{r})").number_format = MOEDA
-        r += 1
-
-    if r == 2:
-        return None
-
-    total_row = r
-    ws.cell(row=total_row, column=1, value="Total").font = _FONTE_TOTAL
-    celula_total = ws.cell(row=total_row, column=7, value=f"=SUM(G2:G{total_row - 1})")
-    celula_total.number_format = MOEDA
-    celula_total.font = _FONTE_TOTAL
-    _ajustar_largura(ws, {"A": 40, "B": 12, "C": 12, "D": 14, "E": 10, "F": 12, "G": 14})
-    return f"'Matéria-prima'!$G${total_row}"
+    return f"${_COL_PARAM_VALOR}${linhas[chave]}"
 
 
 def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int], linha_caldeiraria_horas_cel: str | None) -> tuple[str, str | None]:
@@ -134,8 +152,8 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
         # app/processos.py calcula o bruto com as horas SEM arredondar, mas
         # guarda linha.horas arredondado (2 casas) — e é esse valor
         # arredondado que orcamento.py repassa pro jateamento/pintura. Pra
-        # bater exato com o motor real, o bruto daqui usa a expressão cheia
-        # (sem arredondar) e a célula de Horas (que o jateamento referencia)
+        # bater exato com o motor real, o bruto usa a expressão cheia (sem
+        # arredondar) e a célula de Horas (que o jateamento referencia)
         # arredonda, replicando a mesma perda de precisão intermediária.
         horas_cheio = f"{peso}*{_ref(linhas_p, 'caldeiraria_fator_h_kg')}"
         return f"={horas_cheio}*{_ref(linhas_p, 'caldeiraria_valor_hora')}", f"=ROUND({horas_cheio},2)"
@@ -178,12 +196,67 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
     return None, None  # usinagem, itens_padrao — sem taxa única, fica estático
 
 
-def _montar_processos(ws, resultado_linhas: list, entrada: dict, linhas_p: dict[str, int]) -> str:
-    _cabecalho(ws, 1, ["Processo", "Horas", "Bruto", "ICMS", "PIS/COFINS", "Líquido"])
+def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) -> bytes:
+    """entrada: o dict já adaptado (o mesmo que POST /orcamento espera).
+    resultado: o ResultadoOrcamento já calculado (evita recalcular e
+    garante que os valores estáticos batem com o que apareceu na tela)."""
+    params = params or PARAMETROS_PADRAO
 
-    r = 2
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Orçamento"
+    ws.sheet_view.showGridLines = False
+
+    linhas_p = _montar_parametros(ws, entrada, params, resultado.comercial)
+
+    # ---- Cabeçalho do relatório ----
+    r = 1
+    _mesclar_e_estilizar(ws, r, "A", "G", "ORÇAMENTO INDUSTRIAL", _FONTE_TITULO, _FILL_TITULO)
+    ws.row_dimensions[r].height = 28
+    r += 1
+    gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
+    _mesclar_e_estilizar(
+        ws, r, "A", "G", f"FC Nexus — Orçamento Industrial I.A.  ·  Gerado em {gerado_em}",
+        _FONTE_SUBTITULO, _FILL_TITULO,
+    )
+    r += 2
+
+    # ---- Matéria-prima ----
+    itens_mp = entrada.get("materia_prima") or []
+    ref_total_materia_prima = None
+    if itens_mp:
+        _mesclar_e_estilizar(ws, r, "A", "G", "MATÉRIA-PRIMA", _FONTE_SECAO, _FILL_SECAO)
+        r += 1
+        _cabecalho_tabela(ws, r, ["Descrição", "Peso (kg)", "Preço/kg", "Bruto", "ICMS", "PIS/COFINS", "Líquido"])
+        r += 1
+        icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["materia_prima"]
+        primeira_linha_mp = r
+        for item in itens_mp:
+            ws.cell(row=r, column=1, value=item["descricao"])
+            ws.cell(row=r, column=2, value=item["peso_kg"]).number_format = "0.00"
+            ws.cell(row=r, column=3, value=item["preco_kg"]).number_format = MOEDA
+            ws.cell(row=r, column=4, value=f"=B{r}*C{r}").number_format = MOEDA
+            ws.cell(row=r, column=5, value=icms).number_format = PERCENTUAL
+            ws.cell(row=r, column=6, value=pis_cofins).number_format = PERCENTUAL
+            ws.cell(row=r, column=7, value=f"=D{r}*(1-E{r}-F{r})").number_format = MOEDA
+            _bordar_linha(ws, r, 7)
+            r += 1
+        ws.cell(row=r, column=1, value="Total matéria-prima").font = _FONTE_TOTAL
+        celula_total = ws.cell(row=r, column=7, value=f"=SUM(G{primeira_linha_mp}:G{r - 1})")
+        celula_total.number_format = MOEDA
+        celula_total.font = _FONTE_TOTAL
+        _bordar_linha(ws, r, 7)
+        ref_total_materia_prima = f"$G${r}"
+        r += 2
+
+    # ---- Processos ----
+    _mesclar_e_estilizar(ws, r, "A", "G", "PROCESSOS", _FONTE_SECAO, _FILL_SECAO)
+    r += 1
+    _cabecalho_tabela(ws, r, ["Processo", "Horas", "Bruto", "ICMS", "PIS/COFINS", "Líquido", ""])
+    r += 1
+    primeira_linha_proc = r
     horas_caldeiraria_cel: str | None = None
-    for linha in resultado_linhas:
+    for linha in resultado.linhas:
         if linha.codigo == "materia_prima":
             continue
 
@@ -197,11 +270,11 @@ def _montar_processos(ws, resultado_linhas: list, entrada: dict, linhas_p: dict[
         if formula_horas is not None:
             ws.cell(row=r, column=2, value=formula_horas).number_format = "0.00"
             if linha.codigo == "caldeiraria":
-                horas_caldeiraria_cel = f"Processos!$B${r}"
+                horas_caldeiraria_cel = f"$B${r}"
         elif linha.horas is not None:
             ws.cell(row=r, column=2, value=linha.horas).number_format = "0.00"
             if linha.codigo == "caldeiraria":
-                horas_caldeiraria_cel = f"Processos!$B${r}"
+                horas_caldeiraria_cel = f"$B${r}"
 
         if formula_bruto is not None:
             ws.cell(row=r, column=3, value=formula_bruto).number_format = MOEDA
@@ -211,78 +284,91 @@ def _montar_processos(ws, resultado_linhas: list, entrada: dict, linhas_p: dict[
         ws.cell(row=r, column=4, value=linha.aliquota_icms).number_format = PERCENTUAL
         ws.cell(row=r, column=5, value=linha.aliquota_pis_cofins).number_format = PERCENTUAL
         ws.cell(row=r, column=6, value=f"=C{r}*(1-D{r}-E{r})").number_format = MOEDA
+        _bordar_linha(ws, r, 7)
         r += 1
 
-    total_row = r
-    ws.cell(row=total_row, column=1, value="Total processos").font = _FONTE_TOTAL
-    celula_total = ws.cell(row=total_row, column=6, value=f"=SUM(F2:F{total_row - 1})")
-    celula_total.number_format = MOEDA
-    celula_total.font = _FONTE_TOTAL
-    _ajustar_largura(ws, {"A": 42, "B": 10, "C": 14, "D": 10, "E": 12, "F": 14})
-    return f"Processos!$F${total_row}"
+    ws.cell(row=r, column=1, value="Total processos").font = _FONTE_TOTAL
+    celula_total_proc = ws.cell(row=r, column=6, value=f"=SUM(F{primeira_linha_proc}:F{r - 1})")
+    celula_total_proc.number_format = MOEDA
+    celula_total_proc.font = _FONTE_TOTAL
+    _bordar_linha(ws, r, 7)
+    ref_total_processos = f"$F${r}"
+    r += 2
 
+    # ---- Resumo comercial ----
+    linha_resumo_ini = r
+    _mesclar_e_estilizar(ws, r, "A", "G", "RESUMO COMERCIAL", _FONTE_SECAO, _FILL_SECAO)
+    r += 1
 
-def _montar_resumo(ws, linhas_p: dict[str, int], ref_total_materia_prima: str | None, ref_total_processos: str) -> None:
-    partes_custo = [ref_total_processos]
-    if ref_total_materia_prima:
-        partes_custo.append(ref_total_materia_prima)
+    partes_custo = [ref_total_processos] + ([ref_total_materia_prima] if ref_total_materia_prima else [])
     formula_custo_industrial = "=" + "+".join(partes_custo)
 
-    _cabecalho(ws, 1, ["Resumo comercial", ""])
-    linhas = [
-        ("Peso líquido (kg)", f"={_ref(linhas_p, 'peso_liquido_kg')}", "0.00"),
-        ("Custo industrial", formula_custo_industrial, MOEDA),
-        ("Fator de margem", f"={_ref(linhas_p, 'fator_margem')}", "0.00"),
-        ("Alíquota de venda", f"={_ref(linhas_p, 'aliquota_venda')}", PERCENTUAL),
-    ]
-    for i, (rotulo, formula, fmt) in enumerate(linhas, start=2):
-        ws.cell(row=i, column=1, value=rotulo)
-        ws.cell(row=i, column=2, value=formula).number_format = fmt
+    def linha_resumo(rotulo: str, formula, fmt: str):
+        nonlocal r
+        ws.cell(row=r, column=1, value=rotulo).font = _FONTE_RESUMO_ROTULO
+        celula = ws.cell(row=r, column=3, value=formula)
+        celula.font = _FONTE_RESUMO_VALOR
+        celula.number_format = fmt
+        return celula
 
-    custo_cel, margem_cel, aliquota_cel, peso_cel = "B3", "B4", "B5", "B2"
-    ws.cell(row=6, column=1, value="Preço de venda (c/ impostos)")
-    ws.cell(row=6, column=2, value=f"={custo_cel}*(1+{margem_cel})").number_format = MOEDA
-    venda_com_impostos_cel = "B6"
+    linha_peso = r
+    linha_resumo("Peso líquido (kg)", f"={_ref(linhas_p, 'peso_liquido_kg')}", "0.00")
+    r += 1
+    linha_custo = r
+    linha_resumo("Custo industrial", formula_custo_industrial, MOEDA)
+    r += 1
+    linha_margem = r
+    linha_resumo("Fator de margem", f"={_ref(linhas_p, 'fator_margem')}", "0.00")
+    r += 1
+    linha_aliquota = r
+    linha_resumo("Alíquota de venda", f"={_ref(linhas_p, 'aliquota_venda')}", PERCENTUAL)
+    r += 1
 
-    ws.cell(row=7, column=1, value="Imposto a pagar")
-    ws.cell(row=7, column=2, value=f"={venda_com_impostos_cel}*{aliquota_cel}").number_format = MOEDA
-    imposto_cel = "B7"
+    custo_cel, margem_cel, aliquota_cel, peso_cel = f"$C${linha_custo}", f"$C${linha_margem}", f"$C${linha_aliquota}", f"$C${linha_peso}"
 
-    ws.cell(row=8, column=1, value="Margem de lucro")
-    ws.cell(row=8, column=2, value=f"={venda_com_impostos_cel}-{imposto_cel}-{custo_cel}").number_format = MOEDA
+    linha_venda_com = r
+    linha_resumo("Preço de venda (c/ impostos)", f"={custo_cel}*(1+{margem_cel})", MOEDA)
+    venda_com_cel = f"$C${linha_venda_com}"
+    r += 1
+    linha_imposto = r
+    linha_resumo("Imposto a pagar", f"={venda_com_cel}*{aliquota_cel}", MOEDA)
+    imposto_cel = f"$C${linha_imposto}"
+    r += 1
+    linha_resumo("Margem de lucro", f"={venda_com_cel}-{imposto_cel}-{custo_cel}", MOEDA)
+    r += 1
+    linha_resumo("Preço de venda (s/ impostos)", f"={venda_com_cel}*(1-{aliquota_cel})", MOEDA)
+    r += 1
+    linha_resumo("R$/kg", f"=IF({peso_cel}=0,0,{venda_com_cel}/{peso_cel})", MOEDA)
+    r += 1
 
-    ws.cell(row=9, column=1, value="Preço de venda (s/ impostos)")
-    ws.cell(row=9, column=2, value=f"={venda_com_impostos_cel}*(1-{aliquota_cel})").number_format = MOEDA
+    for linha_i in range(linha_resumo_ini + 1, r):
+        _bordar_linha(ws, linha_i, 3)
 
-    ws.cell(row=10, column=1, value="R$/kg")
-    ws.cell(row=10, column=2, value=f"=IF({peso_cel}=0,0,{venda_com_impostos_cel}/{peso_cel})").number_format = MOEDA
+    r += 1
+    # Preço final em destaque
+    _mesclar_e_estilizar(ws, r, "A", "D", "PREÇO DE VENDA (C/ IMPOSTOS)", _FONTE_PRECO_FINAL, _FILL_PRECO_FINAL)
+    ws.row_dimensions[r].height = 26
+    ws.merge_cells(f"E{r}:G{r}")
+    celula_preco_final = ws[f"E{r}"]
+    celula_preco_final.value = f"={venda_com_cel}"
+    celula_preco_final.font = _FONTE_PRECO_FINAL
+    celula_preco_final.fill = _FILL_PRECO_FINAL
+    celula_preco_final.number_format = MOEDA
+    celula_preco_final.alignment = Alignment(horizontal="right", vertical="center")
+    ultima_linha = r
 
-    for row in (6, 7, 8, 9, 10):
-        ws.cell(row=row, column=1).font = _FONTE_TOTAL
-        ws.cell(row=row, column=2).font = _FONTE_TOTAL
+    # ---- Layout A4 ----
+    ws.column_dimensions["A"].width = 34
+    for col in ("B", "C", "D", "E", "F", "G"):
+        ws.column_dimensions[col].width = 13
 
-    _ajustar_largura(ws, {"A": 32, "B": 16})
-
-
-def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) -> bytes:
-    """entrada: o dict já adaptado (o mesmo que POST /orcamento espera).
-    resultado: o ResultadoOrcamento já calculado (evita recalcular e
-    garante que os valores estáticos batem com o que apareceu na tela)."""
-    params = params or PARAMETROS_PADRAO
-
-    wb = Workbook()
-    ws_parametros = wb.active
-    ws_parametros.title = "Parâmetros"
-    ws_materia_prima = wb.create_sheet("Matéria-prima")
-    ws_processos = wb.create_sheet("Processos")
-    ws_resumo = wb.create_sheet("Resumo")
-
-    linhas_p = _montar_parametros(ws_parametros, entrada, params, resultado.comercial)
-    ref_total_materia_prima = _montar_materia_prima(ws_materia_prima, entrada.get("materia_prima") or [])
-    ref_total_processos = _montar_processos(ws_processos, resultado.linhas, entrada, linhas_p)
-    _montar_resumo(ws_resumo, linhas_p, ref_total_materia_prima, ref_total_processos)
-
-    wb.move_sheet("Resumo", offset=-3)  # Resumo primeiro, é o que interessa ao abrir
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "portrait"
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_margins = PageMargins(left=0.5, right=0.5, top=0.6, bottom=0.6, header=0.3, footer=0.3)
+    ws.print_area = f"A1:G{ultima_linha}"
 
     buffer = io.BytesIO()
     wb.save(buffer)

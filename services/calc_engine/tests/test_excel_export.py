@@ -29,24 +29,51 @@ def _carregar(entrada: dict):
     return load_workbook(io.BytesIO(conteudo)), resultado
 
 
-def test_gera_as_quatro_abas_com_resumo_primeiro():
+def _acha_linha(ws, coluna: int, texto: str, ate_linha: int = 60) -> int:
+    for r in range(1, ate_linha):
+        valor = ws.cell(row=r, column=coluna).value
+        if valor and texto in str(valor):
+            return r
+    raise AssertionError(f"'{texto}' não encontrado na coluna {coluna}")
+
+
+def test_gera_uma_aba_so():
     wb, _ = _carregar(ENTRADA_BASE)
-    assert wb.sheetnames == ["Resumo", "Parâmetros", "Matéria-prima", "Processos"]
+    assert wb.sheetnames == ["Orçamento"]
+
+
+def test_layout_a4_configurado():
+    wb, _ = _carregar(ENTRADA_BASE)
+    ws = wb["Orçamento"]
+    assert str(ws.page_setup.paperSize) == str(ws.PAPERSIZE_A4)
+    assert ws.page_setup.orientation == "portrait"
+    assert ws.print_area is not None
+    # área de impressão cobre só o relatório (A:G), não o painel de parâmetros (I:J)
+    assert "I" not in ws.print_area and "J" not in ws.print_area
+
+
+def test_parametros_ficam_no_mesmo_sheet_fora_da_area_de_impressao():
+    wb, _ = _carregar(ENTRADA_BASE)
+    ws = wb["Orçamento"]
+    assert ws["I1"].value == "PARÂMETROS (editável)"
+    linha_peso = _acha_linha(ws, 9, "Peso líquido")
+    assert ws.cell(row=linha_peso, column=10).value == 196.25
 
 
 def test_materia_prima_usa_formula_nao_valor_fixo():
     wb, _ = _carregar(ENTRADA_BASE)
-    ws = wb["Matéria-prima"]
-    assert ws["D2"].value == "=B2*C2"  # bruto = peso × preço
-    assert ws["G2"].value == "=D2*(1-E2-F2)"  # líquido = bruto líquido de impostos
+    ws = wb["Orçamento"]
+    linha_item = _acha_linha(ws, 1, "CHAPA 1000x500x25")
+    assert ws.cell(row=linha_item, column=4).value == f"=B{linha_item}*C{linha_item}"
+    assert ws.cell(row=linha_item, column=7).value == f"=D{linha_item}*(1-E{linha_item}-F{linha_item})"
 
 
-def test_resumo_encadeia_formulas_ate_preco_de_venda():
+def test_preco_final_referencia_a_linha_de_venda_com_impostos():
     wb, _ = _carregar(ENTRADA_BASE)
-    ws = wb["Resumo"]
-    assert ws["B6"].value == "=B3*(1+B4)"  # venda c/ impostos = custo × (1 + margem)
-    assert ws["B7"].value == "=B6*B5"  # imposto = venda × alíquota
-    assert ws["B10"].value == "=IF(B2=0,0,B6/B2)"  # R$/kg
+    ws = wb["Orçamento"]
+    linha_venda = _acha_linha(ws, 1, "Preço de venda (c/ impostos)")
+    linha_destaque = _acha_linha(ws, 1, "PREÇO DE VENDA")
+    assert ws.cell(row=linha_destaque, column=5).value == f"=$C${linha_venda}"
 
 
 def test_caldeiraria_arredonda_horas_antes_do_jateamento_usar():
@@ -56,32 +83,34 @@ def test_caldeiraria_arredonda_horas_antes_do_jateamento_usar():
     arredondamento intermediário no Excel, o jateamento batia ~0,006
     errado. Trava esse comportamento aqui."""
     wb, _ = _carregar(ENTRADA_BASE)
-    ws = wb["Processos"]
+    ws = wb["Orçamento"]
 
-    linha_caldeiraria = next(r for r in range(2, 20) if ws.cell(row=r, column=1).value and "Caldeiraria" in ws.cell(row=r, column=1).value)
+    linha_caldeiraria = _acha_linha(ws, 1, "Caldeiraria")
     formula_horas_caldeiraria = ws.cell(row=linha_caldeiraria, column=2).value
     assert formula_horas_caldeiraria.startswith("=ROUND(")
 
     formula_bruto_caldeiraria = ws.cell(row=linha_caldeiraria, column=3).value
     assert "ROUND" not in formula_bruto_caldeiraria  # bruto usa a expressão cheia, não a arredondada
 
-    linha_jateamento = next(r for r in range(2, 20) if ws.cell(row=r, column=1).value and "Jateamento" in ws.cell(row=r, column=1).value)
+    linha_jateamento = _acha_linha(ws, 1, "Jateamento")
     formula_horas_jateamento = ws.cell(row=linha_jateamento, column=2).value
     assert f"$B${linha_caldeiraria}" in formula_horas_jateamento  # referencia a célula (já arredondada)
 
 
 def test_sem_materia_prima_nao_quebra_resumo():
     entrada = {**ENTRADA_BASE, "materia_prima": []}
-    wb, resultado = _carregar(entrada)
-    ws = wb["Resumo"]
-    assert ws["B3"].value == "=Processos!$F$12"  # sem "+None" nem referência quebrada
+    wb, _ = _carregar(entrada)
+    ws = wb["Orçamento"]
+    linha_custo = _acha_linha(ws, 1, "Custo industrial")
+    formula = ws.cell(row=linha_custo, column=3).value
+    assert formula.startswith("=$F$")  # só o total de processos, sem "+None"
 
 
 def test_usar_historico_horas_cai_para_valor_estatico_sem_quebrar():
     entrada = {**ENTRADA_BASE, "usar_historico_horas": True}
     wb, resultado = _carregar(entrada)
-    ws = wb["Processos"]
-    linha_caldeiraria = next(r for r in range(2, 20) if ws.cell(row=r, column=1).value and "Caldeiraria" in ws.cell(row=r, column=1).value)
+    ws = wb["Orçamento"]
+    linha_caldeiraria = _acha_linha(ws, 1, "Caldeiraria")
     valor_bruto = ws.cell(row=linha_caldeiraria, column=3).value
     linha_calc = next(l for l in resultado.linhas if l.codigo == "caldeiraria")
     assert valor_bruto == round(linha_calc.valor_bruto, 2)

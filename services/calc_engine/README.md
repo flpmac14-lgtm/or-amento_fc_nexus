@@ -180,13 +180,16 @@ Pra poder testar sem esperar o frontend (Node.js ainda não instalado):
   linha aceito. Útil quando o orçamentista já sabe os itens de cabeça.
 - `POST /orcamento/excel` — mesma entrada de `/orcamento`, devolve uma
   planilha `.xlsx` **editável** em vez de JSON (`app/excel_export.py`):
-  peso, taxas por processo e alíquotas ficam em células próprias na aba
-  "Parâmetros"; as outras abas usam fórmula (não valor fixo), então mudar
-  um parâmetro recalcula tudo dentro do próprio Excel. Validado batendo
-  exato (2 casas decimais) com o motor Python em dois cenários reais —
-  achado no processo: `app/processos.py` arredonda as horas de
-  caldeiraria pra 2 casas ANTES de repassar pro cálculo do jateamento/
-  pintura, então a fórmula do Excel replica esse arredondamento
+  tudo numa aba só ("Orçamento", layout A4 retrato, pronta pra imprimir/
+  exportar em PDF do próprio Excel), com um painel de parâmetros editável
+  ao lado (colunas I:J, fora da área de impressão) — peso, taxas por
+  processo e alíquotas ficam em células próprias ali; o relatório
+  (colunas A:G) usa fórmula (não valor fixo) referenciando essas células,
+  então mudar um parâmetro recalcula tudo dentro do próprio Excel.
+  Validado batendo exato (2 casas decimais) com o motor Python em dois
+  cenários reais — achado no processo: `app/processos.py` arredonda as
+  horas de caldeiraria pra 2 casas ANTES de repassar pro cálculo do
+  jateamento/pintura, então a fórmula do Excel replica esse arredondamento
   intermediário com `ROUND(...)` (sem isso, a diferença era pequena mas
   real, ~R$0,01 em alguns casos).
 
