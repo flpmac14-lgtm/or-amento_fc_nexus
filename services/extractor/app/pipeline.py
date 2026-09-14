@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from app.ai_fallback.client import fallback_habilitado
 from app.extraction import bom_parser
+from app.extraction.bom_table import extrair_bom_de_tabelas
 from app.extraction.ocr import ocr_pagina, tesseract_disponivel
 from app.extraction.text_extract import extrair_texto_nativo
 
@@ -58,6 +59,14 @@ def processar_pdf(pdf_path: str) -> dict:
         numero_folhas=_campo_len(paginas),
     )
 
+    # Extração de tabela (BOM) trabalha direto no PDF via pdfplumber, à
+    # parte do texto nativo/OCR já concatenado acima. Tabelas sem cabeçalho
+    # reconhecível são descartadas dentro de extrair_bom_de_tabelas (ver
+    # limite documentado em app/extraction/bom_table.py — quando a página
+    # não tem texto nativo, a grade da tabela aparece mas as células vêm
+    # vazias, e não há nada de útil pra extrair sem OCR de layout).
+    bom = extrair_bom_de_tabelas(pdf_path)
+
     campos_essenciais = {
         nome: getattr(identificacao, nome).confianca for nome in CAMPOS_IDENTIFICACAO
     }
@@ -75,7 +84,7 @@ def processar_pdf(pdf_path: str) -> dict:
     resultado = ResultadoExtracao(
         identificacao=identificacao,
         caracteristicas=caracteristicas,
-        bom=[],
+        bom=bom,
         confianca_geral=round(confianca_geral, 2),
         paginas_total=len(paginas),
         paginas_com_texto_nativo=sum(1 for p in paginas if not p.precisa_ocr),

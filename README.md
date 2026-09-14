@@ -55,6 +55,15 @@ INTERGARD/INTERSEAL). Número do desenho, revisão e BOM dependem de OCR nas
 outras páginas — ainda não testado ponta a ponta porque o binário do
 Tesseract não está instalado nesta máquina (ver "Pendências").
 
+O mesmo vale para a extração de BOM em tabela (`app/extraction/bom_table.py`):
+rodando `pdfplumber` contra esse PDF real, ele até acha a grade da tabela
+pelas linhas vetoriais, mas todas as células voltam vazias (mesmo motivo —
+texto como curva, não como texto). A extração de tabela em si foi validada
+com um PDF sintético (tabela com grade + texto real, gerada via PyMuPDF nos
+testes) — funciona corretamente quando o PDF tem texto de verdade; falta
+testar contra um desenho real que não dependa de OCR pra confirmar em
+produção.
+
 ## O que já existe neste repositório
 
 - `supabase/migrations/0001_init.sql` — schema completo (materiais, perfis,
@@ -88,11 +97,19 @@ Tesseract não está instalado nesta máquina (ver "Pendências").
   - `app/extraction/bom_parser.py` — heurísticas de regex calibradas com o
     desenho real (norma ASTM/AISI, perfil W, PO, código de equipamento,
     especificação de pintura, indicação MACHINED)
+  - `app/extraction/bom_table.py` — extração da lista de materiais (BOM) como
+    tabela via pdfplumber: mapeia cabeçalhos em português OU inglês (desenhos
+    de clientes como Weir/Andritz costumam vir em inglês) para os campos
+    canônicos do `ItemBom`, infere `tipo_geometria` (chapa retangular,
+    circular, barra redonda, perfil) a partir das colunas presentes, e
+    **descarta tabelas sem cabeçalho reconhecível** em vez de adivinhar
+    itens sem base — ver limite abaixo
   - `app/ai_fallback/client.py` — stub do fallback de IA externa, desligado
     por padrão, só ativa com `EXTRACTOR_AI_FALLBACK_ENABLED=1` + chave de API
   - `app/pipeline.py` — orquestra tudo e calcula confiança geral
-  - `tests/test_bom_parser.py` — testes unitários rodando contra o texto real
-    do desenho A752193 (5 passando)
+  - `tests/test_bom_parser.py` e `tests/test_bom_table.py` — 13 testes,
+    incluindo um PDF sintético (tabela real com grade + texto, gerada via
+    PyMuPDF) que valida o caminho ponta a ponta do pdfplumber
 - `services/calc_engine/` — motor de cálculo determinístico (peso, custo por
   processo, custo industrial, impostos e preço de venda), lendo os mesmos
   parâmetros semeados acima:
@@ -161,9 +178,11 @@ python -m venv .venv
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
    revisão em folhas sem texto nativo).
-5. `services/extractor` ainda não extrai a BOM em tabela de verdade (`bom`
-   sempre volta vazio) — o adaptador já está pronto para quando isso existir.
-   Falta também a camada de estimativa de horas por histórico
+5. `services/extractor` já extrai BOM em tabela (`app/extraction/bom_table.py`,
+   validado com PDF sintético) e o adaptador já consome isso — falta validar
+   contra desenhos reais com texto nativo de verdade (a maioria dos desenhos
+   da Macfab parece depender de OCR, então isso também está amarrado ao
+   item 1). Falta ainda a camada de estimativa de horas por histórico
    (peso/material/complexidade similares → horas medianas de orçamentos
    passados) e trocar a fixture de materiais/preços por consulta real ao
    Supabase.
