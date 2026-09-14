@@ -21,6 +21,7 @@ from app.ai_fallback.client import fallback_habilitado
 from app.extraction import bom_parser
 from app.extraction.bom_sap_export import extrair_bom_sap_export
 from app.extraction.bom_table import extrair_bom_de_tabelas
+from app.extraction.bom_texto_manual import extrair_bom_de_texto_manual
 from app.extraction.ocr import ocr_pagina, tesseract_disponivel
 from app.extraction.text_extract import extrair_texto_nativo
 
@@ -118,6 +119,32 @@ def processar_pdfs(pdf_paths: list[str]) -> dict:
         paginas_via_ocr=paginas_ocr_total,
         usou_ia_externa=usou_ia_externa,
         texto_bruto=texto_completo,
+    )
+    return resultado.model_dump()
+
+
+def processar_texto(texto: str) -> dict:
+    """Mesma saída de `processar_pdf`, mas a partir de uma BOM digitada
+    manualmente (sem PDF) — ver app/extraction/bom_texto_manual.py pro
+    formato de linha aceito. Não tem desenho pra tirar identificação/
+    normas gerais, só a BOM; identificação e características ficam vazias
+    (confiança 0), o que é honesto — não tem de onde vir esse dado aqui."""
+    from app.schemas import CaracteristicasGerais, Identificacao, ResultadoExtracao
+
+    bom = extrair_bom_de_texto_manual(texto)
+    confiancas_bom = [item["tipo_geometria"]["confianca"] for item in bom if item["tipo_geometria"]["confianca"] > 0]
+    confianca_geral = sum(confiancas_bom) / len(confiancas_bom) if confiancas_bom else 0.0
+
+    resultado = ResultadoExtracao(
+        identificacao=Identificacao(),
+        caracteristicas=CaracteristicasGerais(),
+        bom=bom,
+        confianca_geral=round(confianca_geral, 2),
+        paginas_total=0,
+        paginas_com_texto_nativo=0,
+        paginas_via_ocr=0,
+        usou_ia_externa=False,
+        texto_bruto=texto,
     )
     return resultado.model_dump()
 

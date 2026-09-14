@@ -9,6 +9,8 @@ Endpoints:
                                HTTP (mantendo os serviços desacoplados, do
                                jeito documentado no README raiz), monta a
                                entrada com o adapter e calcula o orçamento
+  POST /orcamento-de-texto -> igual, mas a BOM vem digitada manualmente
+                               (sem PDF nenhum) — ver bom_texto_manual.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -18,10 +20,11 @@ backend do app principal (Next.js/Supabase), não aqui.
 from __future__ import annotations
 
 import os
+from typing import Annotated
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapter import montar_entrada_orcamento
@@ -102,6 +105,48 @@ async def orcamento_de_pdf(
         "cenario_comercial": cenario_comercial,
         "usar_historico_horas": usar_historico_horas,
     }
+    return _montar_resposta(resultado_extracao, estimativas)
+
+
+@app.post("/orcamento-de-texto")
+async def orcamento_de_texto(
+    texto: Annotated[str, Form()],
+    peso_liquido_kg: float | None = None,
+    area_pintura_m2: float | None = None,
+    quantidade_posicoes_engenharia: float | None = None,
+    cenario_comercial: str = "venda_fabricacao",
+    usar_historico_horas: bool = False,
+) -> dict:
+    """Igual a /orcamento-de-pdf, mas a BOM vem digitada manualmente (sem
+    PDF nenhum) — ver formato de linha aceito no README do extractor
+    (app/extraction/bom_texto_manual.py). Útil quando o orçamentista já
+    sabe os itens de cabeça ou tem uma lista solta (e-mail do cliente,
+    por exemplo) e não quer esperar a extração de um desenho."""
+    if not texto or not texto.strip():
+        raise HTTPException(status_code=400, detail="Envie o texto com os itens")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(f"{EXTRACTOR_URL}/extract-de-texto", json={"texto": texto})
+            resp.raise_for_status()
+            resultado_extracao = resp.json()
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Não consegui falar com o serviço de extração em {EXTRACTOR_URL}. Ele está rodando?",
+        ) from e
+
+    estimativas = {
+        "peso_liquido_kg": peso_liquido_kg,
+        "area_pintura_m2": area_pintura_m2,
+        "quantidade_posicoes_engenharia": quantidade_posicoes_engenharia,
+        "cenario_comercial": cenario_comercial,
+        "usar_historico_horas": usar_historico_horas,
+    }
+    return _montar_resposta(resultado_extracao, estimativas)
+
+
+def _montar_resposta(resultado_extracao: dict, estimativas: dict) -> dict:
     adaptacao = montar_entrada_orcamento(resultado_extracao, estimativas)
     resultado_orcamento = montar_orcamento(adaptacao.entrada)
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import FormularioUpload from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
-import { analisarPdf } from "@/lib/api";
+import { analisarPdf, analisarTexto } from "@/lib/api";
 import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "@/lib/types";
 
 export default function Home() {
@@ -23,6 +23,21 @@ export default function Home() {
       setResultado(r);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao analisar o PDF.");
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function handleAnalisarTexto(texto: string, estimativas: EstimativasOrcamento) {
+    setCarregando(true);
+    setErro(null);
+    setResultado(null);
+    setNomeArquivo("itens digitados manualmente");
+    try {
+      const r = await analisarTexto(texto, estimativas);
+      setResultado(r);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao analisar o texto.");
     } finally {
       setCarregando(false);
     }
@@ -61,7 +76,11 @@ export default function Home() {
           )}
         </header>
 
-        <FormularioUpload carregando={carregando} onAnalisar={handleAnalisar} />
+        <FormularioUpload
+          carregando={carregando}
+          onAnalisar={handleAnalisar}
+          onAnalisarTexto={handleAnalisarTexto}
+        />
 
         {erro && (
           <div className="rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-300">

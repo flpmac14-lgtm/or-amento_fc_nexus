@@ -3,9 +3,9 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import Body, FastAPI, HTTPException, UploadFile
 
-from app.pipeline import processar_pdf, processar_pdfs, status_dependencias
+from app.pipeline import processar_pdf, processar_pdfs, processar_texto, status_dependencias
 
 app = FastAPI(
     title="FC Nexus - Extrator de Desenhos",
@@ -52,3 +52,12 @@ async def extract_varios(files: list[UploadFile]) -> dict:
             pdf_path.write_bytes(conteudo)
             caminhos.append(str(pdf_path))
         return processar_pdfs(caminhos)
+
+
+@app.post("/extract-de-texto")
+def extract_de_texto(texto: str = Body(..., embed=True)) -> dict:
+    """BOM digitada manualmente, sem PDF — ver app/extraction/bom_texto_manual.py
+    pro formato de linha aceito (um item por linha)."""
+    if not texto or not texto.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio")
+    return processar_texto(texto)
