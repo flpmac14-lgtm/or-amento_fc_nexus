@@ -54,14 +54,14 @@ export default function FormularioUpload({ carregando, onAnalisar }: Props) {
         }}
         className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
           arrastando
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-            : "border-zinc-300 dark:border-zinc-700"
+            ? "border-cyan-400 bg-cyan-500/10"
+            : "border-slate-700 bg-slate-900/40"
         }`}
       >
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-slate-400">
           Arraste o desenho técnico (PDF) aqui, ou
         </p>
-        <label className="cursor-pointer rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+        <label className="cursor-pointer rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-cyan-400">
           Escolher arquivo
           <input
             type="file"
@@ -71,57 +71,57 @@ export default function FormularioUpload({ carregando, onAnalisar }: Props) {
           />
         </label>
         {arquivo && (
-          <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <p className="mt-2 text-sm font-medium text-slate-100">
             {arquivo.name}
           </p>
         )}
       </div>
 
-      <details className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-        <summary className="cursor-pointer font-medium text-zinc-800 dark:text-zinc-200">
+      <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
+        <summary className="cursor-pointer font-medium text-slate-200">
           Estimativas manuais (o que o desenho ainda não dá pra calcular sozinho)
         </summary>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
-            <span className="text-zinc-600 dark:text-zinc-400">Peso líquido (kg)</span>
+            <span className="text-slate-400">Peso líquido (kg)</span>
             <input
               type="number"
               step="0.01"
               value={pesoLiquidoKg}
               onChange={(e) => setPesoLiquidoKg(e.target.value)}
               placeholder="ex: 3319"
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-zinc-600 dark:text-zinc-400">Área de pintura (m²)</span>
+            <span className="text-slate-400">Área de pintura (m²)</span>
             <input
               type="number"
               step="0.01"
               value={areaPinturaM2}
               onChange={(e) => setAreaPinturaM2(e.target.value)}
               placeholder="ex: 83"
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-zinc-600 dark:text-zinc-400">Posições de engenharia</span>
+            <span className="text-slate-400">Posições de engenharia</span>
             <input
               type="number"
               value={qtdPosicoesEngenharia}
               onChange={(e) => setQtdPosicoesEngenharia(e.target.value)}
               placeholder="ex: 38"
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-zinc-600 dark:text-zinc-400">Cenário comercial</span>
+            <span className="text-slate-400">Cenário comercial</span>
             <select
               value={cenarioComercial}
               onChange={(e) =>
                 setCenarioComercial(e.target.value as EstimativasOrcamento["cenario_comercial"])
               }
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
             >
               <option value="venda_fabricacao">Venda de fabricação</option>
               <option value="industrializacao">Industrialização</option>
@@ -133,8 +133,9 @@ export default function FormularioUpload({ carregando, onAnalisar }: Props) {
               type="checkbox"
               checked={usarHistorico}
               onChange={(e) => setUsarHistorico(e.target.checked)}
+              className="accent-cyan-500"
             />
-            <span className="text-zinc-600 dark:text-zinc-400">
+            <span className="text-slate-400">
               Combinar horas de caldeiraria com o histórico Macfab (camada 2)
             </span>
           </label>
@@ -144,7 +145,7 @@ export default function FormularioUpload({ carregando, onAnalisar }: Props) {
       <button
         type="submit"
         disabled={!arquivo || carregando}
-        className="rounded-md bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md bg-cyan-500 px-4 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {carregando ? "Analisando…" : "Analisar desenho"}
       </button>

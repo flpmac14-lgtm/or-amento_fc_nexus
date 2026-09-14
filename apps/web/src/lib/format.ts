@@ -17,10 +17,10 @@ export function formatarPercentual(valor: number | null | undefined): string {
 }
 
 export function corConfianca(confianca: number): string {
-  if (confianca >= 0.8) return "bg-emerald-100 text-emerald-800 border-emerald-300";
-  if (confianca >= 0.5) return "bg-amber-100 text-amber-800 border-amber-300";
-  if (confianca > 0) return "bg-red-100 text-red-800 border-red-300";
-  return "bg-zinc-100 text-zinc-500 border-zinc-300";
+  if (confianca >= 0.8) return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+  if (confianca >= 0.5) return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+  if (confianca > 0) return "bg-red-500/15 text-red-300 border-red-500/30";
+  return "bg-slate-500/15 text-slate-400 border-slate-500/30";
 }
 
 export const NOMES_PROCESSO: Record<string, string> = {
