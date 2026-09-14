@@ -6,18 +6,32 @@ TypeScript, Tailwind v4), gerado com `create-next-app`.
 ## Tela implementada
 
 `src/app/page.tsx` (client component) implementa o fluxo alvo da
-especificação: **Enviar desenho (PDF) ou digitar itens → Analisar →
-Conferir resultados → Relatório/Excel**. Paleta dark navy + ciano fixa
-(não depende de `prefers-color-scheme`) — pedida explicitamente pelo
-usuário a partir de uma referência visual.
+especificação: **Enviar desenho (PDF), digitar itens ou calcular
+manualmente → Analisar → Conferir resultados → Relatório/Excel**. Paleta
+dark navy + ciano fixa (não depende de `prefers-color-scheme`) — pedida
+explicitamente pelo usuário a partir de uma referência visual.
 
-- `src/components/FormularioUpload.tsx` — duas abas: **Enviar desenho
-  (PDF)** (drag-and-drop) ou **Digitar itens** (textarea, um item por
+- `src/components/FormularioUpload.tsx` — três abas: **Enviar desenho
+  (PDF)** (drag-and-drop), **Digitar itens** (textarea, um item por
   linha — `CHAPA CxLxE`, `BARRA REDONDA DxC`, `PERFIL designação
   comprimento C`, norma/qtd opcionais; ver
-  `services/extractor/app/extraction/bom_texto_manual.py` pro parser).
-  Mais campos opcionais de estimativa (peso, área de pintura, posições de
-  engenharia, cenário comercial, usar histórico Macfab).
+  `services/extractor/app/extraction/bom_texto_manual.py` pro parser) ou
+  **Cálculo manual** (ver abaixo). Mais campos opcionais de estimativa
+  (peso, área de pintura, posições de engenharia, cenário comercial,
+  usar histórico Macfab) — ocultos na aba de cálculo manual, que tem seu
+  próprio fluxo de submissão.
+- `src/components/CalculoManual.tsx` — pedido explícito do usuário:
+  cartões pequenos por tipo de geometria (chapa retangular, círculo,
+  triângulo, losango, trapézio, anel, cilindro, cone, cantoneira, barra
+  redonda, perfil, tubo — catálogo vem de `GET /geometria/tipos`). Clica
+  no cartão → formulário com as medidas daquele tipo → "Calcular peso"
+  (`POST /geometria/calcular`) → escolhe/cria a posição/item do
+  orçamento (um orçamento tem várias posições, cada uma com várias
+  peças) → "Adicionar". Repete pra cada peça; no fim, "Calcular
+  orçamento" manda tudo pra `POST /orcamento-de-bom` (ver README do
+  calc_engine) e mostra o resultado igual aos outros fluxos — preço
+  resolvido automaticamente pelo Supabase quando a norma bate com um
+  material cadastrado.
 - `src/components/ResultadoOrcamento.tsx` — identificação extraída (com
   badge de confiança por campo), itens sinalizados para revisão, linhas de
   custo por processo com "Ver cálculo" expandível (mostra a memória de

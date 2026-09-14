@@ -74,3 +74,27 @@ export interface EstimativasOrcamento {
   cenario_comercial: "venda_fabricacao" | "industrializacao" | "servico";
   usar_historico_horas: boolean;
 }
+
+export interface CampoGeometria {
+  chave: string;
+  rotulo: string;
+  unidade: string;
+}
+
+export interface TipoGeometria {
+  rotulo: string;
+  campos: CampoGeometria[];
+}
+
+export type CatalogoGeometria = Record<string, TipoGeometria>;
+
+export interface ItemCalculado {
+  posicao: string;
+  tipo: string;
+  tipoRotulo: string;
+  descricao: string;
+  norma: string;
+  quantidade: number;
+  peso_kg: number;
+  memoria_calculo: string;
+}

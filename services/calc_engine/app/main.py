@@ -14,6 +14,16 @@ Endpoints:
   POST /orcamento/excel    -> mesma entrada de /orcamento, devolve uma
                                planilha .xlsx com fórmulas editáveis em
                                vez de JSON — ver app/excel_export.py
+  GET  /geometria/tipos    -> catálogo de tipos de geometria pros cartões
+                               de cálculo manual (rótulo + campos por tipo)
+  POST /geometria/calcular -> calcula peso de uma peça a partir do tipo +
+                               medidas escolhidas no cartão — ver
+                               app/geometria_dispatch.py
+  POST /orcamento-de-bom   -> igual a /orcamento-de-pdf, mas a BOM já vem
+                               pronta (item_numero/descricao/peso_kg/norma)
+                               montada no frontend pelos cartões de cálculo
+                               manual — pula o extractor por completo,
+                               porque o peso já foi calculado
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -33,6 +43,7 @@ from fastapi.responses import Response
 
 from app.adapter import montar_entrada_orcamento
 from app.excel_export import gerar_excel_orcamento
+from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.orcamento import montar_orcamento
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
@@ -79,6 +90,86 @@ def orcamento_excel(entrada: dict) -> Response:
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="orcamento.xlsx"'},
     )
+
+
+@app.get("/geometria/tipos")
+def geometria_tipos() -> dict:
+    """Catálogo de tipos de geometria pros cartões de cálculo manual —
+    rótulo do cartão + lista de campos (chave, rótulo, unidade) por tipo,
+    na ordem que devem aparecer no formulário."""
+    return {
+        tipo: {"rotulo": rotulo, "campos": [{"chave": c, "rotulo": r, "unidade": u} for c, r, u in campos]}
+        for tipo, (rotulo, campos) in TIPOS_GEOMETRIA.items()
+    }
+
+
+@app.post("/geometria/calcular")
+def geometria_calcular(pedido: dict) -> dict:
+    """pedido: {"tipo": str, "medidas": {chave: valor}, "quantidade": float}.
+    Calcula peso de UMA peça a partir do cartão escolhido — não monta
+    orçamento nenhum, só devolve peso_kg + memória de cálculo pro
+    frontend guardar como um item de matéria-prima."""
+    tipo = pedido.get("tipo")
+    medidas = pedido.get("medidas") or {}
+    quantidade = pedido.get("quantidade", 1)
+    try:
+        resultado = calcular_peso(tipo, medidas, quantidade)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"peso_kg": round(resultado.peso_kg, 3), "memoria_calculo": resultado.memoria}
+
+
+def _campo_pronto(valor, confianca: float = 1.0) -> dict:
+    return {"valor": valor, "confianca": confianca, "origem": "manual"}
+
+
+_IDENTIFICACAO_VAZIA = {
+    campo: {"valor": None, "confianca": 0.0, "origem": "regra_local"}
+    for campo in ("cliente", "numero_desenho", "revisao", "codigo_equipamento", "pedido_po", "descricao", "quantidade")
+}
+
+
+@app.post("/orcamento-de-bom")
+def orcamento_de_bom(pedido: dict) -> dict:
+    """Igual a /orcamento-de-pdf, mas a BOM já vem pronta do frontend (os
+    cartões de cálculo manual já calcularam peso_kg de cada peça — ver
+    app/geometria_dispatch.py) em vez de vir de um PDF ou texto solto.
+    Pula o extractor por completo.
+
+    pedido: {"bom": [{"item_numero", "descricao", "peso_kg", "norma",
+    "quantidade", "tipo"}], "estimativas": {...}}. `tipo` é o tipo de
+    geometria do cartão (ex: "chapa_anel") — usado só pra resolver a
+    categoria de preço certa (chapa/barra/perfil), não pra recalcular
+    peso (que já veio pronto)."""
+    itens_bom = []
+    for item in pedido.get("bom") or []:
+        tipo_geometria = CATEGORIA_PRECO_POR_TIPO.get(item.get("tipo"))
+        itens_bom.append({
+            "item_numero": _campo_pronto(item.get("item_numero")),
+            "descricao": _campo_pronto(item.get("descricao")),
+            "tipo_geometria": _campo_pronto(tipo_geometria, 0.95 if tipo_geometria else 0.0),
+            "perfil": _campo_pronto(None, 0.0),
+            "espessura_mm": _campo_pronto(None, 0.0),
+            "comprimento_mm": _campo_pronto(None, 0.0),
+            "largura_mm": _campo_pronto(None, 0.0),
+            "diametro_mm": _campo_pronto(None, 0.0),
+            "material": _campo_pronto(item.get("norma"), 0.9 if item.get("norma") else 0.0),
+            "norma": _campo_pronto(item.get("norma"), 0.9 if item.get("norma") else 0.0),
+            "usinado": _campo_pronto(False, 0.3),
+            "quantidade": _campo_pronto(item.get("quantidade", 1)),
+            "peso_kg": _campo_pronto(item.get("peso_kg")),
+        })
+
+    resultado_extracao = {
+        "identificacao": _IDENTIFICACAO_VAZIA,
+        "caracteristicas": {},
+        "bom": itens_bom,
+        "confianca_geral": 1.0,
+        "paginas_total": 0,
+        "paginas_com_texto_nativo": 0,
+        "paginas_via_ocr": 0,
+    }
+    return _montar_resposta(resultado_extracao, pedido.get("estimativas") or {})
 
 
 @app.post("/orcamento-de-pdf")

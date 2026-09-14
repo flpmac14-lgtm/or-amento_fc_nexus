@@ -155,6 +155,31 @@ origem, não um preço real. Credenciais do ERP em `.env`
 (`ERP_SQL_SERVER`/`ERP_SQL_DATABASE`/`ERP_SQL_USER`/`ERP_SQL_PASSWORD`) —
 ver `.env.example`.
 
+## Cálculo manual de geometria (`app/geometria.py`, `app/geometria_dispatch.py`)
+
+Pedido explícito do usuário: uma forma de calcular peso peça a peça sem
+precisar de desenho nenhum, escolhendo o tipo de geometria num "cartão"
+(chapa retangular, círculo, triângulo, losango, trapézio, anel/coroa
+circular, cilindro calandrado, cone/tronco de cone por altura ou por
+ângulo, cantoneira L, barra redonda, perfil, tubo) e digitando as
+medidas. Fórmulas calibradas contra `Estudo de material.xls` (planilha
+real da pasta MAC_0573.26/A752193, tabela de 18 tipos de geometria com
+fórmula própria) — reescritas na convenção deste módulo (densidade em
+kg/m³) e revalidadas numericamente batendo exato com os exemplos reais
+da planilha (ver `tests/test_geometria.py`). Três variantes de anel do
+Excel original (calandrado/setores/recortado) viraram um `peso_chapa_anel`
+só, porque o peso líquido delas é idêntico — só o desperdício de corte
+difere, e este motor não modela peso bruto/sobra. Duas variantes raras
+(perfil ou cantoneira calandrado em semicírculo) ficaram de fora por
+enquanto.
+
+`app/geometria_dispatch.py` faz a ponte entre um tipo escolhido no
+cartão + as medidas digitadas e a função certa de `geometria.py`, e
+também mapeia cada tipo pra categoria de preço certa (chapa/barra/perfil
+— `CATEGORIA_PRECO_POR_TIPO`) pra `POST /orcamento-de-bom` conseguir
+resolver o preço/kg pelo Supabase automaticamente, igual os outros
+fluxos.
+
 ## API HTTP (`app/main.py`)
 
 Pra poder testar sem esperar o frontend (Node.js ainda não instalado):
@@ -197,6 +222,15 @@ Pra poder testar sem esperar o frontend (Node.js ainda não instalado):
 orçamento, a `entrada` já adaptada (o mesmo formato que `/orcamento` e
 `/orcamento/excel` esperam) — é assim que o frontend pede o Excel depois
 sem precisar re-extrair nada.
+
+- `GET /geometria/tipos` e `POST /geometria/calcular` — motor de cálculo
+  manual de geometria por trás dos "cartões" do frontend (usuário escolhe
+  o tipo de peça, digita as medidas, recebe peso). Ver seção "Cálculo
+  manual de geometria" abaixo.
+- `POST /orcamento-de-bom` — igual a `/orcamento-de-pdf`, mas a BOM já vem
+  pronta (`item_numero`/`descricao`/`peso_kg`/`norma`/`tipo`) montada pelo
+  frontend a partir dos cartões — pula o extractor por completo, já que o
+  peso já foi calculado.
 
 Abra `http://localhost:8002/docs` (Swagger UI) pra testar pelo navegador —
 "Try it out" em `/orcamento-de-pdf` aceita upload de arquivo direto na tela.

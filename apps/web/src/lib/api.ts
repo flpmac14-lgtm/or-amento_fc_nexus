@@ -1,4 +1,9 @@
-import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "./types";
+import type {
+  CatalogoGeometria,
+  EstimativasOrcamento,
+  ItemCalculado,
+  RespostaOrcamentoDePdf,
+} from "./types";
 
 const CALC_ENGINE_URL =
   process.env.NEXT_PUBLIC_CALC_ENGINE_URL ?? "http://localhost:8002";
@@ -98,6 +103,62 @@ export async function analisarTexto(
     const corpo = await resposta.text().catch(() => "");
     throw new Error(
       `Falha ao analisar o texto (${resposta.status}). ${corpo || "Verifique se os serviços estão rodando."}`,
+    );
+  }
+
+  return resposta.json();
+}
+
+export async function buscarCatalogoGeometria(): Promise<CatalogoGeometria> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/geometria/tipos`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar os tipos de geometria (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export async function calcularPesoGeometria(
+  tipo: string,
+  medidas: Record<string, number>,
+  quantidade: number,
+): Promise<{ peso_kg: number; memoria_calculo: string }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/geometria/calcular`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo, medidas, quantidade }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao calcular o peso (${resposta.status}). ${corpo}`);
+  }
+
+  return resposta.json();
+}
+
+export async function analisarBom(
+  itens: ItemCalculado[],
+  estimativas: EstimativasOrcamento,
+): Promise<RespostaOrcamentoDePdf> {
+  const bom = itens.map((item, i) => ({
+    item_numero: `${item.posicao} · ${i + 1}`,
+    descricao: `${item.descricao} (${item.posicao})`,
+    peso_kg: item.peso_kg,
+    norma: item.norma || null,
+    quantidade: 1,
+    tipo: item.tipo,
+  }));
+
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento-de-bom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bom, estimativas }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao calcular o orçamento (${resposta.status}). ${corpo || "Verifique se os serviços estão rodando."}`,
     );
   }
 

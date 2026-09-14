@@ -216,10 +216,15 @@ descobertas desse teste real:
     valida a combinação regra+histórico e confirma que o comportamento sem
     a flag `usar_historico_horas` fica idêntico a antes)
 - `apps/web/` — frontend Next.js 16 (App Router, TypeScript, Tailwind).
-  Implementa o fluxo alvo: arrastar PDF → analisar → conferir resultados
+  Três formas de entrada — enviar PDF, digitar itens em texto, ou
+  **cálculo manual por cartões de geometria** (chapa, anel, cone,
+  cantoneira etc. — pedido explícito do usuário, fórmulas calibradas
+  contra `Estudo de material.xls`, outra planilha real da pasta
+  MAC_0573.26/A752193) — todas convergindo pra conferir resultados
   (identificação com confiança por campo, itens para revisão, linhas de
-  custo com "Ver cálculo", resumo comercial). Chama `services/calc_engine`
-  via HTTP. Ver `apps/web/README.md`.
+  custo com "Ver cálculo", resumo comercial) e exportar como relatório
+  PDF ou planilha Excel editável. Chama `services/calc_engine` via HTTP.
+  Ver `apps/web/README.md`.
 
 ## Bibliotecas (todas gratuitas/open source)
 

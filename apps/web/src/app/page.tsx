@@ -44,6 +44,16 @@ export default function Home() {
     }
   }
 
+  function handleResultadoManual(r: RespostaOrcamentoDePdf, nomeArquivoDescricao: string) {
+    setErro(null);
+    setNomeArquivo(nomeArquivoDescricao);
+    setResultado(r);
+  }
+
+  function handleErroManual(mensagem: string) {
+    setErro(mensagem);
+  }
+
   async function handleBaixarExcel() {
     if (!resultado) return;
     setBaixandoExcel(true);
@@ -104,6 +114,8 @@ export default function Home() {
           carregando={carregando}
           onAnalisar={handleAnalisar}
           onAnalisarTexto={handleAnalisarTexto}
+          onResultadoManual={handleResultadoManual}
+          onErroManual={handleErroManual}
         />
 
         {erro && (

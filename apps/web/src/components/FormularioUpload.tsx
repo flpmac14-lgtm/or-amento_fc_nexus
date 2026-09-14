@@ -1,20 +1,29 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
-import type { EstimativasOrcamento } from "@/lib/types";
+import CalculoManual from "@/components/CalculoManual";
+import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "@/lib/types";
 
 interface Props {
   carregando: boolean;
   onAnalisar: (arquivo: File, estimativas: EstimativasOrcamento) => void;
   onAnalisarTexto: (texto: string, estimativas: EstimativasOrcamento) => void;
+  onResultadoManual: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
+  onErroManual: (mensagem: string) => void;
 }
 
 const PLACEHOLDER_TEXTO = `CHAPA 1000 x 500 x 25 ASTM A36 qtd 2
 BARRA REDONDA Ø100 x 500 SAE 1020
 PERFIL W310x52 comprimento 4750 ASTM A36`;
 
-export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTexto }: Props) {
-  const [modo, setModo] = useState<"arquivo" | "texto">("arquivo");
+export default function FormularioUpload({
+  carregando,
+  onAnalisar,
+  onAnalisarTexto,
+  onResultadoManual,
+  onErroManual,
+}: Props) {
+  const [modo, setModo] = useState<"arquivo" | "texto" | "manual">("arquivo");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
   const [texto, setTexto] = useState("");
@@ -34,6 +43,7 @@ export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTex
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (modo === "manual") return; // CalculoManual cuida do próprio fluxo
     const estimativas: EstimativasOrcamento = {
       cenario_comercial: cenarioComercial,
       usar_historico_horas: usarHistorico,
@@ -73,9 +83,20 @@ export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTex
         >
           Digitar itens
         </button>
+        <button
+          type="button"
+          onClick={() => setModo("manual")}
+          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
+            modo === "manual" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Cálculo manual
+        </button>
       </div>
 
-      {modo === "arquivo" ? (
+      {modo === "manual" && <CalculoManual onResultado={onResultadoManual} onErro={onErroManual} />}
+
+      {modo === "arquivo" && (
         <div
           onDragOver={(e: DragEvent) => {
             e.preventDefault();
@@ -111,7 +132,9 @@ export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTex
             </p>
           )}
         </div>
-      ) : (
+      )}
+
+      {modo === "texto" && (
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-slate-400">
@@ -135,6 +158,7 @@ export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTex
         </div>
       )}
 
+      {modo !== "manual" && (
       <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
         <summary className="cursor-pointer font-medium text-slate-200">
           Estimativas manuais (o que ainda não dá pra calcular sozinho)
@@ -199,14 +223,17 @@ export default function FormularioUpload({ carregando, onAnalisar, onAnalisarTex
           </label>
         </div>
       </details>
+      )}
 
-      <button
-        type="submit"
-        disabled={(modo === "arquivo" ? !arquivo : !texto.trim()) || carregando}
-        className="rounded-md bg-cyan-500 px-4 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {carregando ? "Analisando…" : modo === "arquivo" ? "Analisar desenho" : "Analisar itens"}
-      </button>
+      {modo !== "manual" && (
+        <button
+          type="submit"
+          disabled={(modo === "arquivo" ? !arquivo : !texto.trim()) || carregando}
+          className="rounded-md bg-cyan-500 px-4 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {carregando ? "Analisando…" : modo === "arquivo" ? "Analisar desenho" : "Analisar itens"}
+        </button>
+      )}
     </form>
   );
 }
