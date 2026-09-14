@@ -4,11 +4,12 @@ import { useState } from "react";
 import FormularioUpload from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
-import { analisarPdf, analisarTexto } from "@/lib/api";
+import { analisarPdf, analisarTexto, baixarExcel } from "@/lib/api";
 import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "@/lib/types";
 
 export default function Home() {
   const [carregando, setCarregando] = useState(false);
+  const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<RespostaOrcamentoDePdf | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
@@ -43,6 +44,19 @@ export default function Home() {
     }
   }
 
+  async function handleBaixarExcel() {
+    if (!resultado) return;
+    setBaixandoExcel(true);
+    setErro(null);
+    try {
+      await baixarExcel(resultado.entrada);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao gerar o Excel.");
+    } finally {
+      setBaixandoExcel(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950">
       <main className="print:hidden mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
@@ -66,13 +80,23 @@ export default function Home() {
             </div>
           </div>
           {resultado && (
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="shrink-0 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
-            >
-              Gerar relatório
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+              >
+                Relatório (PDF)
+              </button>
+              <button
+                type="button"
+                onClick={handleBaixarExcel}
+                disabled={baixandoExcel}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {baixandoExcel ? "Gerando…" : "Excel (editável)"}
+              </button>
+            </div>
           )}
         </header>
 

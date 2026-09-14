@@ -11,6 +11,9 @@ Endpoints:
                                entrada com o adapter e calcula o orçamento
   POST /orcamento-de-texto -> igual, mas a BOM vem digitada manualmente
                                (sem PDF nenhum) — ver bom_texto_manual.py
+  POST /orcamento/excel    -> mesma entrada de /orcamento, devolve uma
+                               planilha .xlsx com fórmulas editáveis em
+                               vez de JSON — ver app/excel_export.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -26,8 +29,10 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from app.adapter import montar_entrada_orcamento
+from app.excel_export import gerar_excel_orcamento
 from app.orcamento import montar_orcamento
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
@@ -58,6 +63,22 @@ def health() -> dict:
 def orcamento(entrada: dict) -> dict:
     resultado = montar_orcamento(entrada)
     return resultado.model_dump()
+
+
+@app.post("/orcamento/excel")
+def orcamento_excel(entrada: dict) -> Response:
+    """Mesma entrada de POST /orcamento, mas devolve uma planilha .xlsx
+    editável em vez de JSON — ver app/excel_export.py. Os valores que
+    importam (peso, taxas por processo, alíquotas) ficam em células na
+    aba "Parâmetros"; as outras abas usam fórmula, não valor fixo, então
+    mudar um parâmetro recalcula tudo dentro do próprio Excel."""
+    resultado = montar_orcamento(entrada)
+    conteudo = gerar_excel_orcamento(entrada, resultado)
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="orcamento.xlsx"'},
+    )
 
 
 @app.post("/orcamento-de-pdf")
@@ -164,4 +185,8 @@ def _montar_resposta(resultado_extracao: dict, estimativas: dict) -> dict:
             for i in adaptacao.itens_para_revisao
         ],
         "orcamento": resultado_orcamento.model_dump(),
+        # Devolvido pra o frontend poder pedir o Excel editável depois
+        # (POST /orcamento/excel) sem precisar re-extrair nada — ver
+        # app/excel_export.py.
+        "entrada": adaptacao.entrada,
     }

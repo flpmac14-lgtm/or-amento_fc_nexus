@@ -61,6 +61,10 @@ export interface RespostaOrcamentoDePdf {
   };
   itens_para_revisao: ItemParaRevisao[];
   orcamento: ResultadoOrcamentoDTO;
+  // Entrada já adaptada (o dict que POST /orcamento espera) — opaca pro
+  // frontend, só serve pra pedir a planilha Excel depois (POST
+  // /orcamento/excel) sem precisar re-extrair nada.
+  entrada: Record<string, unknown>;
 }
 
 export interface EstimativasOrcamento {

@@ -172,7 +172,28 @@ Pra poder testar sem esperar o frontend (Node.js ainda não instalado):
   então o extractor precisa estar rodando também), monta a entrada com
   `adapter.py` e calcula o orçamento. Parâmetros opcionais no form:
   `peso_liquido_kg`, `area_pintura_m2`, `quantidade_posicoes_engenharia`,
-  `cenario_comercial`, `usar_historico_horas`.
+  `cenario_comercial`, `usar_historico_horas`. Aceita `anexos` (lista de
+  arquivos) pra BOM em anexo separado — ver README do extractor.
+- `POST /orcamento-de-texto` — igual, mas a BOM vem digitada manualmente
+  (form field `texto`, um item por linha) em vez de vir de um PDF — ver
+  `services/extractor/app/extraction/bom_texto_manual.py` pro formato de
+  linha aceito. Útil quando o orçamentista já sabe os itens de cabeça.
+- `POST /orcamento/excel` — mesma entrada de `/orcamento`, devolve uma
+  planilha `.xlsx` **editável** em vez de JSON (`app/excel_export.py`):
+  peso, taxas por processo e alíquotas ficam em células próprias na aba
+  "Parâmetros"; as outras abas usam fórmula (não valor fixo), então mudar
+  um parâmetro recalcula tudo dentro do próprio Excel. Validado batendo
+  exato (2 casas decimais) com o motor Python em dois cenários reais —
+  achado no processo: `app/processos.py` arredonda as horas de
+  caldeiraria pra 2 casas ANTES de repassar pro cálculo do jateamento/
+  pintura, então a fórmula do Excel replica esse arredondamento
+  intermediário com `ROUND(...)` (sem isso, a diferença era pequena mas
+  real, ~R$0,01 em alguns casos).
+
+`/orcamento-de-pdf` e `/orcamento-de-texto` devolvem, junto com o
+orçamento, a `entrada` já adaptada (o mesmo formato que `/orcamento` e
+`/orcamento/excel` esperam) — é assim que o frontend pede o Excel depois
+sem precisar re-extrair nada.
 
 Abra `http://localhost:8002/docs` (Swagger UI) pra testar pelo navegador —
 "Try it out" em `/orcamento-de-pdf` aceita upload de arquivo direto na tela.

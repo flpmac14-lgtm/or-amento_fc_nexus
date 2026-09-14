@@ -41,6 +41,31 @@ export async function analisarPdf(
   return resposta.json();
 }
 
+export async function baixarExcel(entrada: Record<string, unknown>): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento/excel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(entrada),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao gerar o Excel (${resposta.status}). ${corpo || "Verifique se os serviços estão rodando."}`,
+    );
+  }
+
+  const blob = await resposta.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "orcamento.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function analisarTexto(
   texto: string,
   estimativas: EstimativasOrcamento,
