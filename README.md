@@ -106,10 +106,20 @@ Tesseract não está instalado nesta máquina (ver "Pendências").
   - `app/comercial.py` — margem, alíquota por cenário, preço de venda com/sem
     impostos, R$/kg
   - `app/orcamento.py` — orquestra tudo
+  - `app/adapter.py` — liga o extractor ao motor: transforma o JSON de
+    `ResultadoExtracao` em entrada de `montar_orcamento`, calculando peso por
+    item via geometria e sinalizando para revisão humana (`itens_para_revisao`)
+    o que não tem geometria, material ou preço suficientes — ou confiança
+    abaixo de 0,6
+  - `app/materiais_fixture.py` — placeholder local de densidade/kg-m/preço
+    (substituir por consulta real a `materiais`/`perfis`/`historico_compras`)
   - `tests/test_orcamento_a752193.py` — reconstrói o orçamento real
     MAC_0573.26/A752193 item a item e bate **exatamente** com a planilha:
-    custo industrial R$ 58.027,43, venda R$ 116.054,86, R$ 34,97/kg (6 testes
-    passando, incluindo a geometria)
+    custo industrial R$ 58.027,43, venda R$ 116.054,86, R$ 34,97/kg
+  - `tests/test_adapter.py` — cobre cálculo de peso (chapa/perfil/barra),
+    itens sinalizados para revisão (geometria incompleta, material sem
+    cadastro, preço ausente, baixa confiança) e integração ponta a ponta
+  - 13 testes passando ao todo
 - `apps/web/` — ainda não gerado (Node.js não está instalado nesta máquina);
   ver `apps/web/README.md` para os próximos passos.
 
@@ -151,9 +161,9 @@ python -m venv .venv
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
    revisão em folhas sem texto nativo).
-5. Ligar `services/extractor` (o que sai do desenho) a `services/calc_engine`
-   (o que vira orçamento) — hoje o mapeamento entre `ItemBom` extraído e a
-   entrada de `montar_orcamento` só existe manualmente no teste de validação.
-   Falta também a extração de tabela/BOM em si (item 6 do README de cima) e
-   a camada de estimativa de horas por histórico (peso/material/complexidade
-   similares → horas medianas de orçamentos passados).
+5. `services/extractor` ainda não extrai a BOM em tabela de verdade (`bom`
+   sempre volta vazio) — o adaptador já está pronto para quando isso existir.
+   Falta também a camada de estimativa de horas por histórico
+   (peso/material/complexidade similares → horas medianas de orçamentos
+   passados) e trocar a fixture de materiais/preços por consulta real ao
+   Supabase.

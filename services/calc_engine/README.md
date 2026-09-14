@@ -35,9 +35,33 @@ python -m venv .venv
 ./.venv/Scripts/python -m pytest tests/ -v
 ```
 
-## Próximo passo
+## Adaptador (extractor → orçamento)
 
-Ligar este motor ao serviço de extração (`services/extractor`): os campos
-`ItemBom` que saem de lá (material, geometria, dimensões) ainda precisam ser
-mapeados para as entradas de `app.orcamento.montar_orcamento` — hoje esse
-mapeamento só existe manualmente no teste de validação.
+`app/adapter.py` já liga os dois serviços: recebe o JSON que
+`services/extractor` devolve (`ResultadoExtracao.model_dump()`), calcula o
+peso de cada item da BOM pelo motor geométrico (usando a fixture de
+materiais/perfis em `app/materiais_fixture.py` — placeholder para as tabelas
+reais `materiais`/`perfis`/`historico_compras` do Supabase) e monta a
+entrada de `app.orcamento.montar_orcamento`.
+
+Os dois serviços continuam desacoplados de propósito: o adaptador só lê o
+dict JSON, nunca importa os modelos Pydantic do extractor — é o mesmo
+contrato que valeria numa chamada HTTP real entre eles.
+
+Itens que não têm geometria suficiente, material não cadastrado, ou preço/kg
+não cadastrado **não entram silenciosamente no custo** — vão para
+`itens_para_revisao` com um motivo específico, para a tela de conferência
+prevista na especificação (item 89-91 do README raiz: usuário só revisa o
+que o sistema não conseguiu resolver sozinho). Itens com confiança abaixo de
+0,6 entram no custo mas também ficam sinalizados.
+
+O que ainda falta:
+- Horas de caldeiraria/usinagem, área de pintura e quantidade de posições de
+  engenharia continuam como `estimativas` manuais — a camada de estimativa
+  por histórico/IA (item 5 da especificação) ainda não existe.
+- A fixture de materiais/preços é só um ponto de partida; precisa virar
+  consulta real ao Supabase (`historico_compras` para preço, `materiais`/
+  `perfis` para densidade e kg/m).
+- `services/extractor` ainda não extrai a BOM em tabela de verdade (`bom`
+  sempre volta vazio hoje) — o adaptador já está pronto para quando isso
+  existir.
