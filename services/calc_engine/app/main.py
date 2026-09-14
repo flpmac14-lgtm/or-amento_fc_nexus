@@ -21,6 +21,7 @@ import os
 
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapter import montar_entrada_orcamento
 from app.orcamento import montar_orcamento
@@ -30,6 +31,15 @@ EXTRACTOR_URL = os.environ.get("EXTRACTOR_URL", "http://localhost:8001")
 app = FastAPI(
     title="FC Nexus - Motor de Orçamento",
     description="Motor de cálculo determinístico (peso, custo por processo, preço de venda).",
+)
+
+# Libera o frontend local (Next.js em dev, porta 3000) a chamar esta API
+# direto do navegador. Em produção isso deve restringir pro domínio real.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

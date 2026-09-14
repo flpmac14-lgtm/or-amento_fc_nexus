@@ -21,6 +21,29 @@ def test_mapeia_cabecalho_em_ingles():
     assert mapa == {0: "item_numero", 1: "descricao", 2: "material", 3: "quantidade", 4: "espessura_mm"}
 
 
+def test_celula_gigante_com_texto_da_folha_nao_e_tratada_como_cabecalho():
+    # Bug real encontrado testando um desenho da Andritz de 11 folhas: quando
+    # a grade da tabela se mistura com o desenho técnico, pdfplumber às
+    # vezes devolve uma célula gigante com o texto da folha inteira
+    # misturado — que por coincidência de substring contém "DESCRIÇÃO" em
+    # algum lugar no meio, e sem o limite de tamanho isso virava cabeçalho
+    # "válido" e gerava centenas de itens de lixo (316, na prática).
+    celula_gigante = (
+        "LISTA DE MATERIAL\nPOS. QTD. DESCRIÇÃO COMPR. MATERIAL SUP. PESO UNIT. PESO TOTAL\n"
+        "1 2 CANTONEIRA 76,2 x 4,8 2738 ASTM A36 15,16 30,32\n"
+        + "NOTAS: MEDIDAS EM mm, EXCETO ONDE INDICADO " * 20
+    )
+    cabecalho = [celula_gigante, None, None, None, "LISTA DE MATERIAL"]
+
+    # A célula gigante em si nunca deve virar campo mapeado (é maior que o
+    # limite de tamanho de um rótulo de coluna de verdade); a legenda curta
+    # "LISTA DE MATERIAL" pode coincidentemente casar com "material", mas
+    # isso sozinho não é suficiente pra _parece_cabecalho aceitar a linha.
+    mapa = bom_table._mapear_cabecalho(cabecalho)
+    assert 0 not in mapa
+    assert not bom_table._parece_cabecalho(cabecalho)
+
+
 def test_linha_sem_cabecalho_reconhecivel_nao_e_tratada_como_cabecalho():
     linha_de_dados = ["1", "CH 1\" ASTM A36", "ASTM A36", "2", "25,4"]
     assert not bom_table._parece_cabecalho(linha_de_dados)

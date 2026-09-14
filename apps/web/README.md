@@ -1,22 +1,44 @@
-# apps/web (placeholder)
+# apps/web
 
-Frontend Next.js do FC Nexus Orçamento Industrial IA — ainda não gerado
-porque esta máquina não tem Node.js instalado (`node`/`npm` não encontrados
-em nenhum PATH nem instalação padrão do Windows).
+Frontend do FC Nexus Orçamento Industrial I.A. — Next.js 16 (App Router,
+TypeScript, Tailwind v4), gerado com `create-next-app`.
 
-## Para desbloquear
+## Tela implementada
 
-1. Instalar Node.js LTS (ex: `winget install OpenJS.NodeJS.LTS`).
-2. Rodar dentro de `apps/web`:
-   ```
-   npx create-next-app@latest . --typescript --tailwind --app --eslint
-   ```
-3. Telas mínimas do fluxo alvo (ver README raiz do projeto):
-   - Upload de PDF (drag-and-drop) → chama `POST /extract` do serviço em
-     `services/extractor`.
-   - Tela de conferência: mostra cada campo extraído com seu nível de
-     confiança; campos abaixo do limiar ficam destacados para revisão manual.
-   - Tela de orçamento: BOM com peso/custo calculado, processos detectados,
-     "Ver cálculo" por linha, e resumo comercial (custo industrial, impostos,
-     margem, preço de venda, R$/kg).
-4. Conectar ao mesmo projeto Supabase usado pelo schema em `supabase/migrations/`.
+`src/app/page.tsx` (client component) implementa o fluxo alvo da
+especificação: **Arrastar PDF → Analisar desenho → Conferir resultados**.
+
+- `src/components/FormularioUpload.tsx` — drag-and-drop de PDF + campos
+  opcionais de estimativa (peso, área de pintura, posições de engenharia,
+  cenário comercial, usar histórico Macfab).
+- `src/components/ResultadoOrcamento.tsx` — identificação extraída (com
+  badge de confiança por campo), itens sinalizados para revisão, linhas de
+  custo por processo com "Ver cálculo" expandível (mostra a memória de
+  cálculo vinda do motor), e o resumo comercial.
+- `src/lib/api.ts` — chama `POST {NEXT_PUBLIC_CALC_ENGINE_URL}/orcamento-de-pdf`
+  (default `http://localhost:8002`), que por sua vez chama
+  `services/extractor` via HTTP e roda `services/calc_engine`. Ver
+  `services/calc_engine/README.md`.
+
+## Rodar
+
+Precisa dos dois serviços Python rodando também (`services/extractor` na
+porta 8001, `services/calc_engine` na porta 8002 — ambos com CORS liberado
+para `http://localhost:3000`):
+
+```bash
+npm install
+npm run dev
+```
+
+Abra [http://localhost:3000](http://localhost:3000).
+
+## O que ainda falta aqui
+
+- Só a tela de upload/análise existe. Não há: lista de orçamentos salvos,
+  edição manual dos itens sinalizados para revisão, geração de PDF/proposta
+  comercial, autenticação, nem conexão com Supabase (hoje os dois backends
+  usam fixtures locais).
+- O upload → orçamento é síncrono numa chamada só; para desenhos grandes
+  (o exemplo real da Andritz com 11 folhas levou alguns segundos) vale
+  considerar um estado de progresso mais granular no futuro.

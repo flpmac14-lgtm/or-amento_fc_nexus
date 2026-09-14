@@ -71,8 +71,10 @@ texto como curva, não como texto).
 
 **Mas nem todo desenho da pasta de referência é assim.** Rodando o mesmo
 teste contra `MAC_0785.26 - Dispositivos (RAYRON) - ANDRITZ - OK\
-837859-F-CF00-10-DM-0018.pdf` (desenho real da Andritz, projeto "Torre de
-Acesso ao Cone", 11 folhas), o texto é nativo de verdade e a BOM
+737859-F-CF00-10-DM-0018.pdf` (arquivo no disco; o número do desenho no
+próprio bloco de título é "837859-F-CF00-10-DM-0018" — desenho real da
+Andritz, projeto "Torre de Acesso ao Cone", 11 folhas), o texto é nativo de
+verdade e a BOM
 ("LISTA DE MATERIAL") aparece com dados reais — confirma que a extração de
 tabela funciona em produção para desenhos que não dependem de OCR. Duas
 descobertas desse teste real:
@@ -188,8 +190,11 @@ descobertas desse teste real:
   - 24 testes passando ao todo (incluindo `test_estimativa_horas.py`, que
     valida a combinação regra+histórico e confirma que o comportamento sem
     a flag `usar_historico_horas` fica idêntico a antes)
-- `apps/web/` — ainda não gerado (Node.js não está instalado nesta máquina);
-  ver `apps/web/README.md` para os próximos passos.
+- `apps/web/` — frontend Next.js 16 (App Router, TypeScript, Tailwind).
+  Implementa o fluxo alvo: arrastar PDF → analisar → conferir resultados
+  (identificação com confiança por campo, itens para revisão, linhas de
+  custo com "Ver cálculo", resumo comercial). Chama `services/calc_engine`
+  via HTTP. Ver `apps/web/README.md`.
 
 ## Bibliotecas (todas gratuitas/open source)
 
@@ -237,27 +242,53 @@ texto nativo): o OCR trouxe texto legível (números de item, cotas, bloco de
 título completo) e o `numero_desenho` (`A752193`) passou a ser extraído
 corretamente pela primeira vez — ver "Descoberta importante" acima.
 
+## Node.js e frontend — instalados e o fluxo completo testado
+
+Node.js LTS instalado via `winget install OpenJS.NodeJS.LTS`, e o frontend
+gerado em `apps/web` (`npx create-next-app` — Next.js 16, TypeScript,
+Tailwind v4, App Router). Implementa o fluxo alvo (arrastar PDF → analisar
+→ conferir resultados) chamando `services/calc_engine` via HTTP — ver
+`apps/web/README.md`.
+
+O fluxo ponta a ponta (upload → extractor → adapter → calc_engine →
+resultado na tela) foi validado com o PDF real da Andritz — e essa
+validação pegou um bug real: `pdfplumber`, nesse desenho de 11 folhas,
+devolvia uma célula gigante (texto da folha inteira misturado) que batia
+por coincidência de substring com a palavra "DESCRIÇÃO", e o código estava
+tratando isso como cabeçalho de tabela válido — gerando 316 itens de lixo
+sinalizados para revisão. Corrigido em `bom_table.py` com um limite de
+tamanho pra célula de cabeçalho (uma célula de cabeçalho de verdade é um
+rótulo curto, não um parágrafo); depois da correção o mesmo PDF extrai 7
+itens (os que realmente têm tabela reconhecível). Teste de regressão
+específico em `tests/test_bom_table.py`.
+
+A verificação final ficou dividida entre teste direto de API (decisivo,
+confirma 316→7) e um teste de UI no navegador que funcionou uma vez mas
+não de forma repetível nesta sessão (cliques subsequentes no botão
+"Analisar desenho" pararam de disparar a chamada de rede, sem erro no
+console — parece instabilidade da ferramenta de automação de navegador
+desta sessão, não um bug do app). Vale testar de novo manualmente.
+
 ## Pendências para os próximos passos
 
-1. **Instalar Node.js** para gerar o frontend Next.js (`apps/web`).
-2. **Criar/conectar um projeto Supabase real** e rodar as migrations.
-3. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
+1. **Criar/conectar um projeto Supabase real** e rodar as migrations.
+2. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de IA visual (interpretação de tabela dentro de
    imagem, por exemplo).
-4. `services/extractor` já extrai BOM em tabela e já foi validado contra um
+3. `services/extractor` já extrai BOM em tabela e já foi validado contra um
    desenho real com texto nativo (Andritz, ver acima) — não depende só de
    OCR. Falta afinar `table_settings` do pdfplumber pra tabelas que se
    misturam com o desenho técnico na mesma folha, e cobrir mais formatos de
    descrição (ex: perfis em polegada fracionária como `PERFIL TIPO "U" 3" x
    1/4"`). Cantoneira/perfil L não tem fórmula de peso no motor geométrico
    ainda — fica sinalizada para revisão.
-5. A extração de tabela **não roda sobre o texto que vem do OCR** — só sobre
+4. A extração de tabela **não roda sobre o texto que vem do OCR** — só sobre
    texto nativo do PDF via `pdfplumber`. Para desenhos vetorizados como o
    A752193, isso significa que a BOM continua vazia mesmo com OCR ativo.
    Ensinar `bom_table.py` (ou um módulo novo) a reconhecer uma tabela dentro
    do texto solto que o OCR devolve é o próximo ganho real de cobertura.
-6. Regra simples + histórico já estão combinados (`app/estimativa_horas.py`,
+5. Regra simples + histórico já estão combinados (`app/estimativa_horas.py`,
    opt-in via `usar_historico_horas`) — falta adicionar um critério de
    similaridade além do peso (material, tipo de peça) pra reduzir o ruído
    descoberto na validação (ver README do calc_engine). Falta também trocar

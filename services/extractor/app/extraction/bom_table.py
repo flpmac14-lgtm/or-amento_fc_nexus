@@ -43,6 +43,17 @@ COLUNAS_CANDIDATAS: dict[str, list[str]] = {
 
 _RE_NUMERO = re.compile(r"-?\d+(?:[.,]\d+)?")
 
+# Uma célula de cabeçalho de verdade é um rótulo curto ("DESCRIÇÃO",
+# "PR. MATERIAL"). Achado real testando um desenho da Andritz com 11 folhas:
+# quando a grade da tabela se mistura com o desenho técnico (ver módulo
+# bom_table.py, "Limite conhecido"), pdfplumber às vezes devolve uma célula
+# gigante com o texto da folha inteira misturado — e essa célula, por pura
+# coincidência de substring, contém palavras como "DESCRIÇÃO" em algum
+# lugar no meio do texto solto. Sem esse limite de tamanho, isso era
+# reconhecido como cabeçalho válido e gerava centenas de itens de lixo (só
+# em vez de descartar a tabela, como deveria).
+_TAMANHO_MAXIMO_CELULA_CABECALHO = 40
+
 # Padrões pra achar a geometria dentro do texto da própria DESCRIÇÃO —
 # necessário porque, em desenhos reais (ex: torre de acesso Andritz,
 # projeto MAC_0785.26), a BOM não tem colunas separadas de espessura/
@@ -108,7 +119,7 @@ def _mapear_cabecalho(cabecalho: list[str | None]) -> dict[int, str]:
     usados: set[str] = set()
     for i, celula in enumerate(cabecalho):
         celula_norm = _normaliza(celula or "")
-        if not celula_norm:
+        if not celula_norm or len(celula_norm) > _TAMANHO_MAXIMO_CELULA_CABECALHO:
             continue
         for campo, palavras in COLUNAS_CANDIDATAS.items():
             if campo in usados:
