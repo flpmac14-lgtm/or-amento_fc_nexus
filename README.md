@@ -93,6 +93,23 @@ Tesseract não está instalado nesta máquina (ver "Pendências").
   - `app/pipeline.py` — orquestra tudo e calcula confiança geral
   - `tests/test_bom_parser.py` — testes unitários rodando contra o texto real
     do desenho A752193 (5 passando)
+- `services/calc_engine/` — motor de cálculo determinístico (peso, custo por
+  processo, custo industrial, impostos e preço de venda), lendo os mesmos
+  parâmetros semeados acima:
+  - `app/geometria.py` — peso de chapa retangular/circular, barra redonda,
+    perfil e tubo redondo; validado contra os exemplos numéricos da própria
+    planilha de referência
+  - `app/processos.py` — uma função por processo (corte, caldeiraria,
+    jateamento/pintura MO, usinagem, solda, pintura material, NDT,
+    engenharia, embalagem, transporte, energia), cada uma devolvendo valor
+    bruto, líquido e memória de cálculo
+  - `app/comercial.py` — margem, alíquota por cenário, preço de venda com/sem
+    impostos, R$/kg
+  - `app/orcamento.py` — orquestra tudo
+  - `tests/test_orcamento_a752193.py` — reconstrói o orçamento real
+    MAC_0573.26/A752193 item a item e bate **exatamente** com a planilha:
+    custo industrial R$ 58.027,43, venda R$ 116.054,86, R$ 34,97/kg (6 testes
+    passando, incluindo a geometria)
 - `apps/web/` — ainda não gerado (Node.js não está instalado nesta máquina);
   ver `apps/web/README.md` para os próximos passos.
 
@@ -134,8 +151,9 @@ python -m venv .venv
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
    revisão em folhas sem texto nativo).
-5. Motor de cálculo (peso/custo/horas/impostos/preço) ainda não implementado
-   — as fórmulas já estão documentadas e semeadas no banco
-   (`regras_orcamento`, `custos_indiretos`, `produtividade_processos`,
-   `soldagem_consumiveis`, `ndt`, `impostos`), faltando o código que as lê e
-   aplica sobre os itens extraídos.
+5. Ligar `services/extractor` (o que sai do desenho) a `services/calc_engine`
+   (o que vira orçamento) — hoje o mapeamento entre `ItemBom` extraído e a
+   entrada de `montar_orcamento` só existe manualmente no teste de validação.
+   Falta também a extração de tabela/BOM em si (item 6 do README de cima) e
+   a camada de estimativa de horas por histórico (peso/material/complexidade
+   similares → horas medianas de orçamentos passados).
