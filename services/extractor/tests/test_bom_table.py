@@ -74,6 +74,55 @@ def test_linha_para_item_bom_detecta_machined():
     assert item["usinado"]["confianca"] > 0.5
 
 
+def test_geometria_da_descricao_chapa_real():
+    # Linha real da BOM do desenho 837859-F-CF00-10-DM-0018 (Andritz, MAC_0785.26)
+    mapa = {0: "item_numero", 1: "quantidade", 2: "descricao", 3: "comprimento_mm", 4: "material"}
+    linha = ["2", "2", "CHAPA 6 x 80", "2560", "ASTM A36"]
+
+    item = bom_table._linha_para_item_bom(linha, mapa)
+
+    assert item["tipo_geometria"]["valor"] == "chapa_retangular"
+    assert item["espessura_mm"]["valor"] == 6.0
+    assert item["largura_mm"]["valor"] == 80.0
+    assert item["comprimento_mm"]["valor"] == 2560.0
+
+
+def test_geometria_da_descricao_barra_redonda_real():
+    # "4 5 BARRA Ø25 457 SAE 1020 1,76 8,79"
+    mapa = {0: "item_numero", 1: "quantidade", 2: "descricao", 3: "comprimento_mm", 4: "material"}
+    linha = ["4", "5", "BARRA Ø25", "457", "SAE 1020"]
+
+    item = bom_table._linha_para_item_bom(linha, mapa)
+
+    assert item["tipo_geometria"]["valor"] == "barra_redonda"
+    assert item["diametro_mm"]["valor"] == 25.0
+    assert item["comprimento_mm"]["valor"] == 457.0
+
+
+def test_geometria_da_descricao_chapa_entre_parenteses():
+    # "2 1 P2_F4 CHAPA (150 x 150 x 3mm) - ASTM A36"
+    mapa = {0: "item_numero", 1: "quantidade", 2: "descricao"}
+    linha = ["2", "1", "CHAPA (150 x 150 x 3mm) - ASTM A36"]
+
+    item = bom_table._linha_para_item_bom(linha, mapa)
+
+    assert item["tipo_geometria"]["valor"] == "chapa_retangular"
+    assert item["comprimento_mm"]["valor"] == 150.0
+    assert item["largura_mm"]["valor"] == 150.0
+    assert item["espessura_mm"]["valor"] == 3.0
+
+
+def test_geometria_da_descricao_cantoneira_fica_sinalizada_nao_suportada():
+    # "1 2 CANTONEIRA 76,2 x 4,8 2738 ASTM A36 15,16 30,32" — perfil L ainda
+    # sem fórmula de peso no motor; deve ficar marcado, não virar chapa/barra.
+    mapa = {0: "item_numero", 1: "quantidade", 2: "descricao"}
+    linha = ["1", "2", "CANTONEIRA 76,2 x 4,8"]
+
+    item = bom_table._linha_para_item_bom(linha, mapa)
+
+    assert item["tipo_geometria"]["valor"] == "cantoneira"
+
+
 def _pdf_com_tabela_bom(caminho: Path) -> None:
     """Gera um PDF sintético com uma tabela desenhada por linhas de grade +
     texto real (não curvas), pra validar o caminho ponta a ponta do

@@ -58,11 +58,29 @@ Tesseract não está instalado nesta máquina (ver "Pendências").
 O mesmo vale para a extração de BOM em tabela (`app/extraction/bom_table.py`):
 rodando `pdfplumber` contra esse PDF real, ele até acha a grade da tabela
 pelas linhas vetoriais, mas todas as células voltam vazias (mesmo motivo —
-texto como curva, não como texto). A extração de tabela em si foi validada
-com um PDF sintético (tabela com grade + texto real, gerada via PyMuPDF nos
-testes) — funciona corretamente quando o PDF tem texto de verdade; falta
-testar contra um desenho real que não dependa de OCR pra confirmar em
-produção.
+texto como curva, não como texto).
+
+**Mas nem todo desenho da pasta de referência é assim.** Rodando o mesmo
+teste contra `MAC_0785.26 - Dispositivos (RAYRON) - ANDRITZ - OK\
+837859-F-CF00-10-DM-0018.pdf` (desenho real da Andritz, projeto "Torre de
+Acesso ao Cone", 11 folhas), o texto é nativo de verdade e a BOM
+("LISTA DE MATERIAL") aparece com dados reais — confirma que a extração de
+tabela funciona em produção para desenhos que não dependem de OCR. Duas
+descobertas desse teste real:
+1. `pdfplumber` com configuração padrão às vezes junta a folha inteira numa
+   única célula gigante quando a grade da tabela se mistura com as linhas
+   do desenho técnico — funciona bem só quando a BOM tem sua própria grade
+   limpa (algumas folhas do mesmo PDF têm isso, outras não). Ajustar
+   `table_settings` fica para uma próxima iteração.
+2. Nesse formato de BOM não existem colunas separadas de espessura/largura/
+   diâmetro — a forma vem embutida no texto da própria descrição (ex:
+   `"CHAPA 6 x 80"`, `"BARRA Ø25"`, `"CANTONEIRA 76,2 x 4,8"`,
+   `"CHAPA (150 x 150 x 3mm)"`). `bom_table.py` agora reconhece esses
+   padrões reais como um fallback quando não há coluna dedicada — exceto
+   cantoneira/perfil L, que ainda não tem fórmula de peso no motor
+   geométrico e por isso fica sinalizada para revisão em vez de forçada
+   num tipo que não é (`"Tipo de geometria 'cantoneira' ainda não suportado
+   pelo motor de cálculo"`).
 
 ## O que já existe neste repositório
 
@@ -107,9 +125,9 @@ produção.
   - `app/ai_fallback/client.py` — stub do fallback de IA externa, desligado
     por padrão, só ativa com `EXTRACTOR_AI_FALLBACK_ENABLED=1` + chave de API
   - `app/pipeline.py` — orquestra tudo e calcula confiança geral
-  - `tests/test_bom_parser.py` e `tests/test_bom_table.py` — 13 testes,
+  - `tests/test_bom_parser.py` e `tests/test_bom_table.py` — 17 testes,
     incluindo um PDF sintético (tabela real com grade + texto, gerada via
-    PyMuPDF) que valida o caminho ponta a ponta do pdfplumber
+    PyMuPDF) e casos com strings reais de uma BOM real da Andritz
 - `services/calc_engine/` — motor de cálculo determinístico (peso, custo por
   processo, custo industrial, impostos e preço de venda), lendo os mesmos
   parâmetros semeados acima:
@@ -178,11 +196,13 @@ python -m venv .venv
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de OCR/IA visual (BOM completo, dimensões gerais,
    revisão em folhas sem texto nativo).
-5. `services/extractor` já extrai BOM em tabela (`app/extraction/bom_table.py`,
-   validado com PDF sintético) e o adaptador já consome isso — falta validar
-   contra desenhos reais com texto nativo de verdade (a maioria dos desenhos
-   da Macfab parece depender de OCR, então isso também está amarrado ao
-   item 1). Falta ainda a camada de estimativa de horas por histórico
-   (peso/material/complexidade similares → horas medianas de orçamentos
-   passados) e trocar a fixture de materiais/preços por consulta real ao
-   Supabase.
+5. `services/extractor` já extrai BOM em tabela e já foi validado contra um
+   desenho real com texto nativo (Andritz, ver acima) — não depende só de
+   OCR. Falta afinar `table_settings` do pdfplumber pra tabelas que se
+   misturam com o desenho técnico na mesma folha, e cobrir mais formatos de
+   descrição (ex: perfis em polegada fracionária como `PERFIL TIPO "U" 3" x
+   1/4"`). Cantoneira/perfil L não tem fórmula de peso no motor geométrico
+   ainda — fica sinalizada para revisão. Falta também a camada de
+   estimativa de horas por histórico (peso/material/complexidade similares
+   → horas medianas de orçamentos passados) e trocar a fixture de
+   materiais/preços por consulta real ao Supabase.

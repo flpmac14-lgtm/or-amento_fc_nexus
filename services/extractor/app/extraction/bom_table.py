@@ -43,6 +43,54 @@ COLUNAS_CANDIDATAS: dict[str, list[str]] = {
 
 _RE_NUMERO = re.compile(r"-?\d+(?:[.,]\d+)?")
 
+# Padrões pra achar a geometria dentro do texto da própria DESCRIÇÃO —
+# necessário porque, em desenhos reais (ex: torre de acesso Andritz,
+# projeto MAC_0785.26), a BOM não tem colunas separadas de espessura/
+# largura/diâmetro: a forma vem embutida na descrição, e só o comprimento
+# fica numa coluna própria (COMPR.). Calibrado com dados reais dessa BOM:
+# "CHAPA 6 x 80", "CHAPA DE PISO 4,8 x 673", "BARRA REDONDA Ø25",
+# "BARRA Ø25", "CANTONEIRA 76,2 x 4,8", "CHAPA (150 x 150 x 3mm)".
+_RE_DESCR_CHAPA_PARENTESE = re.compile(
+    r"CHAPA\s*\(\s*(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*mm\s*\)", re.IGNORECASE
+)
+_RE_DESCR_CHAPA = re.compile(
+    r"CHAPA(?:\s+DE\s+PISO)?\s+(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)(?!\s*x)", re.IGNORECASE
+)
+_RE_DESCR_BARRA = re.compile(r"BARRA(?:\s+REDONDA)?\s*[ØÓO]\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
+_RE_DESCR_CANTONEIRA = re.compile(r"CANTONEIRA\s+(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
+
+
+def _extrair_geometria_da_descricao(descricao: str | None) -> dict | None:
+    """Tenta reconhecer a forma a partir do texto livre da descrição.
+    Confiança mais baixa que uma coluna dedicada — é heurística sobre texto,
+    não um campo estruturado."""
+    if not descricao:
+        return None
+
+    m = _RE_DESCR_CHAPA_PARENTESE.search(descricao)
+    if m:
+        c, l, e = (float(v.replace(",", ".")) for v in m.groups())
+        return {"tipo_geometria": "chapa_retangular", "comprimento_mm": c, "largura_mm": l, "espessura_mm": e, "confianca": 0.7}
+
+    m = _RE_DESCR_CHAPA.search(descricao)
+    if m:
+        espessura, largura = (float(v.replace(",", ".")) for v in m.groups())
+        return {"tipo_geometria": "chapa_retangular", "espessura_mm": espessura, "largura_mm": largura, "confianca": 0.65}
+
+    m = _RE_DESCR_BARRA.search(descricao)
+    if m:
+        diametro = float(m.group(1).replace(",", "."))
+        return {"tipo_geometria": "barra_redonda", "diametro_mm": diametro, "confianca": 0.65}
+
+    m = _RE_DESCR_CANTONEIRA.search(descricao)
+    if m:
+        # Cantoneira (perfil L) ainda não tem fórmula de peso no motor
+        # geométrico — sinaliza o tipo em vez de forçar num tipo suportado,
+        # pra virar um item de revisão específico lá no adaptador.
+        return {"tipo_geometria": "cantoneira", "confianca": 0.6}
+
+    return None
+
 
 @dataclass
 class TabelaBom:
@@ -124,6 +172,18 @@ def _linha_para_item_bom(celulas: list[str | None], mapa: dict[int, str]) -> dic
     perfil = valores.get("perfil")
 
     tipo_geometria, confianca_tipo = _inferir_tipo_geometria(perfil, comprimento, largura, espessura, diametro)
+
+    if tipo_geometria is None:
+        geometria_descricao = _extrair_geometria_da_descricao(valores.get("descricao"))
+        if geometria_descricao:
+            tipo_geometria = geometria_descricao["tipo_geometria"]
+            confianca_tipo = geometria_descricao["confianca"]
+            espessura = espessura if espessura is not None else geometria_descricao.get("espessura_mm")
+            largura = largura if largura is not None else geometria_descricao.get("largura_mm")
+            diametro = diametro if diametro is not None else geometria_descricao.get("diametro_mm")
+            # comprimento embutido só existe no formato "CHAPA (C x L x E mm)";
+            # nos outros formatos o comprimento já vem da coluna COMPR.
+            comprimento = comprimento if comprimento is not None else geometria_descricao.get("comprimento_mm")
 
     usinado_texto = _normaliza(valores.get("usinado") or valores.get("descricao") or "")
     usinado = "MACHINED" in usinado_texto or "USINADO" in usinado_texto
