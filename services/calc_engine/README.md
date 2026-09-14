@@ -118,12 +118,11 @@ O que ainda falta:
   acima), o que é literalmente a "Camada 3" da especificação.
 - Área de pintura e quantidade de posições de engenharia continuam como
   `estimativas` manuais — não têm histórico equivalente ainda.
-- A consulta real ao Supabase já existe (`app/repositorio_materiais.py`),
-  mas `historico_compras` ainda está vazia no banco — nenhum preço real
-  cadastrado ainda. Enquanto isso, todo item cai em `itens_para_revisao`
-  por "Sem preço/kg cadastrado" quando `SUPABASE_DB_URL` está ativa. Preço
-  hoje é só a estratégia "último comprado"; falta média das últimas
-  3 compras, média 30/60/90 dias e fornecedor preferencial.
+- A consulta real ao Supabase já existe (`app/repositorio_materiais.py`) e
+  `historico_compras` já tem 151 compras reais importadas do ERP da empresa
+  (`scripts/importar_precos_erp.py`, ver seção abaixo). Preço hoje é só a
+  estratégia "último comprado"; falta média das últimas 3 compras, média
+  30/60/90 dias e fornecedor preferencial.
 - `services/extractor` já extrai BOM em tabela (`app/extraction/bom_table.py`,
   validado com desenho real da Andritz) e o adaptador já consome isso.
 
@@ -134,6 +133,27 @@ connection string do projeto (Project Settings → Database → Connection
 string, modo "Transaction pooler"). Sem essa variável, o motor usa a
 fixture local (`app/materiais_fixture.py`) — é o mesmo comportamento de
 antes, os testes continuam rodando sem precisar de banco nenhum.
+
+## Importar preços reais do ERP (`scripts/importar_precos_erp.py`)
+
+Importa histórico de compra real (SQL Server, tabelas `FN_NFEITENS`/
+`FN_NFE`/`FN_FORNECEDORES`) pra `historico_compras`. Acesso **somente
+leitura** ao ERP — o script nunca escreve lá, só lê e grava no Supabase
+(`historico_compras` e, por upsert, `fornecedores`; nunca cria linha nova
+em `materiais` — norma+tipo sem cadastro fica reportada, não inventada).
+
+```bash
+./.venv/Scripts/python scripts/importar_precos_erp.py --dry-run   # só mostra o que faria
+./.venv/Scripts/python scripts/importar_precos_erp.py             # importa de verdade
+```
+
+Idempotente (não duplica ao rodar de novo) e filtra preço/kg acima de
+R$ 50 (`PRECO_KG_MAX_RAZOAVEL`) — descoberta real: algumas chapas grossas
+foram lançadas no ERP com `PESOLIQ` zerado e o valor por peça inteira
+aparecendo como se fosse R$/kg (ex: R$ 24.175/kg), erro de unidade na
+origem, não um preço real. Credenciais do ERP em `.env`
+(`ERP_SQL_SERVER`/`ERP_SQL_DATABASE`/`ERP_SQL_USER`/`ERP_SQL_PASSWORD`) —
+ver `.env.example`.
 
 ## API HTTP (`app/main.py`)
 

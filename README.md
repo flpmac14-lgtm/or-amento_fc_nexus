@@ -281,11 +281,18 @@ desta sessão, não um bug do app). Vale testar de novo manualmente.
 
 1. ~~Criar/conectar um projeto Supabase real e rodar as migrations.~~ **Feito**:
    projeto `fc-nexus-orcamentos` criado (região `sa-east-1`), migrations
-   0001/0002 aplicadas, `calc_engine` já consulta `materiais`/`perfis`/
+   aplicadas, `calc_engine` já consulta `materiais`/`perfis`/
    `historico_compras` reais quando `SUPABASE_DB_URL` está configurada (ver
-   `app/repositorio_materiais.py`). Falta popular `historico_compras` com
-   preços reais — hoje a tabela está vazia (de propósito: sem compra real
-   registrada, o item vai para revisão em vez de usar um preço inventado).
+   `app/repositorio_materiais.py`). ~~Falta popular `historico_compras`~~
+   **Feito**: `services/calc_engine/scripts/importar_precos_erp.py` importou
+   151 compras reais (ASTM A36, A572, AISI 304, SAE 1020 — chapa/perfil/barra)
+   direto do ERP SQL Server da empresa (acesso somente leitura). Descoberta
+   real ao importar: ~8 linhas do ERP tinham `PESOLIQ` zerado e preço/kg
+   absurdo (chapa grossa lançada por peça, não por peso) — o script descarta
+   automaticamente qualquer preço acima de R$ 50/kg (`PRECO_KG_MAX_RAZOAVEL`)
+   em vez de confiar cegamente na origem. Faltam ainda: `AISI 304` em
+   barra/perfil (só 2-3 compras cada, não cadastrado ainda em `materiais`)
+   e rodar o script de novo periodicamente pra manter os preços atualizados.
 2. Decidir se/quando configurar uma chave de API (OpenAI ou Claude) para o
    fallback — o sistema funciona sem ela, só com confiança mais baixa nos
    campos que hoje dependem de IA visual (interpretação de tabela dentro de
