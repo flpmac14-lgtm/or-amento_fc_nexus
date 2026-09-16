@@ -20,6 +20,9 @@ Thumbs.db
 # Uploads temporários
 services/extractor/tmp/
 
+# Logs de execução local (stdout dos serviços rodando na máquina)
+*.out.log
+
 # Dados reais locais (preços/compras da empresa — sincronizados via OneDrive,
 # nunca commitados no repositório)
 /dados-locais/
