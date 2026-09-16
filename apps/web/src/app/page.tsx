@@ -1,18 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import FormularioUpload from "@/components/FormularioUpload";
+import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
-import { analisarPdf, analisarTexto, baixarExcel } from "@/lib/api";
-import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "@/lib/types";
+import { analisarPdf, baixarExcel, salvarOrcamento } from "@/lib/api";
+import {
+  ESTADO_CALCULO_MANUAL_INICIAL,
+  type EstadoCalculoManual,
+  type EstimativasOrcamento,
+  type OrcamentoSalvoCompleto,
+  type OrigemOrcamentoSalvo,
+  type RespostaOrcamentoDePdf,
+} from "@/lib/types";
+
+function nomeSugerido(r: RespostaOrcamentoDePdf, fallback: string): string {
+  const cliente = r.extracao.identificacao.cliente.valor;
+  const numeroDesenho = r.extracao.identificacao.numero_desenho.valor;
+  const partes = [cliente, numeroDesenho].filter((v): v is string => Boolean(v));
+  return partes.length ? partes.join(" — ") : fallback;
+}
 
 export default function Home() {
+  const [modo, setModo] = useState<ModoFormulario>("arquivo");
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<RespostaOrcamentoDePdf | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
+
+  // Estado editável do cálculo manual, controlado aqui pra "Salvar
+  // orçamento"/"Orçamentos salvos" conseguirem ler e restaurar (ver
+  // components/CalculoManual.tsx e lib/types.ts::EstadoCalculoManual).
+  const [estadoManual, setEstadoManual] = useState<EstadoCalculoManual>(ESTADO_CALCULO_MANUAL_INICIAL);
+  const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
+  const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
+  const [nomeOrcamento, setNomeOrcamento] = useState("");
 
   async function handleAnalisar(arquivo: File, estimativas: EstimativasOrcamento) {
     setCarregando(true);
@@ -22,23 +46,10 @@ export default function Home() {
     try {
       const r = await analisarPdf(arquivo, estimativas);
       setResultado(r);
+      setOrigemAtual("pdf");
+      setNomeOrcamento((atual) => atual || nomeSugerido(r, arquivo.name));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao analisar o PDF.");
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  async function handleAnalisarTexto(texto: string, estimativas: EstimativasOrcamento) {
-    setCarregando(true);
-    setErro(null);
-    setResultado(null);
-    setNomeArquivo("itens digitados manualmente");
-    try {
-      const r = await analisarTexto(texto, estimativas);
-      setResultado(r);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro desconhecido ao analisar o texto.");
     } finally {
       setCarregando(false);
     }
@@ -48,10 +59,64 @@ export default function Home() {
     setErro(null);
     setNomeArquivo(nomeArquivoDescricao);
     setResultado(r);
+    setOrigemAtual("manual");
+    setNomeOrcamento((atual) => atual || nomeSugerido(r, nomeArquivoDescricao));
   }
 
   function handleErroManual(mensagem: string) {
     setErro(mensagem);
+  }
+
+  function handleEstadoManualChange(atualizacao: Partial<EstadoCalculoManual>) {
+    setEstadoManual((atual) => ({ ...atual, ...atualizacao }));
+  }
+
+  function handleAbrirSalvo(salvo: OrcamentoSalvoCompleto) {
+    setErro(null);
+    setResultado(salvo.resultado);
+    setNomeArquivo(salvo.nome);
+    setNomeOrcamento(salvo.nome);
+    setOrcamentoSalvoId(salvo.id);
+    setOrigemAtual(salvo.origem);
+    if (salvo.origem === "manual" && salvo.estado_manual) {
+      setEstadoManual(salvo.estado_manual);
+      setModo("manual");
+    } else {
+      setModo("arquivo");
+    }
+  }
+
+  function handleNovoOrcamento() {
+    setResultado(null);
+    setErro(null);
+    setNomeArquivo("");
+    setNomeOrcamento("");
+    setOrcamentoSalvoId(null);
+    setOrigemAtual(null);
+    setEstadoManual(ESTADO_CALCULO_MANUAL_INICIAL);
+    setModo("arquivo");
+  }
+
+  async function handleSalvarOrcamento() {
+    if (!resultado || !origemAtual) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      const nome = nomeOrcamento.trim() || "Orçamento sem nome";
+      const r = await salvarOrcamento({
+        id: orcamentoSalvoId ?? undefined,
+        nome,
+        origem: origemAtual,
+        resultado,
+        estado_manual: origemAtual === "manual" ? estadoManual : null,
+      });
+      setOrcamentoSalvoId(r.id);
+      setNomeOrcamento(nome);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao salvar o orçamento.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   async function handleBaixarExcel() {
@@ -70,7 +135,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-950">
       <main className="print:hidden mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-800 pb-6">
+        <header className="flex flex-col gap-4 border-b border-slate-800 pb-6">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
@@ -90,7 +155,29 @@ export default function Home() {
             </div>
           </div>
           {resultado && (
-            <div className="flex shrink-0 gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={nomeOrcamento}
+                onChange={(e) => setNomeOrcamento(e.target.value)}
+                placeholder="nome do orçamento"
+                className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 sm:flex-none sm:w-56"
+              />
+              <button
+                type="button"
+                onClick={handleSalvarOrcamento}
+                disabled={salvando}
+                className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {salvando ? "Salvando…" : orcamentoSalvoId ? "Atualizar orçamento" : "Salvar orçamento"}
+              </button>
+              <button
+                type="button"
+                onClick={handleNovoOrcamento}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+              >
+                Novo orçamento
+              </button>
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -111,11 +198,15 @@ export default function Home() {
         </header>
 
         <FormularioUpload
+          modo={modo}
+          setModo={setModo}
           carregando={carregando}
           onAnalisar={handleAnalisar}
-          onAnalisarTexto={handleAnalisarTexto}
           onResultadoManual={handleResultadoManual}
           onErroManual={handleErroManual}
+          estadoManual={estadoManual}
+          onEstadoManualChange={handleEstadoManualChange}
+          onAbrirSalvo={handleAbrirSalvo}
         />
 
         {erro && (

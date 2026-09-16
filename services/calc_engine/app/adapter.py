@@ -144,6 +144,20 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         - cenario_comercial
         - preco_kg_override: {(norma, tipo_geometria): preco} opcional, para não
           depender só do preço padrão da fixture
+        - corte_valor_kg: custo médio de insumos de corte (oxicorte/plasma/laser,
+          R$/kg) digitado no cartão de cálculo manual — opcional, substitui o
+          padrão cadastrado (app.parametros_padrao.PARAMETROS_PADRAO)
+        - insumos_pintura: [{"descricao", "quantidade" (litros), "preco_unitario"}]
+          — produtos do plano de pintura pedido (fundo/intermediária/acabamento/
+          diluente), escolhidos item a item no cálculo manual — ver
+          app.orcamento._agregar_insumos_pintura
+        - servicos_terceiros: [{"descricao", "peso_kg", "valor_kg"}] — outsourcing
+          cobrado por peso (conformação pesada, rebordeamento de tampos,
+          balanceamento etc.) — ver app.orcamento._agregar_servicos_terceiros
+        - tratamento_termico: [{"descricao", "peso_kg", "valor_kg"}] — alívio de
+          tensões, têmpera/revenimento etc. — ver app.orcamento._agregar_tratamento_termico
+        - contingenciamento: [{"descricao", "quantidade", "valor_unitario"}] —
+          provisão de qualificação/contingência — ver app.orcamento._agregar_contingenciamento
         - usar_historico_horas: bool (default False) — quando True, horas de
           caldeiraria combinam a regra simples com o histórico Macfab (ver
           app.estimativa_horas) em vez de usar só a regra
@@ -166,8 +180,9 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         norma = _valor(item.get("norma"))
         tipo = _valor(item.get("tipo_geometria"))
         preco_overrides = estimativas.get("preco_kg_override", {})
+        preco_kg_manual = _valor(item.get("preco_kg_manual"))
         info_material = buscar_info_material(norma, tipo)
-        preco_kg = preco_overrides.get((norma, tipo)) or (
+        preco_kg = preco_kg_manual or preco_overrides.get((norma, tipo)) or (
             info_material.preco_kg_padrao if info_material else None
         )
 
@@ -179,8 +194,19 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
             itens_para_revisao.append(ItemParaRevisao(item_numero, motivo, confianca_geometria))
             continue
 
+        # Perda de material (sobra de corte/compra) digitada no cartão —
+        # infla só o peso de COMPRA (o que entra no custo de matéria-prima),
+        # não o peso líquido da peça (que segue alimentando corte,
+        # caldeiraria, solda etc. — esses processos trabalham em cima da
+        # peça pronta, não da chapa/barra bruta comprada).
+        perda_pct = _valor(item.get("perda_pct")) or 0.0
+        peso_compra_kg = peso_kg * (1 + perda_pct / 100)
+        memoria_mp = memoria
+        if perda_pct:
+            memoria_mp = f"{memoria} + perda {perda_pct}% = {peso_compra_kg:.2f} kg p/ compra"
+
         materia_prima.append(
-            {"descricao": descricao, "peso_kg": peso_kg, "preco_kg": preco_kg, "memoria_peso": memoria}
+            {"descricao": descricao, "peso_kg": peso_compra_kg, "preco_kg": preco_kg, "memoria_peso": memoria_mp}
         )
         peso_total_kg += peso_kg
 
@@ -196,12 +222,17 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         "peso_liquido_kg": peso_liquido_kg,
         "materia_prima": materia_prima,
         "itens_padrao": estimativas.get("itens_padrao", []),
+        "insumos_pintura": estimativas.get("insumos_pintura", []),
         "usinagem_operacoes": estimativas.get("usinagem_operacoes", []),
+        "servicos_terceiros": estimativas.get("servicos_terceiros", []),
+        "tratamento_termico": estimativas.get("tratamento_termico", []),
+        "contingenciamento": estimativas.get("contingenciamento", []),
         "area_pintura_m2": estimativas.get("area_pintura_m2"),
         "quantidade_posicoes_engenharia": estimativas.get("quantidade_posicoes_engenharia"),
         "cenario_comercial": estimativas.get("cenario_comercial", "venda_fabricacao"),
         "usar_historico_horas": estimativas.get("usar_historico_horas", False),
         "historico_horas": estimativas.get("historico_horas"),
+        "corte_valor_kg": estimativas.get("corte_valor_kg"),
     }
 
     return ResultadoAdaptacao(entrada=entrada, itens_para_revisao=itens_para_revisao)

@@ -1,0 +1,562 @@
+[
+  {
+    "designacao": "Tubo 21.3 x 2 mm",
+    "diametro_externo_mm": 21.3,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 17.3,
+    "kg_m": 0.9519,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 21.3 x 2.65 mm",
+    "diametro_externo_mm": 21.3,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 16.0,
+    "kg_m": 1.2188,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 21.3 x 3.2 mm",
+    "diametro_externo_mm": 21.3,
+    "espessura_mm": 3.2,
+    "diametro_interno_mm": 14.9,
+    "kg_m": 1.4284,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 26.7 x 2 mm",
+    "diametro_externo_mm": 26.7,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 22.7,
+    "kg_m": 1.2183,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 26.7 x 2.65 mm",
+    "diametro_externo_mm": 26.7,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 21.4,
+    "kg_m": 1.5717,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 26.7 x 3.2 mm",
+    "diametro_externo_mm": 26.7,
+    "espessura_mm": 3.2,
+    "diametro_interno_mm": 20.3,
+    "kg_m": 1.8545,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 33.4 x 2 mm",
+    "diametro_externo_mm": 33.4,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 29.4,
+    "kg_m": 1.5487,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 33.4 x 2.65 mm",
+    "diametro_externo_mm": 33.4,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 28.1,
+    "kg_m": 2.0096,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 33.4 x 3.35 mm",
+    "diametro_externo_mm": 33.4,
+    "espessura_mm": 3.35,
+    "diametro_interno_mm": 26.7,
+    "kg_m": 2.4826,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 33.4 x 4 mm",
+    "diametro_externo_mm": 33.4,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 25.4,
+    "kg_m": 2.9002,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 42.2 x 2 mm",
+    "diametro_externo_mm": 42.2,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 38.2,
+    "kg_m": 1.9828,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 42.2 x 2.65 mm",
+    "diametro_externo_mm": 42.2,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 36.9,
+    "kg_m": 2.5847,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 42.2 x 3.35 mm",
+    "diametro_externo_mm": 42.2,
+    "espessura_mm": 3.35,
+    "diametro_interno_mm": 35.5,
+    "kg_m": 3.2096,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 42.2 x 4 mm",
+    "diametro_externo_mm": 42.2,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 34.2,
+    "kg_m": 3.7683,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 48.3 x 2 mm",
+    "diametro_externo_mm": 48.3,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 44.3,
+    "kg_m": 2.2837,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 48.3 x 2.65 mm",
+    "diametro_externo_mm": 48.3,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 43.0,
+    "kg_m": 2.9834,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 48.3 x 3.35 mm",
+    "diametro_externo_mm": 48.3,
+    "espessura_mm": 3.35,
+    "diametro_interno_mm": 41.6,
+    "kg_m": 3.7136,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 48.3 x 4 mm",
+    "diametro_externo_mm": 48.3,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 40.3,
+    "kg_m": 4.37,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 48.3 x 5 mm",
+    "diametro_externo_mm": 48.3,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 38.3,
+    "kg_m": 5.3392,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 60.3 x 2 mm",
+    "diametro_externo_mm": 60.3,
+    "espessura_mm": 2.0,
+    "diametro_interno_mm": 56.3,
+    "kg_m": 2.8755,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 60.3 x 2.65 mm",
+    "diametro_externo_mm": 60.3,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 55.0,
+    "kg_m": 3.7676,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 60.3 x 3.35 mm",
+    "diametro_externo_mm": 60.3,
+    "espessura_mm": 3.35,
+    "diametro_interno_mm": 53.6,
+    "kg_m": 4.705,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 60.3 x 4 mm",
+    "diametro_externo_mm": 60.3,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 52.3,
+    "kg_m": 5.5538,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 60.3 x 5 mm",
+    "diametro_externo_mm": 60.3,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 50.3,
+    "kg_m": 6.8189,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 73 x 2.65 mm",
+    "diametro_externo_mm": 73.0,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 67.7,
+    "kg_m": 4.5976,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 73 x 3 mm",
+    "diametro_externo_mm": 73.0,
+    "espessura_mm": 3.0,
+    "diametro_interno_mm": 67.0,
+    "kg_m": 5.1789,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 73 x 3.65 mm",
+    "diametro_externo_mm": 73.0,
+    "espessura_mm": 3.65,
+    "diametro_interno_mm": 65.7,
+    "kg_m": 6.2425,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 73 x 4.5 mm",
+    "diametro_externo_mm": 73.0,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 64.0,
+    "kg_m": 7.6019,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 73 x 5 mm",
+    "diametro_externo_mm": 73.0,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 63.0,
+    "kg_m": 8.3849,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 2.65 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 2.65,
+    "diametro_interno_mm": 83.6,
+    "kg_m": 5.6367,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 3 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 3.0,
+    "diametro_interno_mm": 82.9,
+    "kg_m": 6.3553,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 3.65 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 3.65,
+    "diametro_interno_mm": 81.6,
+    "kg_m": 7.6737,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 4.5 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 79.9,
+    "kg_m": 9.3664,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 5 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 78.9,
+    "kg_m": 10.3455,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 88.9 x 5.6 mm",
+    "diametro_externo_mm": 88.9,
+    "espessura_mm": 5.6,
+    "diametro_interno_mm": 77.7,
+    "kg_m": 11.5041,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 101.6 x 3 mm",
+    "diametro_externo_mm": 101.6,
+    "espessura_mm": 3.0,
+    "diametro_interno_mm": 95.6,
+    "kg_m": 7.2949,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 101.6 x 3.65 mm",
+    "diametro_externo_mm": 101.6,
+    "espessura_mm": 3.65,
+    "diametro_interno_mm": 94.3,
+    "kg_m": 8.8169,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 101.6 x 4 mm",
+    "diametro_externo_mm": 101.6,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 93.6,
+    "kg_m": 9.6279,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 101.6 x 5 mm",
+    "diametro_externo_mm": 101.6,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 91.6,
+    "kg_m": 11.9115,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 101.6 x 5.6 mm",
+    "diametro_externo_mm": 101.6,
+    "espessura_mm": 5.6,
+    "diametro_interno_mm": 90.4,
+    "kg_m": 13.258,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 3 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 3.0,
+    "diametro_interno_mm": 108.3,
+    "kg_m": 8.2345,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 3.65 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 3.65,
+    "diametro_interno_mm": 107.0,
+    "kg_m": 9.9601,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 4.5 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 105.3,
+    "kg_m": 12.1852,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 5 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 104.3,
+    "kg_m": 13.4775,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 6 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 6.0,
+    "diametro_interno_mm": 102.3,
+    "kg_m": 16.025,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 114.3 x 6.3 mm",
+    "diametro_externo_mm": 114.3,
+    "espessura_mm": 6.3,
+    "diametro_interno_mm": 101.7,
+    "kg_m": 16.7797,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 3.35 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 3.35,
+    "diametro_interno_mm": 133.0,
+    "kg_m": 11.2647,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 4 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 131.7,
+    "kg_m": 13.3863,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 4.5 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 130.7,
+    "kg_m": 15.0041,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 5 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 129.7,
+    "kg_m": 16.6095,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 6 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 6.0,
+    "diametro_interno_mm": 127.7,
+    "kg_m": 19.7835,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 139.7 x 6.3 mm",
+    "diametro_externo_mm": 139.7,
+    "espessura_mm": 6.3,
+    "diametro_interno_mm": 127.1,
+    "kg_m": 20.726,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 3.65 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 3.65,
+    "diametro_interno_mm": 161.0,
+    "kg_m": 14.8209,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 4 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 160.3,
+    "kg_m": 16.2075,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 4.5 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 159.3,
+    "kg_m": 18.178,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 5 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 158.3,
+    "kg_m": 20.1361,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 6 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 6.0,
+    "diametro_interno_mm": 156.3,
+    "kg_m": 24.0154,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 168.3 x 7.1 mm",
+    "diametro_externo_mm": 168.3,
+    "espessura_mm": 7.1,
+    "diametro_interno_mm": 154.1,
+    "kg_m": 28.2256,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 4 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 4.0,
+    "diametro_interno_mm": 211.1,
+    "kg_m": 21.2188,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 4.5 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 210.1,
+    "kg_m": 23.8156,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 5 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 209.1,
+    "kg_m": 26.4001,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 6 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 6.0,
+    "diametro_interno_mm": 207.1,
+    "kg_m": 31.5322,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 7.1 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 7.1,
+    "diametro_interno_mm": 204.9,
+    "kg_m": 37.1205,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 219.1 x 8 mm",
+    "diametro_externo_mm": 219.1,
+    "espessura_mm": 8.0,
+    "diametro_interno_mm": 203.1,
+    "kg_m": 41.6483,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 4.5 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 4.5,
+    "diametro_interno_mm": 264.0,
+    "kg_m": 29.7973,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 5 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 5.0,
+    "diametro_interno_mm": 263.0,
+    "kg_m": 33.0464,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 6 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 6.0,
+    "diametro_interno_mm": 261.0,
+    "kg_m": 39.5077,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 6.3 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 6.3,
+    "diametro_interno_mm": 260.4,
+    "kg_m": 41.4365,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 7.1 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 7.1,
+    "diametro_interno_mm": 258.8,
+    "kg_m": 46.5582,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "Tubo 273 x 8 mm",
+    "diametro_externo_mm": 273.0,
+    "espessura_mm": 8.0,
+    "diametro_interno_mm": 257.0,
+    "kg_m": 52.2824,
+    "fonte": "calculado"
+  }
+]

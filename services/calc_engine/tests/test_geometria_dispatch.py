@@ -40,6 +40,22 @@ def test_tipo_desconhecido_da_erro_claro():
         calcular_peso("bolha_de_sabao", {}, 1)
 
 
+def test_anel_com_diametro_interno_maior_ou_igual_ao_externo_da_erro():
+    medidas = {"diametro_externo_mm": 100.0, "diametro_interno_mm": 100.0, "espessura_mm": 10.0, "densidade_kg_m3": 7850.0}
+    with pytest.raises(ValueError, match="diâmetro interno"):
+        calcular_peso("chapa_anel", medidas, 1)
+
+    medidas["diametro_interno_mm"] = 150.0
+    with pytest.raises(ValueError, match="diâmetro interno"):
+        calcular_peso("chapa_anel", medidas, 1)
+
+
+def test_tubo_com_parede_maior_ou_igual_ao_diametro_externo_da_erro():
+    medidas = {"diametro_externo_mm": 50.0, "espessura_parede_mm": 25.0, "comprimento_mm": 1000.0, "densidade_kg_m3": 7850.0}
+    with pytest.raises(ValueError, match="parede"):
+        calcular_peso("tubo_redondo", medidas, 1)
+
+
 def test_medida_faltando_da_erro_claro_em_vez_de_keyerror():
     with pytest.raises(ValueError, match="espessura_mm"):
         calcular_peso("chapa_circular", {"diametro_mm": 100, "densidade_kg_m3": 7850}, 1)

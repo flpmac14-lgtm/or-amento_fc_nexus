@@ -26,9 +26,22 @@ MATERIAIS: dict[tuple[str, str], InfoMaterial] = {
     ("ASTM A36", "perfil"): InfoMaterial(7850, 6200, 10.0),
     ("ASTM A572", "chapa"): InfoMaterial(7850, 6200, 9.0),
     ("ASTM A572", "perfil"): InfoMaterial(7850, 6200, 10.0),
+    ("ASTM A572 GR.50", "perfil"): InfoMaterial(7850, 6200, 10.5),
     ("SAE 1020", "barra"): InfoMaterial(7850, 6200, 12.0),
+    ("SAE 1020", "perfil"): InfoMaterial(7850, 6200, 10.0),
     ("AISI 304", "chapa"): InfoMaterial(8000, 6318, 25.0),
 }
+
+# Opções sugeridas pro campo Norma/Material do cartão de perfil laminado —
+# lista curta e editável, não um cadastro fechado (o campo aceita texto
+# livre; isto só alimenta o autocomplete). Preço/kg padrão de cada uma
+# (quando cadastrado) vem de MATERIAIS acima, por norma+"perfil".
+NORMAS_PERFIL_SUGERIDAS: list[str] = [
+    "ASTM A36",
+    "ASTM A572 Gr.50",
+    "ASTM A992",
+    "SAE 1020",
+]
 
 # kg/m por perfil — hoje é um cadastro fixo (tabela `perfis`); em produção
 # vem de consulta ao Supabase.
@@ -52,7 +65,14 @@ def buscar_info_material(norma: str | None, tipo_geometria: str | None) -> InfoM
 def buscar_peso_kg_m_perfil(designacao: str | None) -> float | None:
     if not designacao:
         return None
-    return PERFIS_KG_M.get(designacao.strip())
+    if designacao.strip() in PERFIS_KG_M:
+        return PERFIS_KG_M[designacao.strip()]
+    # Fallback pro catálogo maior (app/perfis_catalogo.py, hoje a série W —
+    # ver data/perfis_laminados.json), usado tanto pelo cartão de cálculo
+    # manual quanto por perfis identificados num desenho/BOM extraído.
+    from app.perfis_catalogo import buscar_peso_kg_m
+
+    return buscar_peso_kg_m(designacao)
 
 
 def _normaliza_tipo(tipo_geometria: str | None) -> str:

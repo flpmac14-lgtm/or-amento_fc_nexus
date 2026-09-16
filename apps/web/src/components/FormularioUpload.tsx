@@ -2,31 +2,42 @@
 
 import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
-import type { EstimativasOrcamento, RespostaOrcamentoDePdf } from "@/lib/types";
+import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
+import OrcamentosSalvos from "@/components/OrcamentosSalvos";
+import type {
+  EstadoCalculoManual,
+  EstimativasOrcamento,
+  OrcamentoSalvoCompleto,
+  RespostaOrcamentoDePdf,
+} from "@/lib/types";
+
+export type ModoFormulario = "arquivo" | "manual" | "referencia" | "salvos";
 
 interface Props {
+  modo: ModoFormulario;
+  setModo: (modo: ModoFormulario) => void;
   carregando: boolean;
   onAnalisar: (arquivo: File, estimativas: EstimativasOrcamento) => void;
-  onAnalisarTexto: (texto: string, estimativas: EstimativasOrcamento) => void;
   onResultadoManual: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
   onErroManual: (mensagem: string) => void;
+  estadoManual: EstadoCalculoManual;
+  onEstadoManualChange: (atualizacao: Partial<EstadoCalculoManual>) => void;
+  onAbrirSalvo: (salvo: OrcamentoSalvoCompleto) => void;
 }
 
-const PLACEHOLDER_TEXTO = `CHAPA 1000 x 500 x 25 ASTM A36 qtd 2
-BARRA REDONDA Ø100 x 500 SAE 1020
-PERFIL W310x52 comprimento 4750 ASTM A36`;
-
 export default function FormularioUpload({
+  modo,
+  setModo,
   carregando,
   onAnalisar,
-  onAnalisarTexto,
   onResultadoManual,
   onErroManual,
+  estadoManual,
+  onEstadoManualChange,
+  onAbrirSalvo,
 }: Props) {
-  const [modo, setModo] = useState<"arquivo" | "texto" | "manual">("arquivo");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
-  const [texto, setTexto] = useState("");
   const [pesoLiquidoKg, setPesoLiquidoKg] = useState("");
   const [areaPinturaM2, setAreaPinturaM2] = useState("");
   const [qtdPosicoesEngenharia, setQtdPosicoesEngenharia] = useState("");
@@ -43,7 +54,8 @@ export default function FormularioUpload({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (modo === "manual") return; // CalculoManual cuida do próprio fluxo
+    if (modo !== "arquivo") return; // cada uma das outras abas cuida do próprio fluxo
+    if (!arquivo) return;
     const estimativas: EstimativasOrcamento = {
       cenario_comercial: cenarioComercial,
       usar_historico_horas: usarHistorico,
@@ -53,13 +65,7 @@ export default function FormularioUpload({
         ? Number(qtdPosicoesEngenharia)
         : undefined,
     };
-    if (modo === "arquivo") {
-      if (!arquivo) return;
-      onAnalisar(arquivo, estimativas);
-    } else {
-      if (!texto.trim()) return;
-      onAnalisarTexto(texto, estimativas);
-    }
+    onAnalisar(arquivo, estimativas);
   }
 
   return (
@@ -76,15 +82,6 @@ export default function FormularioUpload({
         </button>
         <button
           type="button"
-          onClick={() => setModo("texto")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "texto" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          Digitar itens
-        </button>
-        <button
-          type="button"
           onClick={() => setModo("manual")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
             modo === "manual" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
@@ -92,9 +89,38 @@ export default function FormularioUpload({
         >
           Cálculo manual
         </button>
+        <button
+          type="button"
+          onClick={() => setModo("referencia")}
+          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
+            modo === "referencia" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Referência de preços
+        </button>
+        <button
+          type="button"
+          onClick={() => setModo("salvos")}
+          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
+            modo === "salvos" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Orçamentos salvos
+        </button>
       </div>
 
-      {modo === "manual" && <CalculoManual onResultado={onResultadoManual} onErro={onErroManual} />}
+      {modo === "manual" && (
+        <CalculoManual
+          estado={estadoManual}
+          onEstadoChange={onEstadoManualChange}
+          onResultado={onResultadoManual}
+          onErro={onErroManual}
+        />
+      )}
+
+      {modo === "referencia" && <ReferenciaPrecosMP />}
+
+      {modo === "salvos" && <OrcamentosSalvos onAbrir={onAbrirSalvo} />}
 
       {modo === "arquivo" && (
         <div
@@ -134,31 +160,7 @@ export default function FormularioUpload({
         </div>
       )}
 
-      {modo === "texto" && (
-        <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-400">
-              Um item por linha — a IA não calcula nada aqui, é o mesmo motor determinístico
-              lendo o texto direto.
-            </span>
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              placeholder={PLACEHOLDER_TEXTO}
-              rows={7}
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100 outline-none focus:border-cyan-500"
-            />
-          </label>
-          <p className="text-xs text-slate-500">
-            Formatos aceitos: <code className="text-slate-400">CHAPA C x L x E &lt;norma&gt;</code>,{" "}
-            <code className="text-slate-400">BARRA REDONDA DD x C &lt;norma&gt;</code> (D ou Ø, tanto faz),{" "}
-            <code className="text-slate-400">PERFIL &lt;designação&gt; comprimento C &lt;norma&gt;</code>{" "}
-            — adicione <code className="text-slate-400">qtd N</code> no fim se for mais de 1.
-          </p>
-        </div>
-      )}
-
-      {modo !== "manual" && (
+      {modo === "arquivo" && (
       <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
         <summary className="cursor-pointer font-medium text-slate-200">
           Estimativas manuais (o que ainda não dá pra calcular sozinho)
@@ -225,13 +227,13 @@ export default function FormularioUpload({
       </details>
       )}
 
-      {modo !== "manual" && (
+      {modo === "arquivo" && (
         <button
           type="submit"
-          disabled={(modo === "arquivo" ? !arquivo : !texto.trim()) || carregando}
+          disabled={!arquivo || carregando}
           className="rounded-md bg-cyan-500 px-4 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {carregando ? "Analisando…" : modo === "arquivo" ? "Analisar desenho" : "Analisar itens"}
+          {carregando ? "Analisando…" : "Analisar desenho"}
         </button>
       )}
     </form>

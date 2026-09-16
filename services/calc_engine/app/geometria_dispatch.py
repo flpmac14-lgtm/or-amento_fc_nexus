@@ -53,7 +53,7 @@ TIPOS_GEOMETRIA: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
     ]),
     "cone_angulo": ("Cone / tronco de cone (por ângulo)", [
         ("diametro_maior_mm", "Diâmetro maior", "mm"), ("diametro_menor_mm", "Diâmetro menor (0 = cone fechado)", "mm"),
-        ("angulo_graus", "Ângulo de abertura", "°"), ("espessura_mm", "Espessura", "mm"),
+        ("angulo_graus", "Semiângulo em relação ao eixo", "°"), ("espessura_mm", "Espessura", "mm"),
         ("densidade_kg_m3", "Densidade", "kg/m³"),
     ]),
     "cantoneira": ("Cantoneira L (abas iguais)", [
@@ -124,7 +124,10 @@ def calcular_peso(tipo: str, medidas: dict[str, float], quantidade: float = 1) -
         )
 
     if tipo == "chapa_anel":
-        return geometria.peso_chapa_anel(m("diametro_externo_mm"), m("diametro_interno_mm"), m("espessura_mm"), m("densidade_kg_m3"), quantidade)
+        de, di = m("diametro_externo_mm"), m("diametro_interno_mm")
+        if di >= de:
+            raise ValueError("O diâmetro interno precisa ser menor que o diâmetro externo")
+        return geometria.peso_chapa_anel(de, di, m("espessura_mm"), m("densidade_kg_m3"), quantidade)
 
     if tipo == "cilindro":
         return geometria.peso_cilindro_casca(m("diametro_mm"), m("espessura_mm"), m("comprimento_mm"), m("densidade_kg_m3"), quantidade)
@@ -151,7 +154,10 @@ def calcular_peso(tipo: str, medidas: dict[str, float], quantidade: float = 1) -
         return PesoCalculado(peso_kg=r.peso_kg * quantidade, memoria=f"{r.memoria} × qtd {quantidade}")
 
     if tipo == "tubo_redondo":
-        r = geometria.peso_tubo_redondo(m("diametro_externo_mm"), m("espessura_parede_mm"), m("comprimento_mm"), m("densidade_kg_m3"))
+        de, espessura = m("diametro_externo_mm"), m("espessura_parede_mm")
+        if 2 * espessura >= de:
+            raise ValueError("A parede (2 × espessura) precisa ser menor que o diâmetro externo")
+        r = geometria.peso_tubo_redondo(de, espessura, m("comprimento_mm"), m("densidade_kg_m3"))
         return PesoCalculado(peso_kg=r.peso_kg * quantidade, memoria=f"{r.memoria} × qtd {quantidade}")
 
     if tipo == "perfil":

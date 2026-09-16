@@ -11,6 +11,13 @@ export function formatarNumero(valor: number | null | undefined, casas = 2): str
   });
 }
 
+export function formatarDataBr(isoData: string | null | undefined): string {
+  if (!isoData) return "—";
+  const [ano, mes, dia] = isoData.split("-");
+  if (!ano || !mes || !dia) return isoData;
+  return `${dia}/${mes}/${ano}`;
+}
+
 export function formatarPercentual(valor: number | null | undefined): string {
   if (valor === null || valor === undefined || Number.isNaN(valor)) return "—";
   return `${(valor * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
@@ -32,6 +39,10 @@ export const NOMES_PROCESSO: Record<string, string> = {
   usinagem: "Usinagem",
   solda: "Solda",
   pintura_material: "Pintura (material)",
+  insumos_pintura: "Insumos de pintura",
+  servicos_terceiros: "Serviços de terceiros",
+  tratamento_termico: "Tratamento térmico",
+  contingenciamento: "Qualificações / contingência",
   ndt: "Ensaios NDT",
   engenharia: "Engenharia",
   embalagem: "Embalagem",

@@ -1,0 +1,118 @@
+"use client";
+
+import { useState } from "react";
+import { formatarMoeda, formatarNumero } from "@/lib/format";
+import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
+import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
+import type { ItemContingenciamento } from "@/lib/types";
+
+interface Props {
+  posicaoNum: number;
+  itemNum: number;
+  setPosicaoNum: (n: number) => void;
+  setItemNum: (n: number) => void;
+  onAdicionar: (item: Omit<ItemContingenciamento, "posicao">) => void;
+}
+
+export default function CartaoContingenciamento({
+  posicaoNum,
+  itemNum,
+  setPosicaoNum,
+  setItemNum,
+  onAdicionar,
+}: Props) {
+  const [descricao, setDescricao] = useState("Contingenciamento");
+  const [quantidade, setQuantidade] = useState("1");
+  const [valorUnitario, setValorUnitario] = useState("");
+  const [erro, setErro] = useState("");
+
+  const quantidadeNum = Number(quantidade.replace(",", ".")) || 0;
+  const valorUnitarioNum = Number(valorUnitario.replace(",", ".")) || 0;
+  const custoTotal = quantidadeNum > 0 && valorUnitarioNum > 0 ? quantidadeNum * valorUnitarioNum : null;
+
+  function adicionar() {
+    if (!descricao.trim() || !custoTotal) {
+      setErro("Informe a descrição, a quantidade e o valor unitário antes de adicionar.");
+      return;
+    }
+    setErro("");
+    onAdicionar({ descricao: descricao.trim(), quantidade: quantidadeNum, valorUnitario: valorUnitarioNum, custoTotal });
+    setQuantidade("1");
+    setValorUnitario("");
+  }
+
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
+      <h3 className="mb-1 font-semibold text-white">Qualificações / contingência</h3>
+      <p className="mb-3 text-xs text-slate-400">
+        Provisão de risco/qualificação do orçamento (contingenciamento etc.) — não é compra de
+        terceiro, por isso sem ICMS/PIS-COFINS.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <label className="flex flex-col gap-1 text-xs sm:col-span-2">
+          <span className="text-slate-400">Descrição</span>
+          <input
+            type="text"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-slate-400">Quantidade</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-slate-400">Valor unitário (R$)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={valorUnitario}
+            onChange={(e) => setValorUnitario(e.target.value)}
+            placeholder="ex: 150"
+            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          />
+        </label>
+      </div>
+
+      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+
+      {custoTotal !== null && (
+        <PainelResultadoCalculo
+          linhas={[
+            { rotulo: "Quantidade", valor: `${formatarNumero(quantidadeNum, 0)}` },
+            { rotulo: "Valor unitário", valor: formatarMoeda(valorUnitarioNum) },
+          ]}
+          custoLabel="Custo total"
+          custoValor={formatarMoeda(custoTotal)}
+        />
+      )}
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <SeletorPosicaoItem
+          posicaoNum={posicaoNum}
+          itemNum={itemNum}
+          setPosicaoNum={setPosicaoNum}
+          setItemNum={setItemNum}
+        />
+        <button
+          type="button"
+          onClick={adicionar}
+          disabled={!custoTotal}
+          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+        >
+          Adicionar ao orçamento
+        </button>
+      </div>
+    </div>
+  );
+}

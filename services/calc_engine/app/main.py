@@ -19,11 +19,41 @@ Endpoints:
   POST /geometria/calcular -> calcula peso de uma peça a partir do tipo +
                                medidas escolhidas no cartão — ver
                                app/geometria_dispatch.py
+  GET  /materiais/catalogo -> biblioteca de materiais (norma + densidade)
+                               pro seletor de material de todas as
+                               calculadoras manuais — ver
+                               app/materiais_catalogo.py
+  GET  /materiais/preco-mercado   -> preço/kg de referência por norma+espessura,
+                                      sincronizado da planilha de compras 2026 —
+                                      ver app/precos_mercado.py
+  GET  /materiais/precos-mercado  -> lista completa da referência (aba
+                                      "Referência de preços" do frontend)
+  GET  /perfis/tipos       -> tipos de perfil laminado (I/H/W/U) + normas
+                               sugeridas pro cartão de perfil — ver
+                               app/perfis_catalogo.py
+  GET  /perfis/buscar      -> busca no catálogo de perfis por tipo + termo
+                               (designação/bitola) pro campo pesquisável
+  GET  /cantoneiras/buscar -> busca no catálogo de cantoneiras L — ver
+                               app/cantoneiras_catalogo.py
+  GET  /tubos/buscar       -> busca no catálogo de tubos redondos — ver
+                               app/tubos_catalogo.py
   POST /orcamento-de-bom   -> igual a /orcamento-de-pdf, mas a BOM já vem
                                pronta (item_numero/descricao/peso_kg/norma)
                                montada no frontend pelos cartões de cálculo
                                manual — pula o extractor por completo,
                                porque o peso já foi calculado
+  POST   /orcamentos-salvos       -> salva (ou atualiza, se "id" vier no
+                                      corpo) um orçamento pra reabrir depois
+                                      — ver app/orcamentos_salvos.py
+  GET    /orcamentos-salvos       -> lista os orçamentos salvos (resumo)
+  GET    /orcamentos-salvos/{id}  -> um orçamento salvo completo (resultado
+                                      + estado de edição, quando existir)
+  DELETE /orcamentos-salvos/{id}  -> exclui um orçamento salvo
+  GET  /processos-terceirizados/catalogo -> catálogo pequeno (usinagem,
+                                      serviços de outsourcing, tratamento
+                                      térmico) com taxa de referência
+                                      conhecida — ver
+                                      app/catalogo_processos_terceirizados.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -42,9 +72,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from app.adapter import montar_entrada_orcamento
+from app.cantoneiras_catalogo import buscar_cantoneiras
+from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_processos_terceirizados
 from app.excel_export import gerar_excel_orcamento
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
-from app.orcamento import montar_orcamento
+from app.materiais_catalogo import listar_materiais
+from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
+from app.orcamento import montar_orcamento, resolver_params
+from app.orcamentos_salvos import BancoNaoConfigurado
+from app.orcamentos_salvos import buscar as buscar_orcamento_salvo
+from app.orcamentos_salvos import excluir as excluir_orcamento_salvo
+from app.orcamentos_salvos import listar as listar_orcamentos_salvos
+from app.orcamentos_salvos import salvar as salvar_orcamento_salvo
+from app.perfis_catalogo import buscar_perfis, listar_tipos as listar_tipos_perfil
+from app.precos_mercado import buscar_preco_chapa, listar_todas_compras, status_sincronizacao
+from app.tubos_catalogo import buscar_tubos
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
 
@@ -76,6 +118,66 @@ def orcamento(entrada: dict) -> dict:
     return resultado.model_dump()
 
 
+@app.post("/orcamentos-salvos")
+def orcamentos_salvos_criar(pedido: dict) -> dict:
+    """Salva um orçamento novo, ou atualiza um existente se `id` vier no
+    corpo — ver app/orcamentos_salvos.py. `origem` ("manual"/"pdf"/"texto")
+    diz se dá pra reabrir em modo de edição (a lista de itens do cálculo
+    manual, em `estado_manual`) ou só pra ver o resultado de novo."""
+    try:
+        return salvar_orcamento_salvo(
+            nome=pedido["nome"],
+            origem=pedido["origem"],
+            resultado=pedido["resultado"],
+            estado_manual=pedido.get("estado_manual"),
+            estado_texto=pedido.get("estado_texto"),
+            orcamento_id=pedido.get("id"),
+        )
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/orcamentos-salvos")
+def orcamentos_salvos_listar() -> dict:
+    try:
+        return {"orcamentos": listar_orcamentos_salvos()}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/orcamentos-salvos/{orcamento_id}")
+def orcamentos_salvos_obter(orcamento_id: str) -> dict:
+    try:
+        encontrado = buscar_orcamento_salvo(orcamento_id)
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not encontrado:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+    return encontrado
+
+
+@app.delete("/orcamentos-salvos/{orcamento_id}")
+def orcamentos_salvos_excluir(orcamento_id: str) -> dict:
+    try:
+        excluido = excluir_orcamento_salvo(orcamento_id)
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not excluido:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+    return {"excluido": True}
+
+
+@app.get("/processos-terceirizados/catalogo")
+def processos_terceirizados_catalogo() -> dict:
+    """Catálogo pequeno (usinagem, serviços de outsourcing, tratamento
+    térmico) com taxa de referência conhecida quando existe — ver
+    app/catalogo_processos_terceirizados.py. Alimenta os cartões de
+    usinagem/serviços de terceiros/tratamento térmico do cálculo manual."""
+    return carregar_catalogo_processos_terceirizados()
+
+
 @app.post("/orcamento/excel")
 def orcamento_excel(entrada: dict) -> Response:
     """Mesma entrada de POST /orcamento, mas devolve uma planilha .xlsx
@@ -84,7 +186,7 @@ def orcamento_excel(entrada: dict) -> Response:
     aba "Parâmetros"; as outras abas usam fórmula, não valor fixo, então
     mudar um parâmetro recalcula tudo dentro do próprio Excel."""
     resultado = montar_orcamento(entrada)
-    conteudo = gerar_excel_orcamento(entrada, resultado)
+    conteudo = gerar_excel_orcamento(entrada, resultado, resolver_params(entrada))
     return Response(
         content=conteudo,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -117,6 +219,109 @@ def geometria_calcular(pedido: dict) -> dict:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"peso_kg": round(resultado.peso_kg, 3), "memoria_calculo": resultado.memoria}
+
+
+@app.get("/materiais/catalogo")
+def materiais_catalogo() -> dict:
+    """Biblioteca centralizada de materiais (material/norma/categoria +
+    densidade) — alimenta o seletor de material de todas as calculadoras
+    manuais, eliminando o campo de densidade digitado à mão (ver
+    app/materiais_catalogo.py)."""
+    return {
+        "materiais": [
+            {"material": m.material, "norma": m.norma, "categoria": m.categoria, "densidade_kg_m3": m.densidade_kg_m3}
+            for m in listar_materiais()
+        ]
+    }
+
+
+@app.get("/materiais/precos-mercado")
+def materiais_precos_mercado() -> dict:
+    """Planilha de compras 2026 completa, sem filtro de material/unidade
+    (ver app/precos_mercado.py) — alimenta a aba "Referência de preços" do
+    frontend, que pediu pra ver tudo que está na planilha, não só o
+    subconjunto chapa/KG usado no auto-preenchimento (`/materiais/preco-mercado`)."""
+    status = status_sincronizacao()
+    compras = listar_todas_compras()
+    return {
+        **status,
+        "total_referencias": len(compras),
+        "compras": [
+            {
+                "codigo": c.codigo, "material": c.material, "descricao": c.descricao,
+                "preco_unitario": c.preco_unitario, "unidade": c.unidade,
+                "fornecedor": c.fornecedor, "obra": c.obra, "data_compra": c.data_compra,
+            }
+            for c in compras
+        ],
+    }
+
+
+@app.get("/materiais/preco-mercado")
+def materiais_preco_mercado(norma: str, espessura_mm: float) -> dict:
+    """Preço/kg de referência pra um material+espessura específicos —
+    usado pelo cartão de cálculo pra pré-preencher "Preço por kg" (igual
+    já faz com densidade). `exato=False` quando casou pela espessura mais
+    próxima cadastrada (dentro de app.precos_mercado.TOLERANCIA_ESPESSURA_MM),
+    não pela espessura exata pedida."""
+    resultado = buscar_preco_chapa(norma, espessura_mm)
+    if not resultado:
+        return {"encontrado": False}
+    preco, exato = resultado
+    return {
+        "encontrado": True,
+        "preco_kg": preco.preco_kg,
+        "fornecedor": preco.fornecedor,
+        "data_compra": preco.data_compra,
+        "espessura_referencia_mm": preco.espessura_mm,
+        "exato": exato,
+    }
+
+
+@app.get("/cantoneiras/buscar")
+def cantoneiras_buscar(q: str | None = None) -> dict:
+    """Busca no catálogo de cantoneiras L pro modo "Catálogo" do cartão —
+    ver app/cantoneiras_catalogo.py."""
+    cantoneiras = buscar_cantoneiras(termo=q)
+    return {
+        "cantoneiras": [
+            {"designacao": c.designacao, "aba_mm": c.aba_mm, "espessura_mm": c.espessura_mm, "kg_m": c.kg_m, "fonte": c.fonte}
+            for c in cantoneiras
+        ]
+    }
+
+
+@app.get("/tubos/buscar")
+def tubos_buscar(q: str | None = None) -> dict:
+    """Busca no catálogo de tubos redondos pro modo "Catálogo" do cartão —
+    ver app/tubos_catalogo.py."""
+    tubos = buscar_tubos(termo=q)
+    return {
+        "tubos": [
+            {
+                "designacao": t.designacao, "diametro_externo_mm": t.diametro_externo_mm,
+                "espessura_mm": t.espessura_mm, "diametro_interno_mm": t.diametro_interno_mm,
+                "kg_m": t.kg_m, "fonte": t.fonte,
+            }
+            for t in tubos
+        ]
+    }
+
+
+@app.get("/perfis/tipos")
+def perfis_tipos() -> dict:
+    """Tipos de perfil laminado selecionáveis no cartão (I/H/W/U) — ver
+    app/perfis_catalogo.py sobre por que só a série W tem catálogo
+    povoado hoje."""
+    return {"tipos": listar_tipos_perfil(), "normas_sugeridas": NORMAS_PERFIL_SUGERIDAS}
+
+
+@app.get("/perfis/buscar")
+def perfis_buscar(tipo: str | None = None, q: str | None = None) -> dict:
+    """Busca no catálogo de perfis pro campo "Perfil / Bitola" pesquisável
+    — filtra por tipo (I/H/W/U) e por um termo livre na designação."""
+    perfis = buscar_perfis(tipo=tipo, termo=q)
+    return {"perfis": [{"designacao": p.designacao, "peso_kg_m": p.peso_kg_m, "tipo": p.tipo} for p in perfis]}
 
 
 def _campo_pronto(valor, confianca: float = 1.0) -> dict:
@@ -158,6 +363,12 @@ def orcamento_de_bom(pedido: dict) -> dict:
             "usinado": _campo_pronto(False, 0.3),
             "quantidade": _campo_pronto(item.get("quantidade", 1)),
             "peso_kg": _campo_pronto(item.get("peso_kg")),
+            # Preço/kg e perda de material digitados direto no cartão (hoje
+            # só o de perfil laminado usa) — têm prioridade sobre o preço
+            # padrão por norma cadastrado em materiais_fixture/Supabase, ver
+            # app/adapter.py.
+            "preco_kg_manual": _campo_pronto(item.get("preco_kg"), 0.95 if item.get("preco_kg") else 0.0),
+            "perda_pct": _campo_pronto(item.get("perda_pct")),
         })
 
     resultado_extracao = {

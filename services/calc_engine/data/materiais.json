@@ -1,0 +1,10 @@
+[
+  {"material": "Aço carbono ASTM A36", "norma": "ASTM A36", "categoria": "aco_carbono", "densidade_kg_m3": 7850},
+  {"material": "Aço carbono ASTM A572 Gr.50", "norma": "ASTM A572 Gr.50", "categoria": "aco_carbono", "densidade_kg_m3": 7850},
+  {"material": "Aço SAE 1020", "norma": "SAE 1020", "categoria": "aco_carbono", "densidade_kg_m3": 7850},
+  {"material": "Aço SAE 1045", "norma": "SAE 1045", "categoria": "aco_carbono", "densidade_kg_m3": 7850},
+  {"material": "Aço carbono genérico", "norma": "Aço carbono genérico", "categoria": "aco_carbono", "densidade_kg_m3": 7850},
+  {"material": "Aço inox AISI 304", "norma": "AISI 304", "categoria": "aco_inox", "densidade_kg_m3": 8000},
+  {"material": "Aço inox AISI 316", "norma": "AISI 316", "categoria": "aco_inox", "densidade_kg_m3": 8000},
+  {"material": "Alumínio", "norma": "Alumínio", "categoria": "aluminio", "densidade_kg_m3": 2700}
+]

@@ -58,8 +58,122 @@ def _agregar_itens_padrao(itens: list[dict]) -> LinhaCusto:
     )
 
 
+def _agregar_insumos_pintura(itens: list[dict]) -> LinhaCusto:
+    """Insumos de pintura escolhidos item a item (tinta de fundo,
+    intermediária, acabamento, diluente etc.) — mesma mecânica de
+    `_agregar_itens_padrao`, mas com a alíquota de "pintura_material"
+    (a mesma da linha de pintura por fórmula/área, ver processos.py), já
+    que ambas são compra de material de terceiros com o mesmo tratamento
+    fiscal. Pensado pro cálculo manual, onde o plano de pintura pedido
+    (quais produtos, quantos litros de cada) varia por orçamento e não dá
+    pra cravar numa fórmula única de R$/m²."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["pintura_material"]
+    bruto_total = sum(item["quantidade"] * item["preco_unitario"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['quantidade']} L × R$ {item['preco_unitario']}/L = "
+        f"R$ {item['quantidade'] * item['preco_unitario']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="insumos_pintura",
+        descricao="Insumos de pintura",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
+def _agregar_servicos_terceiros(itens: list[dict]) -> LinhaCusto:
+    """Serviços de outsourcing cobrados por peso (conformação pesada/dobra
+    em calandra, rebordeamento de tampos, balanceamento etc.) — pedido a
+    partir do print da planilha de referência Macfab, seção "SERVIÇOS
+    (OUTSOURCING)". Mesma alíquota de "usinagem" (0% ICMS + 9,25%
+    PIS/COFINS) por analogia — é serviço de terceiro subcontratado, igual
+    usinagem/NDT; ajustar se a empresa usar outra alíquota real pra isso."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["usinagem"]
+    bruto_total = sum(item["peso_kg"] * item["valor_kg"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['peso_kg']} kg × R$ {item['valor_kg']}/kg = "
+        f"R$ {item['peso_kg'] * item['valor_kg']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="servicos_terceiros",
+        descricao="Serviços de terceiros (outsourcing)",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
+def _agregar_tratamento_termico(itens: list[dict]) -> LinhaCusto:
+    """Alívio de tensões/normalização, têmpera/revenimento/cementação/
+    nitretação etc. — seção "TRATAMENTO TÉRMICO (OUTSOURCING)" da planilha
+    de referência. Mesma alíquota/justificativa de `_agregar_servicos_terceiros`."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["usinagem"]
+    bruto_total = sum(item["peso_kg"] * item["valor_kg"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['peso_kg']} kg × R$ {item['valor_kg']}/kg = "
+        f"R$ {item['peso_kg'] * item['valor_kg']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="tratamento_termico",
+        descricao="Tratamento térmico (outsourcing)",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
+def _agregar_contingenciamento(itens: list[dict]) -> LinhaCusto:
+    """Provisão de qualificação/contingência — seção "QUALIFICAÇÕES/
+    CONTINGÊNCIA ETC." da planilha de referência. Não é compra de
+    terceiro (é uma provisão interna de risco), por isso sem ICMS/PIS-
+    COFINS — mesmo tratamento fiscal de "engenharia"."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["engenharia"]
+    bruto_total = sum(item["quantidade"] * item["valor_unitario"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['quantidade']} × R$ {item['valor_unitario']} = "
+        f"R$ {item['quantidade'] * item['valor_unitario']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="contingenciamento",
+        descricao="Qualificações / contingência",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
+def resolver_params(entrada: dict, params: dict | None = None) -> dict:
+    """Aplica sobre PARAMETROS_PADRAO os overrides vindos de `entrada` (hoje
+    só `corte_valor_kg` — custo médio de insumos de corte oxicorte/plasma/
+    laser, digitado no cartão de cálculo manual). Usado tanto por
+    `montar_orcamento` quanto por `app.excel_export.gerar_excel_orcamento`,
+    pra o Excel editável (POST /orcamento/excel, que reusa a mesma `entrada`)
+    bater com o que apareceu na tela em vez de voltar ao padrão."""
+    params = dict(params or PARAMETROS_PADRAO)
+    if entrada.get("corte_valor_kg") is not None:
+        params["corte_valor_kg"] = entrada["corte_valor_kg"]
+    return params
+
+
 def montar_orcamento(entrada: dict, params: dict | None = None) -> ResultadoOrcamento:
-    params = params or PARAMETROS_PADRAO
+    params = resolver_params(entrada, params)
     peso_liquido_kg = entrada["peso_liquido_kg"]
 
     linhas: list[LinhaCusto] = []
@@ -85,16 +199,24 @@ def montar_orcamento(entrada: dict, params: dict | None = None) -> ResultadoOrca
 
     if entrada.get("usinagem_operacoes"):
         linhas.append(processos.usinagem(entrada["usinagem_operacoes"], params))
+    if entrada.get("servicos_terceiros"):
+        linhas.append(_agregar_servicos_terceiros(entrada["servicos_terceiros"]))
+    if entrada.get("tratamento_termico"):
+        linhas.append(_agregar_tratamento_termico(entrada["tratamento_termico"]))
 
     linhas.append(processos.solda(peso_liquido_kg, params))
 
     if entrada.get("area_pintura_m2"):
         linhas.append(processos.pintura_material(entrada["area_pintura_m2"], params))
+    if entrada.get("insumos_pintura"):
+        linhas.append(_agregar_insumos_pintura(entrada["insumos_pintura"]))
 
     linhas.append(processos.ndt(peso_liquido_kg, params))
 
     if entrada.get("quantidade_posicoes_engenharia"):
         linhas.append(processos.engenharia(entrada["quantidade_posicoes_engenharia"], params))
+    if entrada.get("contingenciamento"):
+        linhas.append(_agregar_contingenciamento(entrada["contingenciamento"]))
 
     linhas.append(processos.embalagem(peso_liquido_kg, params))
     linhas.append(processos.transporte(peso_liquido_kg, params))

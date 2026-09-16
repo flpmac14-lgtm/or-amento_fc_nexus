@@ -1,0 +1,387 @@
+[
+  {
+    "designacao": "L 1\" x 1\" x 1/8\" (25.4x25.4x3.2mm)",
+    "aba_mm": 25.4,
+    "espessura_mm": 3.2,
+    "kg_m": 1.1957,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1\" x 1\" x 3/16\" (25.4x25.4x4.8mm)",
+    "aba_mm": 25.4,
+    "espessura_mm": 4.8,
+    "kg_m": 1.7333,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/4\" x 1.1/4\" x 1/8\" (31.8x31.8x3.2mm)",
+    "aba_mm": 31.8,
+    "espessura_mm": 3.2,
+    "kg_m": 1.5172,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/4\" x 1.1/4\" x 3/16\" (31.8x31.8x4.8mm)",
+    "aba_mm": 31.8,
+    "espessura_mm": 4.8,
+    "kg_m": 2.2156,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/4\" x 1.1/4\" x 1/4\" (31.8x31.8x6.4mm)",
+    "aba_mm": 31.8,
+    "espessura_mm": 6.4,
+    "kg_m": 2.8737,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/2\" x 1.1/2\" x 1/8\" (38.1x38.1x3.2mm)",
+    "aba_mm": 38.1,
+    "espessura_mm": 3.2,
+    "kg_m": 1.8338,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/2\" x 1.1/2\" x 3/16\" (38.1x38.1x4.8mm)",
+    "aba_mm": 38.1,
+    "espessura_mm": 4.8,
+    "kg_m": 2.6904,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/2\" x 1.1/2\" x 1/4\" (38.1x38.1x6.4mm)",
+    "aba_mm": 38.1,
+    "espessura_mm": 6.4,
+    "kg_m": 3.5068,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.1/2\" x 1.1/2\" x 5/16\" (38.1x38.1x7.9mm)",
+    "aba_mm": 38.1,
+    "espessura_mm": 7.9,
+    "kg_m": 4.2356,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.3/4\" x 1.3/4\" x 1/8\" (44.5x44.5x3.2mm)",
+    "aba_mm": 44.5,
+    "espessura_mm": 3.2,
+    "kg_m": 2.1553,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.3/4\" x 1.3/4\" x 3/16\" (44.5x44.5x4.8mm)",
+    "aba_mm": 44.5,
+    "espessura_mm": 4.8,
+    "kg_m": 3.1727,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.3/4\" x 1.3/4\" x 1/4\" (44.5x44.5x6.4mm)",
+    "aba_mm": 44.5,
+    "espessura_mm": 6.4,
+    "kg_m": 4.1498,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.3/4\" x 1.3/4\" x 5/16\" (44.5x44.5x7.9mm)",
+    "aba_mm": 44.5,
+    "espessura_mm": 7.9,
+    "kg_m": 5.0294,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 1.3/4\" x 1.3/4\" x 3/8\" (44.5x44.5x9.5mm)",
+    "aba_mm": 44.5,
+    "espessura_mm": 9.5,
+    "kg_m": 5.9287,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2\" x 2\" x 1/8\" (50.8x50.8x3.2mm)",
+    "aba_mm": 50.8,
+    "espessura_mm": 3.2,
+    "kg_m": 2.4718,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2\" x 2\" x 3/16\" (50.8x50.8x4.8mm)",
+    "aba_mm": 50.8,
+    "espessura_mm": 4.8,
+    "kg_m": 3.6474,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2\" x 2\" x 1/4\" (50.8x50.8x6.4mm)",
+    "aba_mm": 50.8,
+    "espessura_mm": 6.4,
+    "kg_m": 4.7828,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2\" x 2\" x 5/16\" (50.8x50.8x7.9mm)",
+    "aba_mm": 50.8,
+    "espessura_mm": 7.9,
+    "kg_m": 5.8108,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2\" x 2\" x 3/8\" (50.8x50.8x9.5mm)",
+    "aba_mm": 50.8,
+    "espessura_mm": 9.5,
+    "kg_m": 6.8684,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 1/8\" (63.5x63.5x3.2mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 3.2,
+    "kg_m": 3.1099,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 3/16\" (63.5x63.5x4.8mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 4.8,
+    "kg_m": 4.6045,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 1/4\" (63.5x63.5x6.4mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 6.4,
+    "kg_m": 6.0589,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 5/16\" (63.5x63.5x7.9mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 7.9,
+    "kg_m": 7.386,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 3/8\" (63.5x63.5x9.5mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 9.5,
+    "kg_m": 8.7626,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 2.1/2\" x 2.1/2\" x 1/2\" (63.5x63.5x12.7mm)",
+    "aba_mm": 63.5,
+    "espessura_mm": 12.7,
+    "kg_m": 11.3951,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 1/8\" (76.2x76.2x3.2mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 3.2,
+    "kg_m": 3.7479,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 3/16\" (76.2x76.2x4.8mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 4.8,
+    "kg_m": 5.5616,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 1/4\" (76.2x76.2x6.4mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 6.4,
+    "kg_m": 7.335,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 5/16\" (76.2x76.2x7.9mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 7.9,
+    "kg_m": 8.9612,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 3/8\" (76.2x76.2x9.5mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 9.5,
+    "kg_m": 10.6568,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3\" x 3\" x 1/2\" (76.2x76.2x12.7mm)",
+    "aba_mm": 76.2,
+    "espessura_mm": 12.7,
+    "kg_m": 13.9274,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 1/8\" (88.9x88.9x3.2mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 3.2,
+    "kg_m": 4.386,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 3/16\" (88.9x88.9x4.8mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 4.8,
+    "kg_m": 6.5186,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 1/4\" (88.9x88.9x6.4mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 6.4,
+    "kg_m": 8.6111,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 5/16\" (88.9x88.9x7.9mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 7.9,
+    "kg_m": 10.5363,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 3/8\" (88.9x88.9x9.5mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 9.5,
+    "kg_m": 12.551,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 3.1/2\" x 3.1/2\" x 1/2\" (88.9x88.9x12.7mm)",
+    "aba_mm": 88.9,
+    "espessura_mm": 12.7,
+    "kg_m": 16.4596,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 1/8\" (101.6x101.6x3.2mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 3.2,
+    "kg_m": 5.024,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 3/16\" (101.6x101.6x4.8mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 4.8,
+    "kg_m": 7.4757,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 1/4\" (101.6x101.6x6.4mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 6.4,
+    "kg_m": 9.8872,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 5/16\" (101.6x101.6x7.9mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 7.9,
+    "kg_m": 12.1115,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 3/8\" (101.6x101.6x9.5mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 9.5,
+    "kg_m": 14.4452,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 4\" x 4\" x 1/2\" (101.6x101.6x12.7mm)",
+    "aba_mm": 101.6,
+    "espessura_mm": 12.7,
+    "kg_m": 18.9919,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 1/8\" (127x127x3.2mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 3.2,
+    "kg_m": 6.3001,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 3/16\" (127x127x4.8mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 4.8,
+    "kg_m": 9.3899,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 1/4\" (127x127x6.4mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 6.4,
+    "kg_m": 12.4394,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 5/16\" (127x127x7.9mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 7.9,
+    "kg_m": 15.2619,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 3/8\" (127x127x9.5mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 9.5,
+    "kg_m": 18.2336,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 5\" x 5\" x 1/2\" (127x127x12.7mm)",
+    "aba_mm": 127.0,
+    "espessura_mm": 12.7,
+    "kg_m": 24.0564,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 1/8\" (152.4x152.4x3.2mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 3.2,
+    "kg_m": 7.5762,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 3/16\" (152.4x152.4x4.8mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 4.8,
+    "kg_m": 11.304,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 1/4\" (152.4x152.4x6.4mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 6.4,
+    "kg_m": 14.9916,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 5/16\" (152.4x152.4x7.9mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 7.9,
+    "kg_m": 18.4123,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 3/8\" (152.4x152.4x9.5mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 9.5,
+    "kg_m": 22.022,
+    "fonte": "calculado"
+  },
+  {
+    "designacao": "L 6\" x 6\" x 1/2\" (152.4x152.4x12.7mm)",
+    "aba_mm": 152.4,
+    "espessura_mm": 12.7,
+    "kg_m": 29.1209,
+    "fonte": "calculado"
+  }
+]

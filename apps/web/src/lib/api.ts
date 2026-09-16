@@ -1,8 +1,24 @@
 import type {
+  CantoneiraCatalogo,
   CatalogoGeometria,
+  CatalogoProcessosTerceirizados,
+  EstadoCalculoManual,
   EstimativasOrcamento,
   ItemCalculado,
+  ItemComercial,
+  ItemContingenciamento,
+  MaterialCatalogo,
+  OperacaoUsinagem,
+  OrcamentoSalvoCompleto,
+  OrcamentoSalvoResumo,
+  OrigemOrcamentoSalvo,
+  PerfilCatalogo,
+  PrecoMercadoResposta,
+  PrecosMercadoLista,
   RespostaOrcamentoDePdf,
+  ServicoPorPeso,
+  TiposPerfilResposta,
+  TuboCatalogo,
 } from "./types";
 
 const CALC_ENGINE_URL =
@@ -136,8 +152,89 @@ export async function calcularPesoGeometria(
   return resposta.json();
 }
 
+export async function buscarMateriais(): Promise<MaterialCatalogo[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/materiais/catalogo`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar a biblioteca de materiais (${resposta.status}).`);
+  }
+  const dados = await resposta.json();
+  return dados.materiais;
+}
+
+export async function buscarCantoneirasCatalogo(termo: string): Promise<CantoneiraCatalogo[]> {
+  const params = new URLSearchParams();
+  if (termo) params.set("q", termo);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/cantoneiras/buscar?${params.toString()}`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao buscar cantoneiras no catálogo (${resposta.status}).`);
+  }
+  const dados = await resposta.json();
+  return dados.cantoneiras;
+}
+
+export async function buscarTubosCatalogo(termo: string): Promise<TuboCatalogo[]> {
+  const params = new URLSearchParams();
+  if (termo) params.set("q", termo);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/tubos/buscar?${params.toString()}`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao buscar tubos no catálogo (${resposta.status}).`);
+  }
+  const dados = await resposta.json();
+  return dados.tubos;
+}
+
+export async function buscarPrecoMercado(norma: string, espessuraMm: number): Promise<PrecoMercadoResposta> {
+  const params = new URLSearchParams({ norma, espessura_mm: String(espessuraMm) });
+  const resposta = await fetch(`${CALC_ENGINE_URL}/materiais/preco-mercado?${params.toString()}`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao buscar preço de referência (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export async function buscarPrecosMercado(): Promise<PrecosMercadoLista> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/materiais/precos-mercado`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar a referência de preços (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export async function buscarTiposPerfil(): Promise<TiposPerfilResposta> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/perfis/tipos`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar os tipos de perfil (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export async function buscarPerfis(tipo: string, termo: string): Promise<PerfilCatalogo[]> {
+  const params = new URLSearchParams({ tipo });
+  if (termo) params.set("q", termo);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/perfis/buscar?${params.toString()}`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao buscar perfis no catálogo (${resposta.status}).`);
+  }
+  const dados = await resposta.json();
+  return dados.perfis;
+}
+
+export async function buscarCatalogoProcessosTerceirizados(): Promise<CatalogoProcessosTerceirizados> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/processos-terceirizados/catalogo`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar o catálogo de processos terceirizados (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
 export async function analisarBom(
   itens: ItemCalculado[],
+  itensComerciais: ItemComercial[],
+  insumosPintura: ItemComercial[],
+  operacoesUsinagem: OperacaoUsinagem[],
+  servicosTerceiros: ServicoPorPeso[],
+  tratamentoTermico: ServicoPorPeso[],
+  contingenciamento: ItemContingenciamento[],
   estimativas: EstimativasOrcamento,
 ): Promise<RespostaOrcamentoDePdf> {
   const bom = itens.map((item, i) => ({
@@ -147,12 +244,61 @@ export async function analisarBom(
     norma: item.norma || null,
     quantidade: 1,
     tipo: item.tipo,
+    preco_kg: item.preco_kg ?? null,
+    perda_pct: item.perdaPct ?? null,
+  }));
+
+  const itensPadrao = itensComerciais.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    quantidade: item.quantidade,
+    preco_unitario: item.preco_unitario,
+  }));
+
+  const insumosPinturaPayload = insumosPintura.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    quantidade: item.quantidade,
+    preco_unitario: item.preco_unitario,
+  }));
+
+  const usinagemOperacoesPayload = operacoesUsinagem.map((op) => ({
+    maquina: `${op.maquina} (${op.posicao})`,
+    horas: op.horas,
+    valor_hora: op.valorHora,
+  }));
+
+  const servicosTerceirosPayload = servicosTerceiros.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    peso_kg: item.pesoKg,
+    valor_kg: item.valorKg,
+  }));
+
+  const tratamentoTermicoPayload = tratamentoTermico.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    peso_kg: item.pesoKg,
+    valor_kg: item.valorKg,
+  }));
+
+  const contingenciamentoPayload = contingenciamento.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    quantidade: item.quantidade,
+    valor_unitario: item.valorUnitario,
   }));
 
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento-de-bom`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bom, estimativas }),
+    body: JSON.stringify({
+      bom,
+      estimativas: {
+        ...estimativas,
+        itens_padrao: itensPadrao,
+        insumos_pintura: insumosPinturaPayload,
+        usinagem_operacoes: usinagemOperacoesPayload,
+        servicos_terceiros: servicosTerceirosPayload,
+        tratamento_termico: tratamentoTermicoPayload,
+        contingenciamento: contingenciamentoPayload,
+      },
+    }),
   });
 
   if (!resposta.ok) {
@@ -163,4 +309,50 @@ export async function analisarBom(
   }
 
   return resposta.json();
+}
+
+export async function salvarOrcamento(payload: {
+  id?: string;
+  nome: string;
+  origem: OrigemOrcamentoSalvo;
+  resultado: RespostaOrcamentoDePdf;
+  estado_manual?: EstadoCalculoManual | null;
+  estado_texto?: { texto: string; estimativas: EstimativasOrcamento } | null;
+}): Promise<{ id: string; created_at: string; updated_at: string }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao salvar o orçamento (${resposta.status}). ${corpo}`);
+  }
+
+  return resposta.json();
+}
+
+export async function listarOrcamentosSalvos(): Promise<OrcamentoSalvoResumo[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao carregar os orçamentos salvos (${resposta.status}).`);
+  }
+  const dados = await resposta.json();
+  return dados.orcamentos;
+}
+
+export async function buscarOrcamentoSalvo(id: string): Promise<OrcamentoSalvoCompleto> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos/${id}`);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao abrir o orçamento salvo (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export async function excluirOrcamentoSalvo(id: string): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos/${id}`, { method: "DELETE" });
+  if (!resposta.ok) {
+    throw new Error(`Falha ao excluir o orçamento salvo (${resposta.status}).`);
+  }
 }
