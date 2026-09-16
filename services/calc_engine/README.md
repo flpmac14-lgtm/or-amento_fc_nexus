@@ -245,10 +245,11 @@ em `app/main.py`. Nenhuma mudança estrutural necessária.
 Pedido explícito do usuário: em vez de digitar "Preço por kg" de cabeça
 no cartão de cálculo, buscar automaticamente o último preço pago (norma +
 espessura) — igual já acontece com densidade — a partir do histórico real
-de compras 2026 que ele mantém numa planilha no Desktop
-(`C:\Users\gerencia\Desktop\Lista sectra de material.xlsx`, caminho
-configurável via `PRECOS_MERCADO_XLSX_PATH`; **não é um arquivo do
-repositório**, é dado de compra real da empresa).
+de compras 2026 que ele mantém numa planilha em `dados-locais/Lista
+sectra de material.xlsx` (pasta na raiz do projeto, sincronizada pelo
+OneDrive mas ignorada pelo git — caminho configurável via
+`PRECOS_MERCADO_XLSX_PATH`; **não é um arquivo do repositório**, é dado
+de compra real da empresa).
 
 Só entram linhas com `UNIDADE == "KG"` e `DESCRICAO` no formato "CHAPA
 #&lt;espessura&gt; &lt;norma&gt;" (é como o ERP registra chapa hoje —

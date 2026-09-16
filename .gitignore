@@ -19,3 +19,7 @@ Thumbs.db
 
 # Uploads temporários
 services/extractor/tmp/
+
+# Dados reais locais (preços/compras da empresa — sincronizados via OneDrive,
+# nunca commitados no repositório)
+/dados-locais/

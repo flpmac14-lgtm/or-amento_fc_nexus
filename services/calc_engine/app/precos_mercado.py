@@ -7,9 +7,12 @@ densidade (auto-preenche, mas continua editável — "casos excepcionais").
 Fonte: uma planilha local (export do ERP, `CODIGO, MATERIAL, DESCRICAO,
 VLRUNITARIO, UNIDADE, FORNECEDOR, OBRA, DTLANCAMENTO`) que o usuário mantém
 atualizando manualmente — não é um arquivo do repositório (é o Desktop
-dele, dado de compra real). Caminho configurável via
-`PRECOS_MERCADO_XLSX_PATH`; sem a variável, cai no caminho padrão desta
-máquina.
+dele, dado de compra real. Vive em `dados-locais/` na raiz do projeto —
+pasta sincronizada pelo OneDrive junto com o resto do repo, mas ignorada
+pelo git (`.gitignore`), pra não versionar preço/compra real da empresa.
+Caminho configurável via `PRECOS_MERCADO_XLSX_PATH`; sem a variável, cai
+no caminho padrão calculado a partir da raiz do projeto (funciona em
+qualquer máquina onde a pasta `dados-locais/` estiver sincronizada).
 
 Só entram linhas onde `UNIDADE == "KG"` (preço já é por quilo, sem
 precisar converter de PC/M2/CT etc — esses têm preço por peça/caixa/m²,
@@ -40,7 +43,9 @@ from pathlib import Path
 
 TETO_SEGUNDOS = 15 * 60
 
-_CAMINHO_PADRAO = r"C:\Users\gerencia\Desktop\Lista sectra de material.xlsx"
+# Raiz do projeto = 3 níveis acima deste arquivo (app/ -> calc_engine/ -> services/ -> raiz)
+_RAIZ_PROJETO = Path(__file__).resolve().parents[3]
+_CAMINHO_PADRAO = _RAIZ_PROJETO / "dados-locais" / "Lista sectra de material.xlsx"
 
 _PADRAO_CHAPA = re.compile(r"^CHAPA\s*#\s*([0-9]+[,.][0-9]+)\s+(.+)$", re.IGNORECASE)
 
