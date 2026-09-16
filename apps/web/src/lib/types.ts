@@ -48,6 +48,10 @@ export interface ResumoComercial {
 export interface ResultadoOrcamentoDTO {
   linhas: LinhaCusto[];
   comercial: ResumoComercial;
+  // Valores efetivos (padrão + overrides já aplicados) dos parâmetros
+  // editáveis do "Custo por processo" — ver
+  // services/calc_engine/app/orcamento.py::PARAMS_ESCALARES_SOBRESCREVIVEIS.
+  parametros?: Record<string, number>;
 }
 
 export interface RespostaOrcamentoDePdf {
@@ -65,6 +69,9 @@ export interface RespostaOrcamentoDePdf {
   // frontend, só serve pra pedir a planilha Excel depois (POST
   // /orcamento/excel) sem precisar re-extrair nada.
   entrada: Record<string, unknown>;
+  // Mesmos valores de `orcamento.parametros`, mas no nível raiz — devolvido
+  // por /orcamento-de-bom, /orcamento-de-pdf e /orcamento-de-texto.
+  parametros?: Record<string, number>;
 }
 
 export interface EstimativasOrcamento {
@@ -140,6 +147,22 @@ export interface ItemCalculado {
   perdaPct?: number;
   pesoParaCompraKg?: number;
   custoTotal?: number;
+  // Cópia dos campos brutos do formulário (medidas, seleção de material,
+  // modo catálogo/manual etc.) no momento de adicionar — só existe pra dar
+  // pra reabrir o cartão certo já preenchido no botão "editar" (ver
+  // CalculoManual.tsx). `descricao`/`peso_kg`/etc. acima são o resultado já
+  // calculado, não servem pra reconstruir o formulário original.
+  formSnapshot?: Record<string, string>;
+}
+
+// Item "puxado de volta" da lista de itens calculados pro botão "editar" —
+// cada cartão sabe interpretar seu próprio formato de `dados` (ver
+// CalculoManual.tsx::iniciarEdicao e o useEffect de restauração em cada
+// Cartao*.tsx). `id` muda a cada clique em "editar", pra disparar o efeito
+// de restauração mesmo editando o mesmo item duas vezes seguidas.
+export interface EdicaoPendente<T = unknown> {
+  id: number;
+  dados: T;
 }
 
 export interface ItemComercial {

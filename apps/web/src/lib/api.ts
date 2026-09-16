@@ -16,6 +16,7 @@ import type {
   PrecoMercadoResposta,
   PrecosMercadoLista,
   RespostaOrcamentoDePdf,
+  ResultadoOrcamentoDTO,
   ServicoPorPeso,
   TiposPerfilResposta,
   TuboCatalogo,
@@ -57,6 +58,21 @@ export async function analisarPdf(
     throw new Error(
       `Falha ao analisar o PDF (${resposta.status}). ${corpo || "Verifique se os serviços estão rodando."}`,
     );
+  }
+
+  return resposta.json();
+}
+
+export async function recalcularOrcamento(entrada: Record<string, unknown>): Promise<ResultadoOrcamentoDTO> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(entrada),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao recalcular o orçamento (${resposta.status}). ${corpo}`);
   }
 
   return resposta.json();

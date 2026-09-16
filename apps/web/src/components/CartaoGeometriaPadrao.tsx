@@ -6,7 +6,7 @@ import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ItemCalculado, MaterialCatalogo, PrecoMercadoResposta, TipoGeometria } from "@/lib/types";
+import type { EdicaoPendente, ItemCalculado, MaterialCatalogo, PrecoMercadoResposta, TipoGeometria } from "@/lib/types";
 
 interface Props {
   tipo: string;
@@ -17,6 +17,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemCalculado> | null;
 }
 
 const PI = Math.PI;
@@ -139,6 +140,7 @@ export default function CartaoGeometriaPadrao({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const campos = useMemo(() => def.campos.filter((c) => c.chave !== "densidade_kg_m3"), [def]);
 
@@ -158,6 +160,31 @@ export default function CartaoGeometriaPadrao({
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState("");
   const [resultadoPeso, setResultadoPeso] = useState<{ peso_kg: number; memoria_calculo: string } | null>(null);
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // essa peça de volta — o item calculado só guarda o resultado (peso,
+  // descrição formatada etc.), não as medidas digitadas, por isso o
+  // "formSnapshot" capturado em adicionar() é quem carrega isso de volta.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const snap = valorInicial.dados.formSnapshot ?? {};
+    const medidasRestauradas: Record<string, string> = {};
+    for (const c of campos) {
+      if (snap[c.chave] !== undefined) medidasRestauradas[c.chave] = snap[c.chave];
+    }
+    setMedidas(medidasRestauradas);
+    setMaterialIndice(snap.materialIndice ?? "");
+    setDensidadeEditada(snap.densidadeEditada === "1");
+    setDensidadeManual(snap.densidadeManual ?? "");
+    setQuantidade(snap.quantidade ?? "1");
+    setPrecoEditado(snap.precoEditado === "1");
+    setPrecoManual(snap.precoManual ?? "");
+    setPerdaPct(snap.perdaPct ?? "10");
+    setArredondamento(snap.arredondamento ?? "");
+    setResultadoPeso(null);
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   const materialAtual = materialIndice !== "" ? materiais[Number(materialIndice)] : null;
   // Densidade vem do material selecionado por padrão; "editar manualmente"
@@ -265,6 +292,17 @@ export default function CartaoGeometriaPadrao({
       perdaPct: calculo.perdaNum || undefined,
       pesoParaCompraKg: calculo.pesoBruto,
       custoTotal: calculo.custoMp ?? undefined,
+      formSnapshot: {
+        ...medidas,
+        materialIndice,
+        densidadeManual,
+        densidadeEditada: densidadeEditada ? "1" : "",
+        quantidade,
+        precoManual,
+        precoEditado: precoEditado ? "1" : "",
+        perdaPct,
+        arredondamento,
+      },
     });
 
     setMedidas({});

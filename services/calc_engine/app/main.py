@@ -115,7 +115,7 @@ def health() -> dict:
 @app.post("/orcamento")
 def orcamento(entrada: dict) -> dict:
     resultado = montar_orcamento(entrada)
-    return resultado.model_dump()
+    return {**resultado.model_dump(), "parametros": resolver_params(entrada)}
 
 
 @app.post("/orcamentos-salvos")
@@ -491,4 +491,9 @@ def _montar_resposta(resultado_extracao: dict, estimativas: dict) -> dict:
         # (POST /orcamento/excel) sem precisar re-extrair nada — ver
         # app/excel_export.py.
         "entrada": adaptacao.entrada,
+        # Valores efetivos (padrão + overrides já aplicados) dos parâmetros
+        # editáveis do "Custo por processo" — ver
+        # app/orcamento.py::PARAMS_ESCALARES_SOBRESCREVIVEIS. O frontend usa
+        # isso pra pré-preencher o formulário de edição de cada linha.
+        "parametros": resolver_params(adaptacao.entrada),
     }

@@ -6,7 +6,7 @@ import { normalizarBusca } from "@/lib/busca";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { CompraMercadoLinha, ItemComercial } from "@/lib/types";
+import type { CompraMercadoLinha, EdicaoPendente, ItemComercial } from "@/lib/types";
 
 interface Props {
   posicaoNum: number;
@@ -14,6 +14,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemComercial, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemComercial> | null;
 }
 
 const MAX_SUGESTOES = 8;
@@ -29,6 +30,7 @@ export default function CartaoInsumoPintura({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [compras, setCompras] = useState<CompraMercadoLinha[]>([]);
   const [descricao, setDescricao] = useState("");
@@ -44,6 +46,21 @@ export default function CartaoInsumoPintura({
       .then((r) => setCompras(r.compras.filter((c) => PADRAO_PINTURA.test(c.descricao))))
       .catch(() => setCompras([]));
   }, []);
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // esse insumo de volta.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const d = valorInicial.dados;
+    setDescricao(d.descricao);
+    setReferencia(null);
+    setPrecoEditado(true);
+    setPrecoManual(String(d.preco_unitario));
+    setQuantidade(String(d.quantidade));
+    setSugestoesAbertas(false);
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   // Sugestões da planilha de compras (mesma fonte da aba "Referência de
   // preços", já filtrada só pra tinta/diluente/verniz etc.) conforme o

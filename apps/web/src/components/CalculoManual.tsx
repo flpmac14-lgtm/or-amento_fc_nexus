@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { analisarBom, buscarCatalogoGeometria, buscarCatalogoProcessosTerceirizados, buscarMateriais } from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import GeometriaIcone from "@/components/icones/GeometriaIcone";
@@ -53,6 +53,21 @@ const CATALOGO_PROCESSOS_VAZIO: CatalogoProcessosTerceirizados = {
   tratamento_termico: [],
 };
 
+// Item "puxado de volta" pro formulário pelo botão "editar" — `tipo` roteia
+// pro cartão certo (ver cada `valorInicial={...}` abaixo); `id` muda a cada
+// clique em "editar" pra disparar o efeito de restauração em cada cartão
+// mesmo editando o mesmo item duas vezes seguidas.
+interface EdicaoAtual {
+  id: number;
+  tipo: string;
+  dados: unknown;
+}
+
+function restaurarPosicaoItem(posicao: string): { posicaoNum: number; itemNum: number } | null {
+  const m = /Posição (\d+) - Item (\d+)/.exec(posicao);
+  return m ? { posicaoNum: Number(m[1]), itemNum: Number(m[2]) } : null;
+}
+
 export default function CalculoManual({ estado, onEstadoChange, onResultado, onErro }: Props) {
   const {
     itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
@@ -64,6 +79,8 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
   const [catalogoProcessos, setCatalogoProcessos] = useState<CatalogoProcessosTerceirizados>(CATALOGO_PROCESSOS_VAZIO);
   const [tipoAberto, setTipoAberto] = useState<string | null>(null);
   const [analisando, setAnalisando] = useState(false);
+  const [edicao, setEdicao] = useState<EdicaoAtual | null>(null);
+  const proximoIdEdicao = useRef(1);
 
   useEffect(() => {
     buscarCatalogoGeometria()
@@ -90,6 +107,15 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     onEstadoChange({ itemNum: n });
   }
 
+  // Puxa o item de volta pro formulário certo pra editar: tira ele da
+  // lista (a edição "completa" quando o usuário adicionar de novo),
+  // reabre o cartão de origem já preenchido e restaura a posição/item.
+  function iniciarEdicao(tipo: string, dados: { posicao: string }) {
+    const posicaoRestaurada = restaurarPosicaoItem(dados.posicao);
+    if (posicaoRestaurada) onEstadoChange(posicaoRestaurada);
+    setEdicao({ id: proximoIdEdicao.current++, tipo, dados });
+  }
+
   function adicionarItem(item: Omit<ItemCalculado, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ itens: [...itens, { ...item, posicao }] });
@@ -97,6 +123,13 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+  }
+
+  function editarItem(indice: number) {
+    const item = itens[indice];
+    onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+    setTipoAberto(item.tipo);
+    iniciarEdicao(item.tipo, item);
   }
 
   function adicionarItemComercial(item: Omit<ItemComercial, "posicao">) {
@@ -108,6 +141,12 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     onEstadoChange({ itensComerciais: itensComerciais.filter((_, i) => i !== indice) });
   }
 
+  function editarItemComercial(indice: number) {
+    const item = itensComerciais[indice];
+    onEstadoChange({ itensComerciais: itensComerciais.filter((_, i) => i !== indice) });
+    iniciarEdicao("item_comercial", item);
+  }
+
   function adicionarInsumoPintura(item: Omit<ItemComercial, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ insumosPintura: [...insumosPintura, { ...item, posicao }] });
@@ -115,6 +154,12 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
 
   function removerInsumoPintura(indice: number) {
     onEstadoChange({ insumosPintura: insumosPintura.filter((_, i) => i !== indice) });
+  }
+
+  function editarInsumoPintura(indice: number) {
+    const item = insumosPintura[indice];
+    onEstadoChange({ insumosPintura: insumosPintura.filter((_, i) => i !== indice) });
+    iniciarEdicao("insumo_pintura", item);
   }
 
   function adicionarOperacaoUsinagem(item: Omit<OperacaoUsinagem, "posicao">) {
@@ -126,6 +171,12 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     onEstadoChange({ operacoesUsinagem: operacoesUsinagem.filter((_, i) => i !== indice) });
   }
 
+  function editarOperacaoUsinagem(indice: number) {
+    const item = operacoesUsinagem[indice];
+    onEstadoChange({ operacoesUsinagem: operacoesUsinagem.filter((_, i) => i !== indice) });
+    iniciarEdicao("usinagem", item);
+  }
+
   function adicionarServicoTerceiro(item: Omit<ServicoPorPeso, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ servicosTerceiros: [...servicosTerceiros, { ...item, posicao }] });
@@ -133,6 +184,12 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
 
   function removerServicoTerceiro(indice: number) {
     onEstadoChange({ servicosTerceiros: servicosTerceiros.filter((_, i) => i !== indice) });
+  }
+
+  function editarServicoTerceiro(indice: number) {
+    const item = servicosTerceiros[indice];
+    onEstadoChange({ servicosTerceiros: servicosTerceiros.filter((_, i) => i !== indice) });
+    iniciarEdicao("servicos_terceiros", item);
   }
 
   function adicionarTratamentoTermico(item: Omit<ServicoPorPeso, "posicao">) {
@@ -144,6 +201,12 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     onEstadoChange({ tratamentoTermico: tratamentoTermico.filter((_, i) => i !== indice) });
   }
 
+  function editarTratamentoTermico(indice: number) {
+    const item = tratamentoTermico[indice];
+    onEstadoChange({ tratamentoTermico: tratamentoTermico.filter((_, i) => i !== indice) });
+    iniciarEdicao("tratamento_termico", item);
+  }
+
   function adicionarContingenciamento(item: Omit<ItemContingenciamento, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ contingenciamento: [...contingenciamento, { ...item, posicao }] });
@@ -153,10 +216,17 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     onEstadoChange({ contingenciamento: contingenciamento.filter((_, i) => i !== indice) });
   }
 
+  function editarContingenciamento(indice: number) {
+    const item = contingenciamento[indice];
+    onEstadoChange({ contingenciamento: contingenciamento.filter((_, i) => i !== indice) });
+    iniciarEdicao("contingenciamento", item);
+  }
+
+  const totalItens =
+    itens.length + itensComerciais.length + insumosPintura.length + operacoesUsinagem.length +
+    servicosTerceiros.length + tratamentoTermico.length + contingenciamento.length;
+
   async function calcularOrcamento() {
-    const totalItens =
-      itens.length + itensComerciais.length + insumosPintura.length + operacoesUsinagem.length +
-      servicosTerceiros.length + tratamentoTermico.length + contingenciamento.length;
     if (totalItens === 0) return;
     setAnalisando(true);
     try {
@@ -191,6 +261,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     descricao: string;
     detalhe: string;
     custoTotal?: number;
+    editar: () => void;
     remover: () => void;
   }
 
@@ -201,6 +272,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao || item.tipoRotulo,
       detalhe: `${formatarNumero(item.peso_kg, 2)} kg`,
       custoTotal: item.custoTotal,
+      editar: () => editarItem(i),
       remover: () => removerItem(i),
     })),
     ...itensComerciais.map((item, i): LinhaExibicao => ({
@@ -209,6 +281,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao,
       detalhe: `${formatarNumero(item.quantidade, 0)} × ${formatarMoeda(item.preco_unitario)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarItemComercial(i),
       remover: () => removerItemComercial(i),
     })),
     ...insumosPintura.map((item, i): LinhaExibicao => ({
@@ -217,6 +290,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao,
       detalhe: `${formatarNumero(item.quantidade, 2)} L × ${formatarMoeda(item.preco_unitario)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarInsumoPintura(i),
       remover: () => removerInsumoPintura(i),
     })),
     ...operacoesUsinagem.map((item, i): LinhaExibicao => ({
@@ -225,6 +299,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.maquina,
       detalhe: `${formatarNumero(item.horas, 2)} h × ${formatarMoeda(item.valorHora)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarOperacaoUsinagem(i),
       remover: () => removerOperacaoUsinagem(i),
     })),
     ...servicosTerceiros.map((item, i): LinhaExibicao => ({
@@ -233,6 +308,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao,
       detalhe: `${formatarNumero(item.pesoKg, 2)} kg × ${formatarMoeda(item.valorKg)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarServicoTerceiro(i),
       remover: () => removerServicoTerceiro(i),
     })),
     ...tratamentoTermico.map((item, i): LinhaExibicao => ({
@@ -241,6 +317,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao,
       detalhe: `${formatarNumero(item.pesoKg, 2)} kg × ${formatarMoeda(item.valorKg)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarTratamentoTermico(i),
       remover: () => removerTratamentoTermico(i),
     })),
     ...contingenciamento.map((item, i): LinhaExibicao => ({
@@ -249,6 +326,7 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       descricao: item.descricao,
       detalhe: `${formatarNumero(item.quantidade, 0)} × ${formatarMoeda(item.valorUnitario)}`,
       custoTotal: item.custoTotal,
+      editar: () => editarContingenciamento(i),
       remover: () => removerContingenciamento(i),
     })),
   ];
@@ -287,157 +365,233 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
   ].filter(Boolean);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="mb-3 text-sm text-slate-400">
-          Escolha o tipo de peça, informe as medidas e adicione à posição/item do orçamento — um
-          orçamento pode ter várias posições, cada uma com várias peças.
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-          {Object.entries(catalogoComPesoDireto).map(([tipo, def]) => (
-            <button
-              key={tipo}
-              type="button"
-              onClick={() => abrirCartao(tipo)}
-              className={`flex flex-col items-center gap-2 rounded-lg border p-3 text-center text-xs font-medium transition-colors ${
-                tipoAberto === tipo
-                  ? "border-cyan-400 bg-cyan-500/15 text-cyan-300"
-                  : "border-slate-800 bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
-              }`}
-            >
-              <GeometriaIcone tipo={tipo} className="h-10 w-10 text-current opacity-90" />
-              {def.rotulo}
-            </button>
-          ))}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start">
+      {/* Coluna esquerda — onde o orçamentista vai adicionando as peças/itens */}
+      <div className="flex min-w-0 flex-col gap-6">
+        <div>
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Peças (geometria)
+          </h2>
+          <p className="mb-3 text-sm text-slate-400">
+            Escolha o tipo de peça, informe as medidas e adicione à posição/item do orçamento — um
+            orçamento pode ter várias posições, cada uma com várias peças.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {Object.entries(catalogoComPesoDireto).map(([tipo, def]) => (
+              <button
+                key={tipo}
+                type="button"
+                onClick={() => abrirCartao(tipo)}
+                className={`flex flex-col items-center gap-2 rounded-lg border p-3 text-center text-xs font-medium transition-colors ${
+                  tipoAberto === tipo
+                    ? "border-cyan-400 bg-cyan-500/15 text-cyan-300"
+                    : "border-slate-800 bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                }`}
+              >
+                <GeometriaIcone tipo={tipo} className="h-10 w-10 text-current opacity-90" />
+                {def.rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tipoAberto === "perfil" && (
+          <CartaoPerfilLaminado
+            materiais={materiais}
+            onAdicionar={adicionarItem}
+            valorInicial={edicao?.tipo === "perfil" ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            {...posicaoProps}
+          />
+        )}
+
+        {tipoAberto === "cantoneira" && (
+          <CartaoCantoneira
+            materiais={materiais}
+            onAdicionar={adicionarItem}
+            valorInicial={edicao?.tipo === "cantoneira" ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            {...posicaoProps}
+          />
+        )}
+
+        {tipoAberto === "tubo_redondo" && (
+          <CartaoTuboRedondo
+            materiais={materiais}
+            onAdicionar={adicionarItem}
+            valorInicial={edicao?.tipo === "tubo_redondo" ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            {...posicaoProps}
+          />
+        )}
+
+        {tipoAberto === TIPO_PESO_DIRETO && (
+          <CartaoPesoDireto
+            materiais={materiais}
+            onAdicionar={adicionarItem}
+            valorInicial={edicao?.tipo === TIPO_PESO_DIRETO ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            {...posicaoProps}
+          />
+        )}
+
+        {tipoAberto && !TIPOS_COM_CARTAO_PROPRIO.has(tipoAberto) && (
+          <CartaoGeometriaPadrao
+            key={tipoAberto}
+            tipo={tipoAberto}
+            def={catalogo[tipoAberto]}
+            materiais={materiais}
+            onAdicionar={adicionarItem}
+            valorInicial={edicao?.tipo === tipoAberto ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            {...posicaoProps}
+          />
+        )}
+
+        <div className="flex flex-col gap-6 border-t border-slate-800 pt-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Itens comerciais, insumos e serviços
+          </h2>
+
+          <CartaoItemComercial
+            onAdicionar={adicionarItemComercial}
+            valorInicial={edicao?.tipo === "item_comercial" ? { id: edicao.id, dados: edicao.dados as ItemComercial } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoInsumoPintura
+            onAdicionar={adicionarInsumoPintura}
+            valorInicial={edicao?.tipo === "insumo_pintura" ? { id: edicao.id, dados: edicao.dados as ItemComercial } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoUsinagem
+            catalogo={catalogoProcessos.usinagem}
+            onAdicionar={adicionarOperacaoUsinagem}
+            valorInicial={edicao?.tipo === "usinagem" ? { id: edicao.id, dados: edicao.dados as OperacaoUsinagem } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoServicoPorPeso
+            titulo="Serviços de terceiros (outsourcing)"
+            descricaoCard="Conformação pesada (dobra/calandra), rebordeamento de tampos, balanceamento etc. — cobrado por peso da peça."
+            catalogo={catalogoProcessos.servicos_terceiros}
+            onAdicionar={adicionarServicoTerceiro}
+            valorInicial={edicao?.tipo === "servicos_terceiros" ? { id: edicao.id, dados: edicao.dados as ServicoPorPeso } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoServicoPorPeso
+            titulo="Tratamento térmico (outsourcing)"
+            descricaoCard="Alívio de tensões/normalização, têmpera/revenimento, cementação/nitretação etc. — cobrado por peso da peça."
+            catalogo={catalogoProcessos.tratamento_termico}
+            onAdicionar={adicionarTratamentoTermico}
+            valorInicial={edicao?.tipo === "tratamento_termico" ? { id: edicao.id, dados: edicao.dados as ServicoPorPeso } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoContingenciamento
+            onAdicionar={adicionarContingenciamento}
+            valorInicial={edicao?.tipo === "contingenciamento" ? { id: edicao.id, dados: edicao.dados as ItemContingenciamento } : null}
+            {...posicaoProps}
+          />
         </div>
       </div>
 
-      {tipoAberto === "perfil" && (
-        <CartaoPerfilLaminado materiais={materiais} onAdicionar={adicionarItem} {...posicaoProps} />
-      )}
+      {/* Coluna direita — congelada (sticky), pra acompanhar o que já foi
+          adicionado sem precisar rolar até o fim da tela. Cresce com o
+          orçamento, mas a lista de itens rola por dentro (o resumo/botão
+          de calcular ficam sempre visíveis) quando tem muito item. */}
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
+        <div>
+          <h3 className="font-semibold text-white">Itens do orçamento</h3>
+          <p className="mt-1 text-xs text-slate-400">
+            {formatarNumero(pesoTotal, 2)} kg de matéria-prima
+            {totaisExtras.length > 0 && (
+              <>
+                {" · "}
+                {totaisExtras.join(" · ")}
+              </>
+            )}
+          </p>
+        </div>
 
-      {tipoAberto === "cantoneira" && (
-        <CartaoCantoneira materiais={materiais} onAdicionar={adicionarItem} {...posicaoProps} />
-      )}
-
-      {tipoAberto === "tubo_redondo" && (
-        <CartaoTuboRedondo materiais={materiais} onAdicionar={adicionarItem} {...posicaoProps} />
-      )}
-
-      {tipoAberto === TIPO_PESO_DIRETO && (
-        <CartaoPesoDireto materiais={materiais} onAdicionar={adicionarItem} {...posicaoProps} />
-      )}
-
-      {tipoAberto && !TIPOS_COM_CARTAO_PROPRIO.has(tipoAberto) && (
-        <CartaoGeometriaPadrao
-          key={tipoAberto}
-          tipo={tipoAberto}
-          def={catalogo[tipoAberto]}
-          materiais={materiais}
-          onAdicionar={adicionarItem}
-          {...posicaoProps}
-        />
-      )}
-
-      <div className="border-t border-slate-800 pt-6">
-        <CartaoItemComercial onAdicionar={adicionarItemComercial} {...posicaoProps} />
-      </div>
-
-      <CartaoInsumoPintura onAdicionar={adicionarInsumoPintura} {...posicaoProps} />
-
-      <CartaoUsinagem catalogo={catalogoProcessos.usinagem} onAdicionar={adicionarOperacaoUsinagem} {...posicaoProps} />
-
-      <CartaoServicoPorPeso
-        titulo="Serviços de terceiros (outsourcing)"
-        descricaoCard="Conformação pesada (dobra/calandra), rebordeamento de tampos, balanceamento etc. — cobrado por peso da peça."
-        catalogo={catalogoProcessos.servicos_terceiros}
-        onAdicionar={adicionarServicoTerceiro}
-        {...posicaoProps}
-      />
-
-      <CartaoServicoPorPeso
-        titulo="Tratamento térmico (outsourcing)"
-        descricaoCard="Alívio de tensões/normalização, têmpera/revenimento, cementação/nitretação etc. — cobrado por peso da peça."
-        catalogo={catalogoProcessos.tratamento_termico}
-        onAdicionar={adicionarTratamentoTermico}
-        {...posicaoProps}
-      />
-
-      <CartaoContingenciamento onAdicionar={adicionarContingenciamento} {...posicaoProps} />
-
-      {linhasExibicao.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <h3 className="mb-3 font-semibold text-white">
-            Itens calculados — {formatarNumero(pesoTotal, 2)} kg de matéria-prima
-            {totaisExtras.length > 0 && ` · ${totaisExtras.join(" · ")}`}
-          </h3>
-          <div className="flex flex-col gap-3">
-            {itensPorPosicao.map((grupo) => (
+        <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+          {itensPorPosicao.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-500">
+              Nenhum item adicionado ainda — use os cartões ao lado.
+            </p>
+          ) : (
+            itensPorPosicao.map((grupo) => (
               <div key={grupo.posicao}>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-cyan-400">
                   {grupo.posicao}
                 </p>
                 <ul className="divide-y divide-slate-800 rounded-md border border-slate-800">
                   {grupo.linhas.map((linha) => (
-                    <li key={linha.chave} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <li key={linha.chave} className="flex flex-col gap-1 px-3 py-2 text-sm">
                       <span className="text-slate-300">{linha.descricao}</span>
-                      <span className="flex items-center gap-3">
-                        <span className="font-mono text-slate-100">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs text-slate-100">
                           {linha.detalhe}
                           {linha.custoTotal !== undefined && (
                             <span className="ml-2 text-cyan-300">{formatarMoeda(linha.custoTotal)}</span>
                           )}
                         </span>
-                        <button
-                          type="button"
-                          onClick={linha.remover}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          remover
-                        </button>
+                        <span className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            onClick={linha.editar}
+                            className="text-xs text-cyan-400 hover:text-cyan-300"
+                          >
+                            editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={linha.remover}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            remover
+                          </button>
+                        </span>
                       </span>
                     </li>
                   ))}
                 </ul>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-slate-400">Cenário comercial</span>
-              <select
-                value={cenarioComercial}
-                onChange={(e) => onEstadoChange({ cenarioComercial: e.target.value as EstimativasOrcamento["cenario_comercial"] })}
-                className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
-              >
-                <option value="venda_fabricacao">Venda de fabricação</option>
-                <option value="industrializacao">Industrialização</option>
-                <option value="servico">Serviço</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-slate-400">Insumos de corte (R$/kg)</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={corteValorKg}
-                onChange={(e) => onEstadoChange({ corteValorKg: e.target.value })}
-                title="Custo médio de oxicorte/plasma/laser — multiplica o peso líquido total dos itens"
-                className="w-28 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={calcularOrcamento}
-              disabled={analisando}
-              className="ml-auto rounded-md bg-cyan-500 px-4 py-2 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:opacity-50"
-            >
-              {analisando ? "Calculando orçamento…" : "Calcular orçamento"}
-            </button>
-          </div>
+            ))
+          )}
         </div>
-      )}
+
+        <div className="flex flex-col gap-3 border-t border-slate-800 pt-3">
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-slate-400">Cenário comercial</span>
+            <select
+              value={cenarioComercial}
+              onChange={(e) => onEstadoChange({ cenarioComercial: e.target.value as EstimativasOrcamento["cenario_comercial"] })}
+              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            >
+              <option value="venda_fabricacao">Venda de fabricação</option>
+              <option value="industrializacao">Industrialização</option>
+              <option value="servico">Serviço</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-slate-400">Insumos de corte (R$/kg)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={corteValorKg}
+              onChange={(e) => onEstadoChange({ corteValorKg: e.target.value })}
+              title="Custo médio de oxicorte/plasma/laser — multiplica o peso líquido total dos itens"
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={calcularOrcamento}
+            disabled={analisando || totalItens === 0}
+            className="w-full rounded-md bg-cyan-500 px-4 py-2 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {analisando ? "Calculando orçamento…" : "Calcular orçamento"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

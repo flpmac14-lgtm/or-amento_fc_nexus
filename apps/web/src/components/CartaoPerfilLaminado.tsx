@@ -6,7 +6,7 @@ import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ItemCalculado, MaterialCatalogo, PerfilCatalogo } from "@/lib/types";
+import type { EdicaoPendente, ItemCalculado, MaterialCatalogo, PerfilCatalogo } from "@/lib/types";
 
 type UnidadeComprimento = "mm" | "cm" | "m";
 
@@ -19,6 +19,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemCalculado> | null;
 }
 
 function normalizarBusca(texto: string): string {
@@ -32,6 +33,7 @@ export default function CartaoPerfilLaminado({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [tipos, setTipos] = useState<Record<string, string>>({});
   const [materialIndice, setMaterialIndice] = useState("");
@@ -65,6 +67,26 @@ export default function CartaoPerfilLaminado({
       .catch(() => setPerfisDoTipo([]))
       .finally(() => setCarregandoPerfis(false));
   }, [tipoPerfil]);
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // essa peça de volta.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const snap = valorInicial.dados.formSnapshot ?? {};
+    if (snap.tipoPerfil !== undefined) setTipoPerfil(snap.tipoPerfil);
+    setMaterialIndice(snap.materialIndice ?? "");
+    setDesignacao(snap.designacao ?? "");
+    setPesoEditadoManualmente(snap.pesoEditadoManualmente === "1");
+    setPesoManual(snap.pesoManual ?? "");
+    setComprimento(snap.comprimento ?? "");
+    setUnidadeComprimento((snap.unidadeComprimento as UnidadeComprimento) ?? "mm");
+    setQuantidade(snap.quantidade ?? "1");
+    setPrecoKg(snap.precoKg ?? "");
+    setPerdaPct(snap.perdaPct ?? "10");
+    setArredondamento(snap.arredondamento ?? "");
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   function selecionarTipoPerfil(novoTipo: string) {
     setCarregandoPerfis(true);
@@ -133,6 +155,19 @@ export default function CartaoPerfilLaminado({
       perdaPct: calculo.perdaNum || undefined,
       pesoParaCompraKg: calculo.pesoBruto,
       custoTotal: calculo.custoMp ?? undefined,
+      formSnapshot: {
+        tipoPerfil,
+        materialIndice,
+        designacao,
+        pesoEditadoManualmente: pesoEditadoManualmente ? "1" : "",
+        pesoManual,
+        comprimento,
+        unidadeComprimento,
+        quantidade,
+        precoKg,
+        perdaPct,
+        arredondamento,
+      },
     });
 
     setDesignacao("");

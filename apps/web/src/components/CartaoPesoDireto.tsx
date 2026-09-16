@@ -6,7 +6,7 @@ import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ItemCalculado, MaterialCatalogo, PrecoMercadoResposta } from "@/lib/types";
+import type { EdicaoPendente, ItemCalculado, MaterialCatalogo, PrecoMercadoResposta } from "@/lib/types";
 
 interface Props {
   materiais: MaterialCatalogo[];
@@ -15,6 +15,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemCalculado> | null;
 }
 
 export default function CartaoPesoDireto({
@@ -24,6 +25,7 @@ export default function CartaoPesoDireto({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [descricao, setDescricao] = useState("");
   const [pesoUnitario, setPesoUnitario] = useState("");
@@ -56,6 +58,26 @@ export default function CartaoPesoDireto({
       cancelado = true;
     };
   }, [materialAtual, espessuraRefNum]);
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // essa peça de volta. peso_kg do item é o TOTAL (unitário × quantidade)
+  // — dividimos de volta pra recuperar o peso unitário digitado. Preço
+  // sempre entra como manual (não temos a espessura original de referência
+  // aqui pra refazer a busca automática).
+  useEffect(() => {
+    if (!valorInicial) return;
+    const d = valorInicial.dados;
+    setDescricao(d.descricao === "Peça com peso já calculado" ? "" : d.descricao);
+    setQuantidade(String(d.quantidade));
+    setPesoUnitario(d.quantidade ? String(d.peso_kg / d.quantidade) : String(d.peso_kg));
+    const indiceMaterial = materiais.findIndex((m) => m.norma === d.norma);
+    setMaterialIndice(indiceMaterial >= 0 ? String(indiceMaterial) : "");
+    setEspessuraRef("");
+    setPrecoEditado(true);
+    setPrecoManual(d.preco_kg !== undefined ? String(d.preco_kg) : "");
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   const precoReferencia = materialAtual && espessuraRefNum ? precoReferenciaBruta : null;
   const precoKg = precoReferencia?.encontrado && !precoEditado ? String(precoReferencia.preco_kg) : precoManual;

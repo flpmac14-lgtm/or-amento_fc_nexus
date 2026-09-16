@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ServicoPorPeso } from "@/lib/types";
+import type { EdicaoPendente, ServicoPorPeso } from "@/lib/types";
 
 interface Props {
   titulo: string;
@@ -15,6 +15,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ServicoPorPeso, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ServicoPorPeso> | null;
 }
 
 // Mesma mecânica (peso × R$/kg) usada tanto pro cartão "Serviços de
@@ -29,6 +30,7 @@ export default function CartaoServicoPorPeso({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [servicoIndice, setServicoIndice] = useState("");
   const [descricaoManual, setDescricaoManual] = useState("");
@@ -41,6 +43,28 @@ export default function CartaoServicoPorPeso({
   const temValorReferencia = Boolean(servicoCatalogo && servicoCatalogo.valor_kg !== null);
   const descricao = servicoCatalogo ? servicoCatalogo.nome : descricaoManual;
   const valorKg = temValorReferencia && !valorEditado ? String(servicoCatalogo!.valor_kg) : valorManual;
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // esse serviço de volta — tenta casar com o catálogo pelo nome; se não
+  // achar, cai no campo manual.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const d = valorInicial.dados;
+    const indiceCatalogo = catalogo.findIndex((s) => s.nome === d.descricao);
+    if (indiceCatalogo >= 0) {
+      setServicoIndice(String(indiceCatalogo));
+      setValorEditado(catalogo[indiceCatalogo].valor_kg !== d.valorKg);
+      setValorManual(String(d.valorKg));
+    } else {
+      setServicoIndice("");
+      setDescricaoManual(d.descricao);
+      setValorEditado(true);
+      setValorManual(String(d.valorKg));
+    }
+    setPesoKg(String(d.pesoKg));
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   function selecionarServico(indice: string) {
     setServicoIndice(indice);

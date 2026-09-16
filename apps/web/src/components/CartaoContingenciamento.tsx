@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ItemContingenciamento } from "@/lib/types";
+import type { EdicaoPendente, ItemContingenciamento } from "@/lib/types";
 
 interface Props {
   posicaoNum: number;
@@ -12,6 +12,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemContingenciamento, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemContingenciamento> | null;
 }
 
 export default function CartaoContingenciamento({
@@ -20,11 +21,22 @@ export default function CartaoContingenciamento({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [descricao, setDescricao] = useState("Contingenciamento");
   const [quantidade, setQuantidade] = useState("1");
   const [valorUnitario, setValorUnitario] = useState("");
   const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    if (!valorInicial) return;
+    const d = valorInicial.dados;
+    setDescricao(d.descricao);
+    setQuantidade(String(d.quantidade));
+    setValorUnitario(String(d.valorUnitario));
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   const quantidadeNum = Number(quantidade.replace(",", ".")) || 0;
   const valorUnitarioNum = Number(valorUnitario.replace(",", ".")) || 0;

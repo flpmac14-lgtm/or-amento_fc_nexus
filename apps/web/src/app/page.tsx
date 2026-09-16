@@ -4,7 +4,7 @@ import { useState } from "react";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
-import { analisarPdf, baixarExcel, salvarOrcamento } from "@/lib/api";
+import { analisarPdf, baixarExcel, recalcularOrcamento, salvarOrcamento } from "@/lib/api";
 import {
   ESTADO_CALCULO_MANUAL_INICIAL,
   type EstadoCalculoManual,
@@ -119,6 +119,24 @@ export default function Home() {
     }
   }
 
+  // Ajuste manual de uma linha do "Custo por processo" — pedido explícito do
+  // usuário: a fórmula de cada processo fica fixa, só o(s) parâmetro(s) que
+  // alimentam ela (R$/kg, R$/h etc.) são editáveis. As chaves recebidas aqui
+  // já são os mesmos campos de nível raiz que `entrada` usa (igual
+  // `corte_valor_kg`) — ver app/orcamento.py::PARAMS_ESCALARES_SOBRESCREVIVEIS
+  // e resolver_params.
+  async function handleEditarLinhaCusto(overrides: Record<string, number>) {
+    if (!resultado) return;
+    const entradaAtualizada = { ...resultado.entrada, ...overrides };
+    const novoOrcamento = await recalcularOrcamento(entradaAtualizada);
+    setResultado({
+      ...resultado,
+      orcamento: novoOrcamento,
+      entrada: entradaAtualizada,
+      parametros: novoOrcamento.parametros ?? resultado.parametros,
+    });
+  }
+
   async function handleBaixarExcel() {
     if (!resultado) return;
     setBaixandoExcel(true);
@@ -134,7 +152,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <main className="print:hidden mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
+      <main className="print:hidden mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
         <header className="flex flex-col gap-4 border-b border-slate-800 pb-6">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
@@ -215,7 +233,9 @@ export default function Home() {
           </div>
         )}
 
-        {resultado && <ResultadoOrcamento resultado={resultado} />}
+        {resultado && (
+          <ResultadoOrcamento resultado={resultado} onEditarLinhaCusto={handleEditarLinhaCusto} />
+        )}
 
         <footer className="mt-8 text-xs text-slate-500">
           A IA não calcula peso, custo, hora ou preço — só estrutura o que o desenho

@@ -42,14 +42,97 @@ function CampoIdentificado({
   );
 }
 
-function LinhaDeCusto({ linha }: { linha: RespostaOrcamentoDePdf["orcamento"]["linhas"][number] }) {
+// Parâmetros (taxas/valores unitários) que alimentam a fórmula de cada
+// processo — a fórmula em si nunca muda, só o valor que entra nela. Chaves
+// batem exatamente com services/calc_engine/app/orcamento.py::PARAMS_ESCALARES_SOBRESCREVIVEIS
+// (mais pintura_preco_fundo/acabamento, tratados à parte no backend).
+// Processos sem entrada aqui não têm "editar" no agregado — já são editáveis
+// item a item no painel "Itens do orçamento".
+const PARAMS_POR_PROCESSO: Record<string, { chave: string; rotulo: string }[]> = {
+  corte: [{ chave: "corte_valor_kg", rotulo: "R$/kg" }],
+  caldeiraria: [
+    { chave: "caldeiraria_fator_h_kg", rotulo: "h/kg" },
+    { chave: "caldeiraria_valor_hora", rotulo: "R$/h" },
+  ],
+  jateamento_pintura_mo: [
+    { chave: "jateamento_pintura_divisor", rotulo: "divisor" },
+    { chave: "jateamento_pintura_valor_hora", rotulo: "R$/h" },
+  ],
+  solda: [
+    { chave: "solda_fator_consumo_percentual", rotulo: "% consumo" },
+    { chave: "solda_preco_kg_consumivel", rotulo: "R$/kg consumível" },
+    { chave: "solda_fator_gas_sobre_consumivel", rotulo: "% gás/consumível" },
+    { chave: "solda_preco_unidade_gas", rotulo: "R$/un. gás" },
+  ],
+  pintura_material: [
+    { chave: "pintura_fator_l_m2", rotulo: "L/m² por demão" },
+    { chave: "pintura_preco_fundo", rotulo: "R$/L fundo" },
+    { chave: "pintura_preco_acabamento", rotulo: "R$/L acabamento" },
+  ],
+  ndt: [{ chave: "ndt_valor_kg", rotulo: "R$/kg" }],
+  engenharia: [{ chave: "engenharia_valor_unitario", rotulo: "R$/posição" }],
+  embalagem: [{ chave: "embalagem_valor_kg", rotulo: "R$/kg" }],
+  transporte: [{ chave: "transporte_valor_kg", rotulo: "R$/kg" }],
+  energia: [{ chave: "energia_valor_kg", rotulo: "R$/kg" }],
+};
+
+function LinhaDeCusto({
+  linha,
+  parametros,
+  onEditar,
+}: {
+  linha: RespostaOrcamentoDePdf["orcamento"]["linhas"][number];
+  parametros?: Record<string, number>;
+  onEditar?: (overrides: Record<string, number>) => Promise<void>;
+}) {
   const [aberta, setAberta] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  const camposParametro = PARAMS_POR_PROCESSO[linha.codigo];
+
+  function iniciarEdicao() {
+    if (!camposParametro) return;
+    const iniciais: Record<string, string> = {};
+    for (const campo of camposParametro) {
+      const atual = parametros?.[campo.chave];
+      iniciais[campo.chave] = atual !== undefined ? String(atual) : "";
+    }
+    setValores(iniciais);
+    setErro("");
+    setEditando(true);
+  }
+
+  async function salvarEdicao() {
+    if (!camposParametro || !onEditar) return;
+    const overrides: Record<string, number> = {};
+    for (const campo of camposParametro) {
+      const numero = Number((valores[campo.chave] ?? "").replace(",", "."));
+      if (Number.isNaN(numero)) {
+        setErro(`Informe um valor numérico para "${campo.rotulo}".`);
+        return;
+      }
+      overrides[campo.chave] = numero;
+    }
+    setSalvando(true);
+    setErro("");
+    try {
+      await onEditar(overrides);
+      setEditando(false);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar o valor ajustado.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   return (
     <div className="border-b border-slate-800 last:border-0">
-      <button
-        type="button"
-        onClick={() => setAberta((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 py-3 text-left"
+      <div
+        onClick={() => !editando && setAberta((v) => !v)}
+        className="flex w-full cursor-pointer items-center justify-between gap-4 py-3 text-left"
       >
         <div>
           <p className="font-medium text-slate-100">
@@ -59,14 +142,65 @@ function LinhaDeCusto({ linha }: { linha: RespostaOrcamentoDePdf["orcamento"]["l
             <p className="text-xs text-slate-500">{formatarNumero(linha.horas)} h</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-sm text-slate-100">
-            {formatarMoeda(linha.valor_liquido)}
-          </span>
-          <span className="text-xs text-cyan-400">{aberta ? "▲" : "▼"} Ver cálculo</span>
-        </div>
-      </button>
-      {aberta && (
+        {editando ? (
+          <div
+            className="flex flex-wrap items-center justify-end gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {camposParametro?.map((campo) => (
+              <label key={campo.chave} className="flex items-center gap-1">
+                <span className="text-xs text-slate-500">{campo.rotulo}</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={valores[campo.chave] ?? ""}
+                  onChange={(e) =>
+                    setValores((v) => ({ ...v, [campo.chave]: e.target.value }))
+                  }
+                  className="w-20 rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                />
+              </label>
+            ))}
+            <button
+              type="button"
+              onClick={salvarEdicao}
+              disabled={salvando}
+              className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
+            >
+              {salvando ? "salvando…" : "salvar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(false)}
+              disabled={salvando}
+              className="text-xs text-slate-500 hover:text-slate-300"
+            >
+              cancelar
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-sm text-slate-100">
+              {formatarMoeda(linha.valor_liquido)}
+            </span>
+            {onEditar && camposParametro && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  iniciarEdicao();
+                }}
+                className="text-xs text-cyan-400 hover:text-cyan-300"
+              >
+                editar
+              </button>
+            )}
+            <span className="text-xs text-cyan-400">{aberta ? "▲" : "▼"} Ver cálculo</span>
+          </div>
+        )}
+      </div>
+      {erro && <p className="pb-2 text-xs text-red-400">{erro}</p>}
+      {aberta && !editando && (
         <div className="mb-3 rounded-md border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
           <ul className="list-inside list-disc space-y-1">
             {linha.memoria_calculo.map((m, i) => (
@@ -87,7 +221,16 @@ function LinhaDeCusto({ linha }: { linha: RespostaOrcamentoDePdf["orcamento"]["l
   );
 }
 
-export default function ResultadoOrcamento({ resultado }: { resultado: RespostaOrcamentoDePdf }) {
+interface Props {
+  resultado: RespostaOrcamentoDePdf;
+  // Ajusta um ou mais parâmetros (R$/kg, R$/h etc.) que alimentam a fórmula
+  // de uma linha do "Custo por processo" e recalcula o orçamento no backend
+  // — a fórmula em si fica fixa, só o valor do parâmetro muda. Ver
+  // page.tsx::handleEditarLinhaCusto e app/orcamento.py::resolver_params.
+  onEditarLinhaCusto?: (overrides: Record<string, number>) => Promise<void>;
+}
+
+export default function ResultadoOrcamento({ resultado, onEditarLinhaCusto }: Props) {
   const { extracao, itens_para_revisao, orcamento } = resultado;
   const id = extracao.identificacao;
 
@@ -135,7 +278,12 @@ export default function ResultadoOrcamento({ resultado }: { resultado: RespostaO
         </h2>
         <div>
           {orcamento.linhas.map((linha) => (
-            <LinhaDeCusto key={linha.codigo} linha={linha} />
+            <LinhaDeCusto
+              key={linha.codigo}
+              linha={linha}
+              parametros={orcamento.parametros ?? resultado.parametros}
+              onEditar={onEditarLinhaCusto}
+            />
           ))}
         </div>
       </section>

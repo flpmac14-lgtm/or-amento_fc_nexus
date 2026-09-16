@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.adapter import montar_entrada_orcamento
-from app.orcamento import montar_orcamento
+from app.orcamento import montar_orcamento, resolver_params
 
 
 def campo(valor, confianca=0.9):
@@ -273,6 +273,57 @@ def test_sem_corte_valor_kg_override_usa_o_padrao_cadastrado():
     linha_corte = next(l for l in orcamento.linhas if l.codigo == "corte")
     peso_liquido = resultado.entrada["peso_liquido_kg"]
     assert round(linha_corte.valor_bruto, 2) == round(peso_liquido * 1.5, 2)
+
+
+def test_override_de_parametro_muda_a_linha_mas_mantem_a_formula_e_a_memoria():
+    """Editar o "Custo por processo" agora sobrescreve o PARÂMETRO (R$/kg,
+    R$/h etc.), não o valor final — a fórmula continua igual, só a taxa
+    muda, e "Ver cálculo" continua batendo com o número mostrado."""
+    entrada = {"peso_liquido_kg": 100.0, "materia_prima": [], "cenario_comercial": "venda_fabricacao"}
+    original = montar_orcamento(entrada)
+    linha_ndt_original = next(l for l in original.linhas if l.codigo == "ndt")
+    assert linha_ndt_original.valor_bruto == 100.0 * 0.5  # padrão: peso × R$0,50/kg
+
+    entrada["ndt_valor_kg"] = 18.0
+    ajustado = montar_orcamento(entrada)
+    linha_ndt = next(l for l in ajustado.linhas if l.codigo == "ndt")
+    assert linha_ndt.valor_bruto == 100.0 * 18.0
+    assert "18.0" in linha_ndt.memoria_calculo[0]  # fórmula continua auditável
+
+    # as outras linhas não mudam
+    outras_originais = {l.codigo: l.valor_liquido for l in original.linhas if l.codigo != "ndt"}
+    outras_ajustadas = {l.codigo: l.valor_liquido for l in ajustado.linhas if l.codigo != "ndt"}
+    assert outras_originais == outras_ajustadas
+
+
+def test_override_de_dois_parametros_do_mesmo_processo():
+    entrada = {"peso_liquido_kg": 100.0, "materia_prima": [], "cenario_comercial": "venda_fabricacao"}
+    entrada["caldeiraria_fator_h_kg"] = 0.1
+    entrada["caldeiraria_valor_hora"] = 80.0
+    resultado = montar_orcamento(entrada)
+    linha = next(l for l in resultado.linhas if l.codigo == "caldeiraria")
+    assert linha.horas == round(100.0 * 0.1, 2)
+    assert round(linha.valor_bruto, 2) == round(100.0 * 0.1 * 80.0, 2)
+
+
+def test_override_precos_pintura_reconstroi_a_lista_de_demaos_sem_perder_o_outro():
+    entrada = {
+        "peso_liquido_kg": 100.0, "materia_prima": [], "cenario_comercial": "venda_fabricacao",
+        "area_pintura_m2": 10.0, "pintura_preco_fundo": 700.0,
+    }
+    resultado = montar_orcamento(entrada)
+    linha = next(l for l in resultado.linhas if l.codigo == "pintura_material")
+    # fundo ajustado (700) + acabamento no padrão (450) — nenhum some
+    litros_por_demao = 10.0 * 0.04
+    bruto_esperado = litros_por_demao * 700.0 + litros_por_demao * 450.0
+    assert round(linha.valor_bruto, 2) == round(bruto_esperado, 2)
+
+
+def test_sem_overrides_usa_os_parametros_padrao():
+    entrada = {"peso_liquido_kg": 100.0, "materia_prima": [], "cenario_comercial": "venda_fabricacao"}
+    params = resolver_params(entrada)
+    assert params["ndt_valor_kg"] == 0.5
+    assert params["corte_valor_kg"] == 1.5
 
 
 def test_insumos_pintura_do_cartao_entram_na_entrada_e_no_orcamento():

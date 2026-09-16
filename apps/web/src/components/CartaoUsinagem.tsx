@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { OperacaoUsinagem } from "@/lib/types";
+import type { EdicaoPendente, OperacaoUsinagem } from "@/lib/types";
 
 interface Props {
   catalogo: { nome: string; valor_hora: number | null }[];
@@ -13,6 +13,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<OperacaoUsinagem, "posicao">) => void;
+  valorInicial?: EdicaoPendente<OperacaoUsinagem> | null;
 }
 
 export default function CartaoUsinagem({
@@ -22,6 +23,7 @@ export default function CartaoUsinagem({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [maquinaIndice, setMaquinaIndice] = useState("");
   const [maquinaManual, setMaquinaManual] = useState("");
@@ -35,6 +37,28 @@ export default function CartaoUsinagem({
   const maquina = maquinaCatalogo ? maquinaCatalogo.nome : maquinaManual;
   const valorHora =
     temValorReferencia && !valorEditado ? String(maquinaCatalogo!.valor_hora) : valorManual;
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // essa operação de volta — tenta casar a máquina com o catálogo pelo
+  // nome; se não achar, cai no campo manual.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const d = valorInicial.dados;
+    const indiceCatalogo = catalogo.findIndex((m) => m.nome === d.maquina);
+    if (indiceCatalogo >= 0) {
+      setMaquinaIndice(String(indiceCatalogo));
+      setValorEditado(catalogo[indiceCatalogo].valor_hora !== d.valorHora);
+      setValorManual(String(d.valorHora));
+    } else {
+      setMaquinaIndice("");
+      setMaquinaManual(d.maquina);
+      setValorEditado(true);
+      setValorManual(String(d.valorHora));
+    }
+    setHoras(String(d.horas));
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   function selecionarMaquina(indice: string) {
     setMaquinaIndice(indice);

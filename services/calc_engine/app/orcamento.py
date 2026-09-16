@@ -159,16 +159,56 @@ def _agregar_contingenciamento(itens: list[dict]) -> LinhaCusto:
     )
 
 
+# Parâmetros escalares (R$/kg, R$/h, fator, %) que o botão "editar" do
+# "Custo por processo" pode sobrescrever, um a um — a fórmula de cada
+# processo (ver app/processos.py) continua fixa, só a taxa/unidade muda.
+# Pedido explícito do usuário: editar o resultado final (valor bruto) direto
+# quebrava a auditabilidade da memória de cálculo; editando o parâmetro, o
+# "Ver cálculo" continua batendo com o número mostrado.
+PARAMS_ESCALARES_SOBRESCREVIVEIS: list[str] = [
+    "corte_valor_kg",
+    "caldeiraria_fator_h_kg", "caldeiraria_valor_hora",
+    "jateamento_pintura_divisor", "jateamento_pintura_valor_hora",
+    "solda_fator_consumo_percentual", "solda_preco_kg_consumivel",
+    "solda_fator_gas_sobre_consumivel", "solda_preco_unidade_gas",
+    "pintura_fator_l_m2",
+    "ndt_valor_kg",
+    "engenharia_valor_unitario",
+    "embalagem_valor_kg", "transporte_valor_kg", "energia_valor_kg",
+]
+
+
 def resolver_params(entrada: dict, params: dict | None = None) -> dict:
-    """Aplica sobre PARAMETROS_PADRAO os overrides vindos de `entrada` (hoje
-    só `corte_valor_kg` — custo médio de insumos de corte oxicorte/plasma/
-    laser, digitado no cartão de cálculo manual). Usado tanto por
-    `montar_orcamento` quanto por `app.excel_export.gerar_excel_orcamento`,
-    pra o Excel editável (POST /orcamento/excel, que reusa a mesma `entrada`)
-    bater com o que apareceu na tela em vez de voltar ao padrão."""
+    """Aplica sobre PARAMETROS_PADRAO os overrides vindos de `entrada` —
+    cada chave em PARAMS_ESCALARES_SOBRESCREVIVEIS, mais os dois preços de
+    pintura (fundo/acabamento, que na fixture vêm como lista `pintura_demaos`
+    em vez de escalar — reconstruída aqui pra caber no mesmo padrão de
+    edição). Usado tanto por `montar_orcamento` quanto por
+    `app.excel_export.gerar_excel_orcamento`, pra o Excel editável (POST
+    /orcamento/excel, que reusa a mesma `entrada`) bater com o que apareceu
+    na tela em vez de voltar ao padrão."""
     params = dict(params or PARAMETROS_PADRAO)
-    if entrada.get("corte_valor_kg") is not None:
-        params["corte_valor_kg"] = entrada["corte_valor_kg"]
+    for chave in PARAMS_ESCALARES_SOBRESCREVIVEIS:
+        if entrada.get(chave) is not None:
+            params[chave] = entrada[chave]
+
+    precos_atuais = {d["tipo"]: d["preco_litro"] for d in params["pintura_demaos"]}
+    if entrada.get("pintura_preco_fundo") is not None or entrada.get("pintura_preco_acabamento") is not None:
+        preco_fundo = entrada.get("pintura_preco_fundo", precos_atuais.get("fundo"))
+        preco_acabamento = entrada.get("pintura_preco_acabamento", precos_atuais.get("acabamento"))
+        params["pintura_demaos"] = [
+            {"tipo": "fundo", "preco_litro": preco_fundo},
+            {"tipo": "acabamento", "preco_litro": preco_acabamento},
+        ]
+
+    # Espelha os preços de pintura como chaves escalares também — só pra dar
+    # pro frontend pré-preencher o "editar" da linha de pintura com o mesmo
+    # padrão dos outros parâmetros (a lista `pintura_demaos` acima é o que
+    # de fato alimenta app/processos.py::pintura_material).
+    demaos = {d["tipo"]: d["preco_litro"] for d in params["pintura_demaos"]}
+    params["pintura_preco_fundo"] = demaos.get("fundo")
+    params["pintura_preco_acabamento"] = demaos.get("acabamento")
+
     return params
 
 

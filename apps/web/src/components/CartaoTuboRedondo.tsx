@@ -6,7 +6,7 @@ import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import PainelResultadoCalculo from "@/components/PainelResultadoCalculo";
 import SeletorPosicaoItem from "@/components/SeletorPosicaoItem";
-import type { ItemCalculado, MaterialCatalogo, TuboCatalogo } from "@/lib/types";
+import type { EdicaoPendente, ItemCalculado, MaterialCatalogo, TuboCatalogo } from "@/lib/types";
 
 interface Props {
   materiais: MaterialCatalogo[];
@@ -15,6 +15,7 @@ interface Props {
   setPosicaoNum: (n: number) => void;
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
+  valorInicial?: EdicaoPendente<ItemCalculado> | null;
 }
 
 function normalizarBusca(texto: string): string {
@@ -28,6 +29,7 @@ export default function CartaoTuboRedondo({
   setPosicaoNum,
   setItemNum,
   onAdicionar,
+  valorInicial,
 }: Props) {
   const [modoManual, setModoManual] = useState(false);
 
@@ -78,6 +80,30 @@ export default function CartaoTuboRedondo({
   }, [diametroExterno, espessuraParede]);
 
   const paredeInvalida = diametroInternoManual !== null && diametroInternoManual <= 0;
+
+  // Restaura o formulário quando o botão "editar" da lista de itens puxa
+  // essa peça de volta. No modo manual, o resultado da geometria (async)
+  // não dá pra restaurar de sincrono — fica pro usuário clicar "Calcular"
+  // de novo, mesmo comportamento de um cálculo novo.
+  useEffect(() => {
+    if (!valorInicial) return;
+    const snap = valorInicial.dados.formSnapshot ?? {};
+    setModoManual(snap.modoManual === "1");
+    setDesignacao(snap.designacao ?? "");
+    setKgMEditado(snap.kgMEditado === "1");
+    setKgMManual(snap.kgMManual ?? "");
+    setDiametroExterno(snap.diametroExterno ?? "");
+    setEspessuraParede(snap.espessuraParede ?? "");
+    setResultadoManual(null);
+    setMaterialIndice(snap.materialIndice ?? "");
+    setComprimento(snap.comprimento ?? "");
+    setQuantidade(snap.quantidade ?? "1");
+    setPrecoKg(snap.precoKg ?? "");
+    setPerdaPct(snap.perdaPct ?? "10");
+    setArredondamento(snap.arredondamento ?? "");
+    setErro("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorInicial?.id]);
 
   async function calcularManual() {
     const de = Number(diametroExterno.replace(",", "."));
@@ -151,6 +177,20 @@ export default function CartaoTuboRedondo({
       perdaPct: calculo.perdaNum || undefined,
       pesoParaCompraKg: calculo.pesoBruto,
       custoTotal: calculo.custoMp ?? undefined,
+      formSnapshot: {
+        modoManual: modoManual ? "1" : "",
+        designacao,
+        kgMEditado: kgMEditado ? "1" : "",
+        kgMManual,
+        diametroExterno,
+        espessuraParede,
+        materialIndice,
+        comprimento,
+        quantidade,
+        precoKg,
+        perdaPct,
+        arredondamento,
+      },
     });
 
     setDesignacao("");
