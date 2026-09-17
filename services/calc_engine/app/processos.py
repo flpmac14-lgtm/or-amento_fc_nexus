@@ -31,11 +31,27 @@ def _linha(codigo: str, descricao: str, valor_bruto: float, tipo_aliquota: str, 
 
 
 def corte(peso_liquido_kg: float, params: dict) -> LinhaCusto:
+    """peso_liquido_kg é o peso padrão (líquido) do orçamento inteiro. A
+    linha de corte pode sobrescrever só o peso dela (`corte_peso_kg` — ex:
+    peso de compra/bruto, quando o corte fizer mais sentido cobrado assim) e
+    somar um % adicional (`corte_fator_percentual_adicional`) sem mexer no
+    R$/kg base — ambos opcionais, ver parametros_padrao.py."""
+    peso = params.get("corte_peso_kg")
+    if peso is None:
+        peso = peso_liquido_kg
     valor_kg = params["corte_valor_kg"]
-    bruto = peso_liquido_kg * valor_kg
+    fator_adicional_pct = params.get("corte_fator_percentual_adicional") or 0.0
+
+    bruto_base = peso * valor_kg
+    bruto = bruto_base * (1 + fator_adicional_pct / 100)
+
+    memoria = [f"{peso} kg × R$ {valor_kg}/kg = R$ {bruto_base:.2f}"]
+    if fator_adicional_pct:
+        memoria.append(f"+ {fator_adicional_pct:.2f}% = R$ {bruto:.2f}")
+
     return _linha(
         "corte", "Corte (oxicorte/plasma/laser)", bruto, "corte", params,
-        memoria=[f"{peso_liquido_kg} kg × R$ {valor_kg}/kg = R$ {bruto:.2f}"],
+        memoria=memoria,
     )
 
 
@@ -43,16 +59,25 @@ def caldeiraria(peso_liquido_kg: float, params: dict, horas_override: float | No
     """Por padrão usa a regra simples (peso × fator h/kg — camada 1). Passe
     `horas_override` para usar um valor já decidido por outra camada (ex:
     app.estimativa_horas, que combina isso com o histórico Macfab) sem
-    duplicar a lógica de custo/memória daqui."""
+    duplicar a lógica de custo/memória daqui.
+
+    `caldeiraria_peso_kg` é um override opcional só do peso usado nessa
+    conta (regra simples) — igual `corte_peso_kg`/`solda_peso_kg` já
+    fazem — None = usa o peso líquido do orçamento. Não se aplica quando
+    `horas_override` já veio pronto de outra camada (o peso já foi
+    considerado lá)."""
     valor_hora = params["caldeiraria_valor_hora"]
 
     if horas_override is not None:
         horas = horas_override
         memoria = memoria_override or [f"{horas:.2f} h (estimativa combinada, ver app.estimativa_horas)"]
     else:
+        peso = params.get("caldeiraria_peso_kg")
+        if peso is None:
+            peso = peso_liquido_kg
         fator = params["caldeiraria_fator_h_kg"]
-        horas = peso_liquido_kg * fator
-        memoria = [f"{peso_liquido_kg} kg × {fator} h/kg = {horas:.2f} h"]
+        horas = peso * fator
+        memoria = [f"{peso} kg × {fator} h/kg = {horas:.2f} h"]
 
     bruto = horas * valor_hora
     memoria = memoria + [f"{horas:.2f} h × R$ {valor_hora}/h = R$ {bruto:.2f}"]
@@ -88,25 +113,69 @@ def usinagem(operacoes: list[dict], params: dict) -> LinhaCusto:
 
 
 def solda(peso_liquido_kg: float, params: dict) -> LinhaCusto:
+    """Insumos de solda — calibrado contra a planilha de referência "INSUMOS
+    DE SOLDA" do usuário (consumível + gás de proteção, por tipo de metal de
+    adição): carbono (FCAW E71T-1, GMAW ER70S-6, GTAW ER70S-3) sempre entra,
+    proporcional ao peso da peça; inox (GMAW ER308/316L, GTAW ER308/309/
+    316L/904L) é opt-in — não dá pra derivar do peso total quanto da peça é
+    solda inox, então fica um campo manual (`solda_inox_qtd_kg`), 0 por
+    padrão (não soma nada), disponível pra digitar quando a peça realmente
+    levar solda inox. Cada gás de proteção acompanha o consumível
+    correspondente (mesma % da planilha de referência: gás = consumível ×
+    fator).
+
+    O peso-base do consumível carbono (`solda_peso_kg`) e o peso-base do gás
+    (`solda_gas_peso_kg`) são overrides opcionais — pedido explícito do
+    usuário pra poder editar o peso usado em cada um, além da % e do R$/kg
+    (que já eram editáveis) — igual `corte_peso_kg` já fazia pro corte.
+    None = comportamento padrão (peso líquido do orçamento pro consumível;
+    kg de consumível calculado pro gás)."""
+    peso_consumivel = params.get("solda_peso_kg")
+    if peso_consumivel is None:
+        peso_consumivel = peso_liquido_kg
     fator_consumo = params["solda_fator_consumo_percentual"]
     preco_kg_consumivel = params["solda_preco_kg_consumivel"]
-    kg_consumivel = peso_liquido_kg * fator_consumo
+    kg_consumivel = peso_consumivel * fator_consumo
     valor_consumivel = kg_consumivel * preco_kg_consumivel
 
+    peso_gas = params.get("solda_gas_peso_kg")
+    if peso_gas is None:
+        peso_gas = kg_consumivel
     fator_gas = params["solda_fator_gas_sobre_consumivel"]
     preco_unidade_gas = params["solda_preco_unidade_gas"]
-    unidade_gas = kg_consumivel * fator_gas
+    unidade_gas = peso_gas * fator_gas
     valor_gas = unidade_gas * preco_unidade_gas
 
     bruto = valor_consumivel + valor_gas
+    memoria = [
+        f"Consumível carbono: {peso_consumivel} kg × {fator_consumo*100:.0f}% = {kg_consumivel:.2f} kg "
+        f"× R$ {preco_kg_consumivel}/kg = R$ {valor_consumivel:.2f}",
+        f"Gás (100% CO2): {peso_gas:.2f} kg × {fator_gas*100:.0f}% = {unidade_gas:.2f} × "
+        f"R$ {preco_unidade_gas} = R$ {valor_gas:.2f}",
+    ]
+
+    kg_inox = params.get("solda_inox_qtd_kg") or 0.0
+    if kg_inox:
+        preco_kg_inox = params["solda_inox_preco_kg_consumivel"]
+        valor_inox = kg_inox * preco_kg_inox
+
+        fator_gas_inox = params["solda_inox_fator_gas_sobre_consumivel"]
+        preco_unidade_gas_inox = params["solda_inox_preco_unidade_gas"]
+        unidade_gas_inox = kg_inox * fator_gas_inox
+        valor_gas_inox = unidade_gas_inox * preco_unidade_gas_inox
+
+        bruto += valor_inox + valor_gas_inox
+        memoria.append(
+            f"Consumível inox: {kg_inox} kg × R$ {preco_kg_inox}/kg = R$ {valor_inox:.2f}"
+        )
+        memoria.append(
+            f"Gás (25% Ar-75% CO2): {kg_inox} kg × {fator_gas_inox*100:.0f}% = {unidade_gas_inox:.2f} × "
+            f"R$ {preco_unidade_gas_inox} = R$ {valor_gas_inox:.2f}"
+        )
+
     return _linha(
-        "solda", "Soldagem (consumível + gás de proteção)", bruto, "solda_consumivel", params,
-        memoria=[
-            f"Consumível: {peso_liquido_kg} kg × {fator_consumo*100:.0f}% = {kg_consumivel:.2f} kg "
-            f"× R$ {preco_kg_consumivel}/kg = R$ {valor_consumivel:.2f}",
-            f"Gás: {kg_consumivel:.2f} kg × {fator_gas*100:.0f}% = {unidade_gas:.2f} × "
-            f"R$ {preco_unidade_gas} = R$ {valor_gas:.2f}",
-        ],
+        "solda", "Soldagem (consumíveis carbono/inox + gases de proteção)", bruto, "solda_consumivel", params,
+        memoria=memoria,
     )
 
 
@@ -144,11 +213,19 @@ def engenharia(quantidade_posicoes: float, params: dict) -> LinhaCusto:
 
 
 def custo_indireto_por_kg(codigo: str, descricao: str, peso_liquido_kg: float, params: dict) -> LinhaCusto:
+    """`{codigo}_peso_kg` é um override opcional só do peso usado nessa
+    linha (igual corte_peso_kg/solda_peso_kg/caldeiraria_peso_kg já fazem)
+    — None (o padrão pra quem não tem esse override cadastrado em
+    parametros_padrao.py, ex: transporte/energia hoje) usa o peso líquido
+    do orçamento."""
+    peso = params.get(f"{codigo}_peso_kg")
+    if peso is None:
+        peso = peso_liquido_kg
     valor_kg = params[f"{codigo}_valor_kg"]
-    bruto = peso_liquido_kg * valor_kg
+    bruto = peso * valor_kg
     return _linha(
         codigo, descricao, bruto, codigo, params,
-        memoria=[f"{peso_liquido_kg} kg × R$ {valor_kg}/kg = R$ {bruto:.2f}"],
+        memoria=[f"{peso} kg × R$ {valor_kg}/kg = R$ {bruto:.2f}"],
     )
 
 

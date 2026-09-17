@@ -14,6 +14,7 @@ import CartaoInsumoPintura from "@/components/CartaoInsumoPintura";
 import CartaoUsinagem from "@/components/CartaoUsinagem";
 import CartaoServicoPorPeso from "@/components/CartaoServicoPorPeso";
 import CartaoContingenciamento from "@/components/CartaoContingenciamento";
+import CartaoEngenhariaIndustrial from "@/components/CartaoEngenhariaIndustrial";
 import type {
   CatalogoGeometria,
   CatalogoProcessosTerceirizados,
@@ -36,6 +37,12 @@ interface Props {
   onEstadoChange: (atualizacao: Partial<EstadoCalculoManual>) => void;
   onResultado: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
   onErro: (mensagem: string) => void;
+  // Peso líquido manual aplicado via PainelPesoBase (null = peso bruto
+  // calculado) — precisa ir em toda chamada de analisarBom daqui, senão o
+  // auto-cálculo (ao adicionar/editar qualquer item) recalcula do zero e
+  // perde o override, voltando pro peso bruto sem o usuário pedir (bug
+  // relatado pelo usuário).
+  pesoLiquidoManualAtivo: number | null;
 }
 
 // Cartões com fluxo próprio (catálogo pesquisável, unidades, etc.) — os
@@ -51,6 +58,7 @@ const CATALOGO_PROCESSOS_VAZIO: CatalogoProcessosTerceirizados = {
   usinagem: [],
   servicos_terceiros: [],
   tratamento_termico: [],
+  ensaios_nao_destrutivos: [],
 };
 
 // Item "puxado de volta" pro formulário pelo botão "editar" — `tipo` roteia
@@ -68,10 +76,13 @@ function restaurarPosicaoItem(posicao: string): { posicaoNum: number; itemNum: n
   return m ? { posicaoNum: Number(m[1]), itemNum: Number(m[2]) } : null;
 }
 
-export default function CalculoManual({ estado, onEstadoChange, onResultado, onErro }: Props) {
+export default function CalculoManual({
+  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
+}: Props) {
   const {
     itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
-    contingenciamento, cenarioComercial, corteValorKg, posicaoNum, itemNum,
+    contingenciamento, ndtItens, engenhariaItens,
+    cenarioComercial, corteValorKg, posicaoNum, itemNum,
   } = estado;
 
   const [catalogo, setCatalogo] = useState<CatalogoGeometria | null>(null);
@@ -222,30 +233,92 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     iniciarEdicao("contingenciamento", item);
   }
 
+  function adicionarNdtItem(item: Omit<ServicoPorPeso, "posicao">) {
+    const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
+    onEstadoChange({ ndtItens: [...ndtItens, { ...item, posicao }] });
+  }
+
+  function removerNdtItem(indice: number) {
+    onEstadoChange({ ndtItens: ndtItens.filter((_, i) => i !== indice) });
+  }
+
+  function editarNdtItem(indice: number) {
+    const item = ndtItens[indice];
+    onEstadoChange({ ndtItens: ndtItens.filter((_, i) => i !== indice) });
+    iniciarEdicao("ndt_itens", item);
+  }
+
+  function adicionarEngenhariaItem(item: Omit<ItemContingenciamento, "posicao">) {
+    const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
+    onEstadoChange({ engenhariaItens: [...engenhariaItens, { ...item, posicao }] });
+  }
+
+  function removerEngenhariaItem(indice: number) {
+    onEstadoChange({ engenhariaItens: engenhariaItens.filter((_, i) => i !== indice) });
+  }
+
+  function editarEngenhariaItem(indice: number) {
+    const item = engenhariaItens[indice];
+    onEstadoChange({ engenhariaItens: engenhariaItens.filter((_, i) => i !== indice) });
+    iniciarEdicao("engenharia_itens", item);
+  }
+
   const totalItens =
     itens.length + itensComerciais.length + insumosPintura.length + operacoesUsinagem.length +
-    servicosTerceiros.length + tratamentoTermico.length + contingenciamento.length;
+    servicosTerceiros.length + tratamentoTermico.length + contingenciamento.length + ndtItens.length +
+    engenhariaItens.length;
+
+  // Token da última chamada disparada — evita que a resposta de um cálculo
+  // mais antigo (rede lenta) sobrescreva o resultado de um mais novo,
+  // já que o auto-cálculo abaixo pode disparar mais de uma chamada em
+  // sequência conforme o usuário vai adicionando itens.
+  const tokenCalculoRef = useRef(0);
 
   async function calcularOrcamento() {
     if (totalItens === 0) return;
+    const token = ++tokenCalculoRef.current;
     setAnalisando(true);
     try {
       const r = await analisarBom(
         itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
-        contingenciamento,
+        contingenciamento, ndtItens, engenhariaItens,
         {
           cenario_comercial: cenarioComercial,
           usar_historico_horas: false,
           corte_valor_kg: Number(corteValorKg.replace(",", ".")) || undefined,
+          // Preserva o peso líquido manual (aplicado via PainelPesoBase)
+          // em cima do peso recém-calculado do BOM — sem isso, qualquer
+          // interação aqui (adicionar item etc.) recalculava do zero e
+          // perdia o override, voltando pro peso bruto sozinho.
+          peso_liquido_kg: pesoLiquidoManualAtivo ?? undefined,
         },
       );
+      if (token !== tokenCalculoRef.current) return;
       onResultado(r, `cálculo manual (${totalItens} ${totalItens === 1 ? "item" : "itens"})`);
     } catch (e) {
+      if (token !== tokenCalculoRef.current) return;
       onErro(e instanceof Error ? e.message : "Erro ao calcular o orçamento.");
     } finally {
-      setAnalisando(false);
+      if (token === tokenCalculoRef.current) setAnalisando(false);
     }
   }
+
+  // Pedido explícito do usuário: recalcular sozinho conforme ele vai
+  // adicionando itens/adicionais, sem precisar apertar "Calcular
+  // orçamento" toda vez. Debounce de 600ms pra não disparar uma chamada
+  // por tecla digitada (ex: no campo "Insumos de corte") nem uma por item
+  // quando várias adições acontecem em sequência rápida.
+  useEffect(() => {
+    if (totalItens === 0) return;
+    const timer = setTimeout(() => {
+      calcularOrcamento();
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
+    contingenciamento, ndtItens, engenhariaItens, cenarioComercial, corteValorKg, pesoLiquidoManualAtivo,
+  ]);
 
   const pesoTotal = itens.reduce((soma, i) => soma + i.peso_kg, 0);
   const custoComercialTotal = itensComerciais.reduce((soma, i) => soma + i.custoTotal, 0);
@@ -254,6 +327,8 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
   const custoServicosTotal = servicosTerceiros.reduce((soma, i) => soma + i.custoTotal, 0);
   const custoTratamentoTotal = tratamentoTermico.reduce((soma, i) => soma + i.custoTotal, 0);
   const custoContingenciaTotal = contingenciamento.reduce((soma, i) => soma + i.custoTotal, 0);
+  const custoNdtTotal = ndtItens.reduce((soma, i) => soma + i.custoTotal, 0);
+  const custoEngenhariaTotal = engenhariaItens.reduce((soma, i) => soma + i.custoTotal, 0);
 
   interface LinhaExibicao {
     chave: string;
@@ -329,6 +404,24 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
       editar: () => editarContingenciamento(i),
       remover: () => removerContingenciamento(i),
     })),
+    ...ndtItens.map((item, i): LinhaExibicao => ({
+      chave: `n-${i}`,
+      posicao: item.posicao,
+      descricao: item.descricao,
+      detalhe: `${formatarNumero(item.pesoKg, 2)} kg × ${formatarMoeda(item.valorKg)}`,
+      custoTotal: item.custoTotal,
+      editar: () => editarNdtItem(i),
+      remover: () => removerNdtItem(i),
+    })),
+    ...engenhariaItens.map((item, i): LinhaExibicao => ({
+      chave: `e-${i}`,
+      posicao: item.posicao,
+      descricao: item.descricao,
+      detalhe: `${formatarNumero(item.quantidade, 0)} × ${formatarMoeda(item.valorUnitario)}`,
+      custoTotal: item.custoTotal,
+      editar: () => editarEngenhariaItem(i),
+      remover: () => removerEngenhariaItem(i),
+    })),
   ];
 
   const gruposPorPosicao = new Map<string, LinhaExibicao[]>();
@@ -362,6 +455,8 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
     custoServicosTotal > 0 && `${formatarMoeda(custoServicosTotal)} em serviços de terceiros`,
     custoTratamentoTotal > 0 && `${formatarMoeda(custoTratamentoTotal)} em tratamento térmico`,
     custoContingenciaTotal > 0 && `${formatarMoeda(custoContingenciaTotal)} em contingência`,
+    custoNdtTotal > 0 && `${formatarMoeda(custoNdtTotal)} em ensaios não destrutivos`,
+    custoEngenhariaTotal > 0 && `${formatarMoeda(custoEngenhariaTotal)} em engenharia industrial`,
   ].filter(Boolean);
 
   return (
@@ -490,6 +585,21 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
             valorInicial={edicao?.tipo === "contingenciamento" ? { id: edicao.id, dados: edicao.dados as ItemContingenciamento } : null}
             {...posicaoProps}
           />
+
+          <CartaoServicoPorPeso
+            titulo="Ensaios não destrutivos"
+            descricaoCard="LP (líquido penetrante) ou ultrassom — escolha um dos dois ou descreva outro tipo de ensaio. Cobrado por peso: kg × R$/kg (mesma mecânica dos serviços de terceiros)."
+            catalogo={catalogoProcessos.ensaios_nao_destrutivos}
+            onAdicionar={adicionarNdtItem}
+            valorInicial={edicao?.tipo === "ndt_itens" ? { id: edicao.id, dados: edicao.dados as ServicoPorPeso } : null}
+            {...posicaoProps}
+          />
+
+          <CartaoEngenhariaIndustrial
+            onAdicionar={adicionarEngenhariaItem}
+            valorInicial={edicao?.tipo === "engenharia_itens" ? { id: edicao.id, dados: edicao.dados as ItemContingenciamento } : null}
+            {...posicaoProps}
+          />
         </div>
       </div>
 
@@ -588,8 +698,13 @@ export default function CalculoManual({ estado, onEstadoChange, onResultado, onE
             disabled={analisando || totalItens === 0}
             className="w-full rounded-md bg-cyan-500 px-4 py-2 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {analisando ? "Calculando orçamento…" : "Calcular orçamento"}
+            {analisando ? "Calculando orçamento…" : "Recalcular agora"}
           </button>
+          {totalItens > 0 && (
+            <p className="text-center text-xs text-slate-500">
+              O orçamento recalcula sozinho a cada item adicionado — esse botão só força na hora.
+            </p>
+          )}
         </div>
       </div>
     </div>

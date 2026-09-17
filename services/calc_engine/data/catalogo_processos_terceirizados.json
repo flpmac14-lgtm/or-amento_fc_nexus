@@ -12,5 +12,9 @@
   "tratamento_termico": [
     {"nome": "Alívio de tensões / normalização", "valor_kg": 1.5},
     {"nome": "Beneficiamento (têmpera/revenimento/cementação/nitretação)", "valor_kg": null}
+  ],
+  "ensaios_nao_destrutivos": [
+    {"nome": "LP (líquido penetrante)", "valor_kg": null},
+    {"nome": "Ultrassom", "valor_kg": null}
   ]
 }

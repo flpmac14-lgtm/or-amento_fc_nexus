@@ -54,6 +54,9 @@ Endpoints:
                                       térmico) com taxa de referência
                                       conhecida — ver
                                       app/catalogo_processos_terceirizados.py
+  GET  /cnpj/{cnpj}        -> nome + endereço de um CNPJ (Receita Federal,
+                               via BrasilAPI) pra pré-preencher a
+                               "Identificação do cliente" — ver app/cnpj.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -74,6 +77,7 @@ from fastapi.responses import Response
 from app.adapter import montar_entrada_orcamento
 from app.cantoneiras_catalogo import buscar_cantoneiras
 from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_processos_terceirizados
+from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.materiais_catalogo import listar_materiais
@@ -276,6 +280,21 @@ def materiais_preco_mercado(norma: str, espessura_mm: float) -> dict:
         "espessura_referencia_mm": preco.espessura_mm,
         "exato": exato,
     }
+
+
+@app.get("/cnpj/{cnpj}")
+def cnpj_buscar(cnpj: str) -> dict:
+    """Busca nome (razão social) e endereço de um CNPJ na Receita Federal
+    (via BrasilAPI, gratuita e sem chave) pra pré-preencher a
+    "Identificação do cliente" — pedido explícito do usuário, primeira
+    etapa de automação (hoje isso é digitado à mão numa planilha Excel).
+    Ver app/cnpj.py."""
+    try:
+        return buscar_cnpj(cnpj)
+    except CnpjInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except CnpjNaoEncontrado as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/cantoneiras/buscar")

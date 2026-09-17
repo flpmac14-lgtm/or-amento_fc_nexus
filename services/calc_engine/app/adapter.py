@@ -220,6 +220,17 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
 
     entrada = {
         "peso_liquido_kg": peso_liquido_kg,
+        # Peso bruto de REFERÊNCIA — sempre o que a geometria/BOM calculou
+        # (peso_total_kg), nunca o que entrou por override (estimativas
+        # .peso_liquido_kg, ex: o peso líquido manual reenviado a cada
+        # recálculo do Cálculo manual pra não se perder — ver
+        # CalculoManual.tsx::pesoLiquidoManualAtivo). Sem essa distinção,
+        # aplicar o peso líquido manual e depois adicionar outro item
+        # "contaminava" essa referência com o valor do override, perdendo
+        # o bruto de verdade. Só cai pro peso líquido quando não há BOM
+        # nenhuma calculada (peso_total_kg = 0, estimativa 100% manual —
+        # não tem "bruto calculado" nenhum pra mostrar nesse caso).
+        "peso_bruto_calculado_kg": peso_total_kg or peso_liquido_kg,
         "materia_prima": materia_prima,
         "itens_padrao": estimativas.get("itens_padrao", []),
         "insumos_pintura": estimativas.get("insumos_pintura", []),
@@ -227,12 +238,15 @@ def montar_entrada_orcamento(resultado_extracao: dict, estimativas: dict) -> Res
         "servicos_terceiros": estimativas.get("servicos_terceiros", []),
         "tratamento_termico": estimativas.get("tratamento_termico", []),
         "contingenciamento": estimativas.get("contingenciamento", []),
+        "ndt_itens": estimativas.get("ndt_itens", []),
+        "engenharia_itens": estimativas.get("engenharia_itens", []),
         "area_pintura_m2": estimativas.get("area_pintura_m2"),
         "quantidade_posicoes_engenharia": estimativas.get("quantidade_posicoes_engenharia"),
         "cenario_comercial": estimativas.get("cenario_comercial", "venda_fabricacao"),
         "usar_historico_horas": estimativas.get("usar_historico_horas", False),
         "historico_horas": estimativas.get("historico_horas"),
         "corte_valor_kg": estimativas.get("corte_valor_kg"),
+        "engenharia_valor_unitario": estimativas.get("engenharia_valor_unitario"),
     }
 
     return ResultadoAdaptacao(entrada=entrada, itens_para_revisao=itens_para_revisao)

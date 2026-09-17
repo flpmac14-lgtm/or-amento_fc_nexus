@@ -18,7 +18,9 @@ from pathlib import Path
 
 _CAMINHO_DATASET_PADRAO = Path(__file__).resolve().parent.parent / "data" / "catalogo_processos_terceirizados.json"
 
-_VAZIO: dict = {"usinagem": [], "servicos_terceiros": [], "tratamento_termico": []}
+_VAZIO: dict = {
+    "usinagem": [], "servicos_terceiros": [], "tratamento_termico": [], "ensaios_nao_destrutivos": [],
+}
 
 
 def carregar(caminho: Path = _CAMINHO_DATASET_PADRAO) -> dict:

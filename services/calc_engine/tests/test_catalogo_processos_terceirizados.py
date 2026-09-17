@@ -22,7 +22,13 @@ def test_carrega_as_tres_categorias_do_dataset_real():
     tratamento = {i["nome"]: i["valor_kg"] for i in catalogo["tratamento_termico"]}
     assert tratamento["Alívio de tensões / normalização"] == 1.5
 
+    ndt = {i["nome"]: i["valor_kg"] for i in catalogo["ensaios_nao_destrutivos"]}
+    assert "LP (líquido penetrante)" in ndt
+    assert "Ultrassom" in ndt
+
 
 def test_arquivo_inexistente_devolve_categorias_vazias(tmp_path):
     catalogo = carregar(tmp_path / "nao_existe.json")
-    assert catalogo == {"usinagem": [], "servicos_terceiros": [], "tratamento_termico": []}
+    assert catalogo == {
+        "usinagem": [], "servicos_terceiros": [], "tratamento_termico": [], "ensaios_nao_destrutivos": [],
+    }

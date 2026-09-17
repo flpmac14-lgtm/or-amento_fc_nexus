@@ -177,6 +177,16 @@ export async function buscarMateriais(): Promise<MaterialCatalogo[]> {
   return dados.materiais;
 }
 
+export async function buscarCnpj(cnpj: string): Promise<{ cnpj: string; nome: string; endereco: string }> {
+  const digitos = cnpj.replace(/\D/g, "");
+  const resposta = await fetch(`${CALC_ENGINE_URL}/cnpj/${digitos}`);
+  if (!resposta.ok) {
+    const corpo = await resposta.json().catch(() => null);
+    throw new Error(corpo?.detail || `Falha ao buscar o CNPJ (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
 export async function buscarCantoneirasCatalogo(termo: string): Promise<CantoneiraCatalogo[]> {
   const params = new URLSearchParams();
   if (termo) params.set("q", termo);
@@ -251,6 +261,8 @@ export async function analisarBom(
   servicosTerceiros: ServicoPorPeso[],
   tratamentoTermico: ServicoPorPeso[],
   contingenciamento: ItemContingenciamento[],
+  ndtItens: ServicoPorPeso[],
+  engenhariaItens: ItemContingenciamento[],
   estimativas: EstimativasOrcamento,
 ): Promise<RespostaOrcamentoDePdf> {
   const bom = itens.map((item, i) => ({
@@ -300,6 +312,18 @@ export async function analisarBom(
     valor_unitario: item.valorUnitario,
   }));
 
+  const ndtItensPayload = ndtItens.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    peso_kg: item.pesoKg,
+    valor_kg: item.valorKg,
+  }));
+
+  const engenhariaItensPayload = engenhariaItens.map((item) => ({
+    descricao: `${item.descricao} (${item.posicao})`,
+    quantidade: item.quantidade,
+    valor_unitario: item.valorUnitario,
+  }));
+
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento-de-bom`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -313,6 +337,8 @@ export async function analisarBom(
         servicos_terceiros: servicosTerceirosPayload,
         tratamento_termico: tratamentoTermicoPayload,
         contingenciamento: contingenciamentoPayload,
+        ndt_itens: ndtItensPayload,
+        engenharia_itens: engenhariaItensPayload,
       },
     }),
   });

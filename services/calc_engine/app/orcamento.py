@@ -159,6 +159,64 @@ def _agregar_contingenciamento(itens: list[dict]) -> LinhaCusto:
     )
 
 
+def _agregar_ndt_itens(itens: list[dict]) -> LinhaCusto:
+    """Ensaios não destrutivos lançados item a item (LP, ultrassom, ou
+    outro tipo descrito à mão) — pedido explícito do usuário, mesma
+    mecânica de `_agregar_servicos_terceiros`/`_agregar_tratamento_termico`
+    (peso × R$/kg), só que pro NDT: cada ensaio pode ter peso e taxa
+    diferentes (ex: só uma solda específica foi ensaiada, não a peça
+    inteira), ao contrário da linha "ndt" automática (peso líquido do
+    orçamento inteiro × uma taxa única). As duas NÃO coexistem — ver
+    montar_orcamento: quando há item lançado aqui, a estimativa automática
+    "ndt" não entra (bug corrigido: as duas juntas contavam o NDT em
+    dobro). Mesma alíquota de "ndt" (0% ICMS + 9,25% PIS/COFINS)."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["ndt"]
+    bruto_total = sum(item["peso_kg"] * item["valor_kg"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['peso_kg']} kg × R$ {item['valor_kg']}/kg = "
+        f"R$ {item['peso_kg'] * item['valor_kg']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="ndt_itens",
+        descricao="Ensaios não destrutivos (itens)",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
+def _agregar_engenharia_itens(itens: list[dict]) -> LinhaCusto:
+    """Engenharia industrial (desenho/croqui p/ delineamento) lançada item a
+    item — pedido explícito do usuário: mesmo padrão de
+    adicionar/posição/item de `_agregar_contingenciamento` (quantidade ×
+    valor unitário, cada lançamento com sua própria posição/item), em vez
+    do campo escalar único que `processos.engenharia` usa (esse continua
+    existindo pro fluxo de PDF/texto, "Estimativas manuais" — as duas
+    coexistem sem se sobrepor, cada fluxo usa uma). Mesma alíquota de
+    "engenharia" (sem ICMS/PIS-COFINS — não é compra de terceiro)."""
+    icms, pis_cofins = ALIQUOTAS_COMPRA_POR_TIPO["engenharia"]
+    bruto_total = sum(item["quantidade"] * item["valor_unitario"] for item in itens)
+    liquido = bruto_total * (1 - icms - pis_cofins)
+    memoria = [
+        f"{item['descricao']}: {item['quantidade']} × R$ {item['valor_unitario']} = "
+        f"R$ {item['quantidade'] * item['valor_unitario']:.2f}"
+        for item in itens
+    ]
+    return LinhaCusto(
+        codigo="engenharia_itens",
+        descricao="Engenharia industrial (itens)",
+        valor_bruto=bruto_total,
+        aliquota_icms=icms,
+        aliquota_pis_cofins=pis_cofins,
+        valor_liquido=liquido,
+        memoria_calculo=memoria,
+    )
+
+
 # Parâmetros escalares (R$/kg, R$/h, fator, %) que o botão "editar" do
 # "Custo por processo" pode sobrescrever, um a um — a fórmula de cada
 # processo (ver app/processos.py) continua fixa, só a taxa/unidade muda.
@@ -166,15 +224,20 @@ def _agregar_contingenciamento(itens: list[dict]) -> LinhaCusto:
 # quebrava a auditabilidade da memória de cálculo; editando o parâmetro, o
 # "Ver cálculo" continua batendo com o número mostrado.
 PARAMS_ESCALARES_SOBRESCREVIVEIS: list[str] = [
-    "corte_valor_kg",
-    "caldeiraria_fator_h_kg", "caldeiraria_valor_hora",
+    "corte_valor_kg", "corte_peso_kg", "corte_fator_percentual_adicional",
+    "caldeiraria_fator_h_kg", "caldeiraria_valor_hora", "caldeiraria_peso_kg",
     "jateamento_pintura_divisor", "jateamento_pintura_valor_hora",
     "solda_fator_consumo_percentual", "solda_preco_kg_consumivel",
     "solda_fator_gas_sobre_consumivel", "solda_preco_unidade_gas",
+    "solda_peso_kg", "solda_gas_peso_kg",
+    "solda_inox_qtd_kg", "solda_inox_preco_kg_consumivel",
+    "solda_inox_fator_gas_sobre_consumivel", "solda_inox_preco_unidade_gas",
     "pintura_fator_l_m2",
     "ndt_valor_kg",
     "engenharia_valor_unitario",
-    "embalagem_valor_kg", "transporte_valor_kg", "energia_valor_kg",
+    "embalagem_valor_kg", "embalagem_peso_kg",
+    "transporte_valor_kg", "transporte_peso_kg",
+    "energia_valor_kg", "energia_peso_kg",
 ]
 
 
@@ -224,6 +287,7 @@ def montar_orcamento(entrada: dict, params: dict | None = None) -> ResultadoOrca
         linhas.append(_agregar_itens_padrao(entrada["itens_padrao"]))
 
     linhas.append(processos.corte(peso_liquido_kg, params))
+    linhas.append(processos.solda(peso_liquido_kg, params))
 
     if entrada.get("usar_historico_horas"):
         estimativa = estimar_horas_caldeiraria(peso_liquido_kg, params, entrada.get("historico_horas"))
@@ -244,17 +308,25 @@ def montar_orcamento(entrada: dict, params: dict | None = None) -> ResultadoOrca
     if entrada.get("tratamento_termico"):
         linhas.append(_agregar_tratamento_termico(entrada["tratamento_termico"]))
 
-    linhas.append(processos.solda(peso_liquido_kg, params))
-
     if entrada.get("area_pintura_m2"):
         linhas.append(processos.pintura_material(entrada["area_pintura_m2"], params))
     if entrada.get("insumos_pintura"):
         linhas.append(_agregar_insumos_pintura(entrada["insumos_pintura"]))
 
-    linhas.append(processos.ndt(peso_liquido_kg, params))
+    # "ndt" (estimativa automática peso × taxa única) e "ndt_itens" (ensaios
+    # reais lançados item a item) NÃO coexistem — bug relatado pelo usuário:
+    # os dois somavam junto e contava o custo de NDT em dobro. Itens reais
+    # lançados têm prioridade (substituem a estimativa, não somam com ela);
+    # a estimativa automática só entra quando não há nenhum item lançado.
+    if entrada.get("ndt_itens"):
+        linhas.append(_agregar_ndt_itens(entrada["ndt_itens"]))
+    else:
+        linhas.append(processos.ndt(peso_liquido_kg, params))
 
     if entrada.get("quantidade_posicoes_engenharia"):
         linhas.append(processos.engenharia(entrada["quantidade_posicoes_engenharia"], params))
+    if entrada.get("engenharia_itens"):
+        linhas.append(_agregar_engenharia_itens(entrada["engenharia_itens"]))
     if entrada.get("contingenciamento"):
         linhas.append(_agregar_contingenciamento(entrada["contingenciamento"]))
 

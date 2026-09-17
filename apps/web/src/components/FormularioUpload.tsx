@@ -23,6 +23,12 @@ interface Props {
   estadoManual: EstadoCalculoManual;
   onEstadoManualChange: (atualizacao: Partial<EstadoCalculoManual>) => void;
   onAbrirSalvo: (salvo: OrcamentoSalvoCompleto) => void;
+  // Peso líquido manual aplicado via PainelPesoBase (null = usando o peso
+  // bruto calculado) — repassado pro Cálculo manual pra ele NÃO perder
+  // esse override toda vez que recalcula sozinho ao adicionar/editar um
+  // item (bug relatado pelo usuário: aplicar o líquido e o resumo voltar
+  // pro bruto depois de qualquer interação em Cálculo manual).
+  pesoLiquidoManualAtivo: number | null;
 }
 
 export default function FormularioUpload({
@@ -35,6 +41,7 @@ export default function FormularioUpload({
   estadoManual,
   onEstadoManualChange,
   onAbrirSalvo,
+  pesoLiquidoManualAtivo,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -115,6 +122,7 @@ export default function FormularioUpload({
           onEstadoChange={onEstadoManualChange}
           onResultado={onResultadoManual}
           onErro={onErroManual}
+          pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
         />
       )}
 

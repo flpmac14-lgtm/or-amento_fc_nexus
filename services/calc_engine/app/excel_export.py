@@ -22,13 +22,23 @@ from __future__ import annotations
 
 import io
 from datetime import datetime
+from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.drawing.image import Image as ImagemExcel
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.page import PageMargins
 
 from app.parametros_padrao import ALIQUOTAS_COMPRA_POR_TIPO, PARAMETROS_PADRAO
+
+# Empresa que emite o orçamento (pedido explícito do usuário) — logo
+# extraída da ficha cadastral real da Macfab. "FC Nexus" é só o nome do
+# software, por isso vira uma marca pequena e discreta no cabeçalho, não
+# o título principal da planilha.
+_MACFAB_NOME = "MACFAB Fabricações e Serviços Industriais LTDA"
+_MACFAB_CNPJ = "13.014.242/0001-86"
+_CAMINHO_LOGO_MACFAB = Path(__file__).resolve().parent.parent / "data" / "assets" / "macfab-logo.png"
 
 MOEDA = '"R$" #,##0.00'
 PERCENTUAL = "0.00%"
@@ -41,6 +51,7 @@ _BRANCO = "FFFFFF"
 
 _FONTE_TITULO = Font(color=_BRANCO, bold=True, size=16)
 _FONTE_SUBTITULO = Font(color=_CINZA_CLARO, size=10, italic=True)
+_FONTE_MARCA_DISCRETA = Font(color=_CINZA_CLARO, size=7, italic=True)
 _FONTE_SECAO = Font(color=_BRANCO, bold=True, size=11)
 _FONTE_CABECALHO_TABELA = Font(bold=True, size=10)
 _FONTE_TOTAL = Font(bold=True, size=10)
@@ -104,17 +115,53 @@ def _montar_parametros(ws, entrada: dict, params: dict, comercial) -> dict[str, 
         linhas[chave] = r
         r += 1
 
-    add("peso_liquido_kg", "Peso líquido (kg)", entrada["peso_liquido_kg"], "0.00")
+    add("peso_liquido_kg", "Peso líquido (kg) — usado no cálculo", entrada["peso_liquido_kg"], "0.00")
+    # Só informativo (nenhuma fórmula referencia essa célula) — mostra o
+    # peso calculado pelo sistema mesmo quando "Peso líquido (kg)" acima
+    # foi trocado por um valor manual (ver PainelPesoBase.tsx no
+    # frontend), pra quem abrir o Excel entender de onde veio a diferença.
+    add(
+        "peso_bruto_calculado_kg", "Peso bruto calculado (kg, referência)",
+        entrada.get("peso_bruto_calculado_kg", entrada["peso_liquido_kg"]), "0.00",
+    )
     add("fator_margem", "Fator de margem de venda", params["fator_margem_venda"], "0.00")
     add("corte_valor_kg", "Corte — R$/kg", params["corte_valor_kg"], MOEDA)
+    add(
+        "corte_peso_kg", "Corte — peso usado (kg, vazio = peso líquido)",
+        params.get("corte_peso_kg") if params.get("corte_peso_kg") is not None else "",
+        "0.00",
+    )
+    add(
+        "corte_fator_percentual_adicional", "Corte — fator adicional (%)",
+        params.get("corte_fator_percentual_adicional") or 0.0, "0.00",
+    )
+    add(
+        "caldeiraria_peso_kg", "Caldeiraria — peso (kg, vazio = peso líquido)",
+        params.get("caldeiraria_peso_kg") if params.get("caldeiraria_peso_kg") is not None else "",
+        "0.00",
+    )
     add("caldeiraria_fator_h_kg", "Caldeiraria — fator h/kg", params["caldeiraria_fator_h_kg"], "0.0000")
     add("caldeiraria_valor_hora", "Caldeiraria — R$/h", params["caldeiraria_valor_hora"], MOEDA)
     add("jateamento_divisor", "Jateamento/pintura — divisor sobre h caldeiraria", params["jateamento_pintura_divisor"], "0")
     add("jateamento_valor_hora", "Jateamento/pintura — R$/h", params["jateamento_pintura_valor_hora"], MOEDA)
-    add("solda_fator_consumo", "Solda — % consumível sobre peso", params["solda_fator_consumo_percentual"], PERCENTUAL)
-    add("solda_preco_consumivel", "Solda — R$/kg consumível", params["solda_preco_kg_consumivel"], MOEDA)
-    add("solda_fator_gas", "Solda — % gás sobre consumível", params["solda_fator_gas_sobre_consumivel"], PERCENTUAL)
-    add("solda_preco_gas", "Solda — R$/unidade gás", params["solda_preco_unidade_gas"], MOEDA)
+    add(
+        "solda_peso_kg", "Solda — peso do consumível (kg, vazio = peso líquido)",
+        params.get("solda_peso_kg") if params.get("solda_peso_kg") is not None else "",
+        "0.00",
+    )
+    add("solda_fator_consumo", "Solda — % consumível carbono sobre peso", params["solda_fator_consumo_percentual"], PERCENTUAL)
+    add("solda_preco_consumivel", "Solda — R$/kg consumível carbono", params["solda_preco_kg_consumivel"], MOEDA)
+    add(
+        "solda_gas_peso_kg", "Solda — peso-base do gás (kg, vazio = kg de consumível)",
+        params.get("solda_gas_peso_kg") if params.get("solda_gas_peso_kg") is not None else "",
+        "0.00",
+    )
+    add("solda_fator_gas", "Solda — % gás (100% CO2) sobre consumível", params["solda_fator_gas_sobre_consumivel"], PERCENTUAL)
+    add("solda_preco_gas", "Solda — R$/unidade gás (100% CO2)", params["solda_preco_unidade_gas"], MOEDA)
+    add("solda_inox_qtd_kg", "Solda — kg consumível inox (0 = não usa)", params.get("solda_inox_qtd_kg") or 0.0, "0.00")
+    add("solda_inox_preco_consumivel", "Solda — R$/kg consumível inox", params["solda_inox_preco_kg_consumivel"], MOEDA)
+    add("solda_inox_fator_gas", "Solda — % gás (25% Ar-75% CO2) sobre consumível inox", params["solda_inox_fator_gas_sobre_consumivel"], PERCENTUAL)
+    add("solda_inox_preco_gas", "Solda — R$/unidade gás (25% Ar-75% CO2)", params["solda_inox_preco_unidade_gas"], MOEDA)
     add("pintura_fator_l_m2", "Pintura — L/m² por demão", params["pintura_fator_l_m2"], "0.0000")
     add("area_pintura_m2", "Área de pintura (m²)", entrada.get("area_pintura_m2") or 0, "0.00")
     demaos = params["pintura_demaos"]
@@ -126,8 +173,23 @@ def _montar_parametros(ws, entrada: dict, params: dict, comercial) -> dict[str, 
     add("engenharia_valor_unitario", "Engenharia — R$/posição", params["engenharia_valor_unitario"], MOEDA)
     add("qtd_posicoes_engenharia", "Quantidade de posições de engenharia", entrada.get("quantidade_posicoes_engenharia") or 0, "0")
     add("embalagem_valor_kg", "Embalagem — R$/kg", params["embalagem_valor_kg"], MOEDA)
+    add(
+        "embalagem_peso_kg", "Embalagem — peso (kg, vazio = peso líquido)",
+        params.get("embalagem_peso_kg") if params.get("embalagem_peso_kg") is not None else "",
+        "0.00",
+    )
     add("transporte_valor_kg", "Transporte — R$/kg", params["transporte_valor_kg"], MOEDA)
+    add(
+        "transporte_peso_kg", "Transporte — peso (kg, vazio = peso líquido)",
+        params.get("transporte_peso_kg") if params.get("transporte_peso_kg") is not None else "",
+        "0.00",
+    )
     add("energia_valor_kg", "Energia — R$/kg", params["energia_valor_kg"], MOEDA)
+    add(
+        "energia_peso_kg", "Energia — peso (kg, vazio = peso líquido)",
+        params.get("energia_peso_kg") if params.get("energia_peso_kg") is not None else "",
+        "0.00",
+    )
     add("aliquota_venda", f"Alíquota de venda ({comercial.cenario_comercial})", comercial.aliquota_venda, PERCENTUAL)
 
     ws.column_dimensions["I"].width = 40
@@ -144,7 +206,10 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
     peso = _ref(linhas_p, "peso_liquido_kg")
 
     if codigo == "corte":
-        return f"={peso}*{_ref(linhas_p, 'corte_valor_kg')}", None
+        peso_corte_ref = _ref(linhas_p, "corte_peso_kg")
+        peso_corte = f'IF({peso_corte_ref}="",{peso},{peso_corte_ref})'
+        fator_ref = _ref(linhas_p, "corte_fator_percentual_adicional")
+        return f"=({peso_corte})*{_ref(linhas_p, 'corte_valor_kg')}*(1+{fator_ref}/100)", None
 
     if codigo == "caldeiraria":
         if entrada.get("usar_historico_horas"):
@@ -155,7 +220,9 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
         # bater exato com o motor real, o bruto usa a expressão cheia (sem
         # arredondar) e a célula de Horas (que o jateamento referencia)
         # arredonda, replicando a mesma perda de precisão intermediária.
-        horas_cheio = f"{peso}*{_ref(linhas_p, 'caldeiraria_fator_h_kg')}"
+        peso_caldeiraria_ref = _ref(linhas_p, "caldeiraria_peso_kg")
+        peso_caldeiraria = f'IF({peso_caldeiraria_ref}="",{peso},{peso_caldeiraria_ref})'
+        horas_cheio = f"({peso_caldeiraria})*{_ref(linhas_p, 'caldeiraria_fator_h_kg')}"
         return f"={horas_cheio}*{_ref(linhas_p, 'caldeiraria_valor_hora')}", f"=ROUND({horas_cheio},2)"
 
     if codigo == "jateamento_pintura_mo":
@@ -165,9 +232,22 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
         return f"={horas}*{_ref(linhas_p, 'jateamento_valor_hora')}", f"=ROUND({horas},2)"
 
     if codigo == "solda":
+        peso_consumivel_ref = _ref(linhas_p, "solda_peso_kg")
+        peso_consumivel = f'IF({peso_consumivel_ref}="",{peso},{peso_consumivel_ref})'
+        kg_consumivel = f"({peso_consumivel})*{_ref(linhas_p, 'solda_fator_consumo')}"
+        valor_consumivel = f"({kg_consumivel})*{_ref(linhas_p, 'solda_preco_consumivel')}"
+
+        peso_gas_ref = _ref(linhas_p, "solda_gas_peso_kg")
+        peso_gas = f'IF({peso_gas_ref}="",({kg_consumivel}),{peso_gas_ref})'
+        valor_gas = f"({peso_gas})*{_ref(linhas_p, 'solda_fator_gas')}*{_ref(linhas_p, 'solda_preco_gas')}"
+
+        carbono = f"({valor_consumivel})+({valor_gas})"
+        inox = (
+            f"{_ref(linhas_p, 'solda_inox_qtd_kg')}*"
+            f"({_ref(linhas_p, 'solda_inox_preco_consumivel')}+{_ref(linhas_p, 'solda_inox_fator_gas')}*{_ref(linhas_p, 'solda_inox_preco_gas')})"
+        )
         return (
-            f"={peso}*{_ref(linhas_p, 'solda_fator_consumo')}*"
-            f"({_ref(linhas_p, 'solda_preco_consumivel')}+{_ref(linhas_p, 'solda_fator_gas')}*{_ref(linhas_p, 'solda_preco_gas')})",
+            f"=({carbono})+({inox})",
             None,
         )
 
@@ -185,13 +265,19 @@ def _formula_bruto_processo(codigo: str, entrada: dict, linhas_p: dict[str, int]
         return f"={_ref(linhas_p, 'qtd_posicoes_engenharia')}*{_ref(linhas_p, 'engenharia_valor_unitario')}", None
 
     if codigo == "embalagem":
-        return f"={peso}*{_ref(linhas_p, 'embalagem_valor_kg')}", None
+        peso_embalagem_ref = _ref(linhas_p, "embalagem_peso_kg")
+        peso_embalagem = f'IF({peso_embalagem_ref}="",{peso},{peso_embalagem_ref})'
+        return f"=({peso_embalagem})*{_ref(linhas_p, 'embalagem_valor_kg')}", None
 
     if codigo == "transporte":
-        return f"={peso}*{_ref(linhas_p, 'transporte_valor_kg')}", None
+        peso_transporte_ref = _ref(linhas_p, "transporte_peso_kg")
+        peso_transporte = f'IF({peso_transporte_ref}="",{peso},{peso_transporte_ref})'
+        return f"=({peso_transporte})*{_ref(linhas_p, 'transporte_valor_kg')}", None
 
     if codigo == "energia":
-        return f"={peso}*{_ref(linhas_p, 'energia_valor_kg')}", None
+        peso_energia_ref = _ref(linhas_p, "energia_peso_kg")
+        peso_energia = f'IF({peso_energia_ref}="",{peso},{peso_energia_ref})'
+        return f"=({peso_energia})*{_ref(linhas_p, 'energia_valor_kg')}", None
 
     return None, None  # usinagem, itens_padrao — sem taxa única, fica estático
 
@@ -210,16 +296,62 @@ def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) 
     linhas_p = _montar_parametros(ws, entrada, params, resultado.comercial)
 
     # ---- Cabeçalho do relatório ----
+    # Empresa que emite (Macfab) em destaque — logo + nome + CNPJ; "FC
+    # Nexus" (nome do software) vira uma marca pequena e discreta embaixo,
+    # não o título principal. Pedido explícito do usuário.
     r = 1
-    _mesclar_e_estilizar(ws, r, "A", "G", "ORÇAMENTO INDUSTRIAL", _FONTE_TITULO, _FILL_TITULO)
-    ws.row_dimensions[r].height = 28
+    ws.row_dimensions[r].height = 34
+    if _CAMINHO_LOGO_MACFAB.exists():
+        logo = ImagemExcel(str(_CAMINHO_LOGO_MACFAB))
+        logo.width = 110
+        logo.height = 42
+        ws.add_image(logo, f"A{r}")
+        _mesclar_e_estilizar(ws, r, "A", "B", "", _FONTE_TITULO, _FILL_TITULO)
+        col_titulo_ini = "C"
+    else:
+        col_titulo_ini = "A"
+    _mesclar_e_estilizar(ws, r, col_titulo_ini, "G", _MACFAB_NOME, _FONTE_TITULO, _FILL_TITULO, "left")
     r += 1
     gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
+    if _CAMINHO_LOGO_MACFAB.exists():
+        _mesclar_e_estilizar(ws, r, "A", "B", "", _FONTE_SUBTITULO, _FILL_TITULO)
     _mesclar_e_estilizar(
-        ws, r, "A", "G", f"FC Nexus — Orçamento Industrial I.A.  ·  Gerado em {gerado_em}",
-        _FONTE_SUBTITULO, _FILL_TITULO,
+        ws, r, col_titulo_ini, "G", f"CNPJ {_MACFAB_CNPJ}  ·  Gerado em {gerado_em}",
+        _FONTE_SUBTITULO, _FILL_TITULO, "left",
+    )
+    r += 1
+    if _CAMINHO_LOGO_MACFAB.exists():
+        _mesclar_e_estilizar(ws, r, "A", "B", "", _FONTE_MARCA_DISCRETA, _FILL_TITULO)
+    _mesclar_e_estilizar(
+        ws, r, col_titulo_ini, "G", "FC Nexus — Orçamento Industrial I.A.",
+        _FONTE_MARCA_DISCRETA, _FILL_TITULO, "left",
     )
     r += 2
+
+    # ---- Identificação do cliente ----
+    # Pedido explícito do usuário: painel de identificação (CNPJ/nome/
+    # endereço/revisão/condição de pagamento/pedido) preenchido no topo da
+    # página — reflete aqui também, pra o Excel bater com o relatório PDF.
+    ident = entrada.get("identificacao_cliente") or {}
+    if any(ident.get(c) for c in ("cnpj", "nome", "endereco", "revisao", "condicao_pagamento", "pedido")):
+        linha_ident = r
+
+        def add_ident(rotulo: str, valor):
+            nonlocal r
+            ws.cell(row=r, column=1, value=rotulo).font = Font(size=9, bold=True)
+            ws.cell(row=r, column=2, value=valor or "").font = Font(size=9)
+            ws.merge_cells(f"B{r}:D{r}")
+            r += 1
+
+        add_ident("CNPJ", ident.get("cnpj"))
+        add_ident("Cliente", ident.get("nome"))
+        add_ident("Endereço", ident.get("endereco"))
+        add_ident("Revisão", ident.get("revisao"))
+        add_ident("Condição de pagamento", ident.get("condicao_pagamento"))
+        add_ident("Pedido", ident.get("pedido"))
+        for linha_b in range(linha_ident, r):
+            _bordar_linha(ws, linha_b, 4)
+        r += 1
 
     # ---- Matéria-prima ----
     itens_mp = entrada.get("materia_prima") or []
@@ -250,7 +382,7 @@ def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) 
         r += 2
 
     # ---- Processos ----
-    _mesclar_e_estilizar(ws, r, "A", "G", "PROCESSOS", _FONTE_SECAO, _FILL_SECAO)
+    _mesclar_e_estilizar(ws, r, "A", "G", "PROCESSOS / CUSTO", _FONTE_SECAO, _FILL_SECAO)
     r += 1
     _cabecalho_tabela(ws, r, ["Processo", "Horas", "Bruto", "ICMS", "PIS/COFINS", "Líquido", ""])
     r += 1
@@ -287,7 +419,18 @@ def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) 
         _bordar_linha(ws, r, 7)
         r += 1
 
-    ws.cell(row=r, column=1, value="Total processos").font = _FONTE_TOTAL
+    # Pedido explícito do usuário: a matéria-prima (que já tem sua própria
+    # tabela detalhada acima) também entra como uma linha aqui, pro "Total
+    # processo/custo" desta seção já sair fechado (processos + matéria-
+    # prima) — por isso o Resumo Comercial abaixo NÃO soma matéria-prima
+    # de novo (contaria em dobro).
+    if ref_total_materia_prima:
+        ws.cell(row=r, column=1, value="Matéria-prima").font = Font(size=10)
+        ws.cell(row=r, column=6, value=f"={ref_total_materia_prima}").number_format = MOEDA
+        _bordar_linha(ws, r, 7)
+        r += 1
+
+    ws.cell(row=r, column=1, value="Total processo/custo").font = _FONTE_TOTAL
     celula_total_proc = ws.cell(row=r, column=6, value=f"=SUM(F{primeira_linha_proc}:F{r - 1})")
     celula_total_proc.number_format = MOEDA
     celula_total_proc.font = _FONTE_TOTAL
@@ -300,8 +443,10 @@ def gerar_excel_orcamento(entrada: dict, resultado, params: dict | None = None) 
     _mesclar_e_estilizar(ws, r, "A", "G", "RESUMO COMERCIAL", _FONTE_SECAO, _FILL_SECAO)
     r += 1
 
-    partes_custo = [ref_total_processos] + ([ref_total_materia_prima] if ref_total_materia_prima else [])
-    formula_custo_industrial = "=" + "+".join(partes_custo)
+    # ref_total_processos já inclui a matéria-prima (linha "Matéria-prima"
+    # somada dentro de "Total processo/custo" acima) — não soma de novo
+    # aqui, senão conta a matéria-prima em dobro no custo industrial.
+    formula_custo_industrial = f"={ref_total_processos}"
 
     def linha_resumo(rotulo: str, formula, fmt: str):
         nonlocal r

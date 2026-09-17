@@ -14,6 +14,31 @@ export interface Identificacao {
   quantidade: CampoExtraido<number>;
 }
 
+// Identificação do cliente digitada à mão (ou preenchida por busca de
+// CNPJ) — pedido explícito do usuário: primeira etapa de automação (hoje
+// isso é digitado numa planilha Excel); uma etapa futura vai trocar a
+// origem desses campos por uma extração automática do desenho, mas o
+// formato é o mesmo. Vive fora de `resultado` (painel sempre visível no
+// topo da página, antes de qualquer cálculo) e é persistida junto do
+// orçamento salvo via `RespostaOrcamentoDePdf.identificacao_cliente`.
+export interface IdentificacaoCliente {
+  cnpj: string;
+  nomeCliente: string;
+  endereco: string;
+  revisao: string;
+  condicaoPagamento: string;
+  pedido: string;
+}
+
+export const IDENTIFICACAO_CLIENTE_INICIAL: IdentificacaoCliente = {
+  cnpj: "",
+  nomeCliente: "",
+  endereco: "",
+  revisao: "",
+  condicaoPagamento: "",
+  pedido: "",
+};
+
 export interface ItemParaRevisao {
   item_numero: string | null;
   motivo: string;
@@ -51,7 +76,7 @@ export interface ResultadoOrcamentoDTO {
   // Valores efetivos (padrão + overrides já aplicados) dos parâmetros
   // editáveis do "Custo por processo" — ver
   // services/calc_engine/app/orcamento.py::PARAMS_ESCALARES_SOBRESCREVIVEIS.
-  parametros?: Record<string, number>;
+  parametros?: Record<string, number | null>;
 }
 
 export interface RespostaOrcamentoDePdf {
@@ -71,7 +96,11 @@ export interface RespostaOrcamentoDePdf {
   entrada: Record<string, unknown>;
   // Mesmos valores de `orcamento.parametros`, mas no nível raiz — devolvido
   // por /orcamento-de-bom, /orcamento-de-pdf e /orcamento-de-texto.
-  parametros?: Record<string, number>;
+  parametros?: Record<string, number | null>;
+  // Preenchido pelo frontend (page.tsx), nunca pelo backend — carona no
+  // mesmo objeto só pra "Salvar orçamento" persistir/restaurar junto sem
+  // precisar de coluna nova no banco. Ver IdentificacaoCliente.
+  identificacao_cliente?: IdentificacaoCliente;
 }
 
 export interface EstimativasOrcamento {
@@ -106,15 +135,28 @@ export interface EstimativasOrcamento {
   tratamento_termico?: { descricao: string; peso_kg: number; valor_kg: number }[];
   // Provisão de qualificação/contingência — ver app/orcamento.py::_agregar_contingenciamento.
   contingenciamento?: { descricao: string; quantidade: number; valor_unitario: number }[];
+  // Ensaios não destrutivos lançados item a item (LP, ultrassom, ou outro
+  // tipo descrito à mão), cobrados por peso — pedido explícito do usuário,
+  // mesma mecânica de servicos_terceiros/tratamento_termico. Coexiste com a
+  // linha "ndt" automática (peso líquido do orçamento × taxa única). Ver
+  // app/orcamento.py::_agregar_ndt_itens.
+  ndt_itens?: { descricao: string; peso_kg: number; valor_kg: number }[];
+  // Engenharia industrial (desenho/croqui p/ delineamento) lançada item a
+  // item, descrição fixa — mesmo padrão de adicionar/posição/item de
+  // contingenciamento (pedido explícito do usuário), em vez do campo
+  // escalar único que a "Estimativas manuais" do fluxo de PDF usa. Ver
+  // app/orcamento.py::_agregar_engenharia_itens.
+  engenharia_itens?: { descricao: string; quantidade: number; valor_unitario: number }[];
 }
 
 // Catálogo pequeno com taxa de referência conhecida (quando existe) pros
-// cartões de usinagem/serviços de terceiros/tratamento térmico — ver
-// app/catalogo_processos_terceirizados.py.
+// cartões de usinagem/serviços de terceiros/tratamento térmico/ensaios não
+// destrutivos — ver app/catalogo_processos_terceirizados.py.
 export interface CatalogoProcessosTerceirizados {
   usinagem: { nome: string; valor_hora: number | null }[];
   servicos_terceiros: { nome: string; valor_kg: number | null }[];
   tratamento_termico: { nome: string; valor_kg: number | null }[];
+  ensaios_nao_destrutivos: { nome: string; valor_kg: number | null }[];
 }
 
 export interface CampoGeometria {
@@ -214,6 +256,13 @@ export interface EstadoCalculoManual {
   servicosTerceiros: ServicoPorPeso[];
   tratamentoTermico: ServicoPorPeso[];
   contingenciamento: ItemContingenciamento[];
+  ndtItens: ServicoPorPeso[];
+  // Engenharia industrial (desenho/croqui p/ delineamento) — descritivo
+  // fixo, mesmo padrão de adicionar/posição/item de contingenciamento
+  // (pedido explícito do usuário). Reusa ItemContingenciamento (mesmos
+  // campos: descrição/quantidade/valor unitário/custo). Ver
+  // CartaoEngenhariaIndustrial.tsx e app/orcamento.py::_agregar_engenharia_itens.
+  engenhariaItens: ItemContingenciamento[];
   cenarioComercial: EstimativasOrcamento["cenario_comercial"];
   corteValorKg: string;
   posicaoNum: number;
@@ -228,6 +277,8 @@ export const ESTADO_CALCULO_MANUAL_INICIAL: EstadoCalculoManual = {
   servicosTerceiros: [],
   tratamentoTermico: [],
   contingenciamento: [],
+  ndtItens: [],
+  engenhariaItens: [],
   cenarioComercial: "venda_fabricacao",
   corteValorKg: "1,50",
   posicaoNum: 1,

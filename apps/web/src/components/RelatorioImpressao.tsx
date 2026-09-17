@@ -1,4 +1,4 @@
-import type { RespostaOrcamentoDePdf } from "@/lib/types";
+import type { IdentificacaoCliente, RespostaOrcamentoDePdf } from "@/lib/types";
 import {
   formatarMoeda,
   formatarNumero,
@@ -6,11 +6,16 @@ import {
   NOMES_PROCESSO,
 } from "@/lib/format";
 
-function valorCampo(campo: { valor: unknown }): string {
-  return campo.valor !== null && campo.valor !== undefined && campo.valor !== ""
-    ? String(campo.valor)
-    : "—";
+function valorCampo(v: string): string {
+  return v.trim() !== "" ? v : "—";
 }
+
+// Dados da empresa que emite o orçamento (pedido explícito do usuário) —
+// ver public/macfab-logo.png, extraído da ficha cadastral da própria
+// Macfab. "FC Nexus" é só o nome do software, por isso vira uma marca
+// pequena e discreta no canto, não o título principal do relatório.
+const MACFAB_NOME = "MACFAB Fabricações e Serviços Industriais LTDA";
+const MACFAB_CNPJ = "13.014.242/0001-86";
 
 /**
  * Relatório de orçamento pronto pra impressão/PDF. Fica fora da tela por
@@ -24,46 +29,64 @@ function valorCampo(campo: { valor: unknown }): string {
 export default function RelatorioImpressao({
   resultado,
   nomeArquivo,
+  identificacaoCliente,
 }: {
   resultado: RespostaOrcamentoDePdf;
   nomeArquivo: string;
+  identificacaoCliente: IdentificacaoCliente;
 }) {
   const { extracao, itens_para_revisao, orcamento } = resultado;
-  const id = extracao.identificacao;
   const geradoEm = new Date().toLocaleString("pt-BR");
+  const pesoBrutoCalculado =
+    typeof resultado.entrada.peso_bruto_calculado_kg === "number"
+      ? resultado.entrada.peso_bruto_calculado_kg
+      : orcamento.comercial.peso_liquido_kg;
+  const pesoFoiAjustadoManualmente = Math.abs(pesoBrutoCalculado - orcamento.comercial.peso_liquido_kg) > 0.005;
 
   return (
     <div className="hidden print:block print:text-black">
-      <header className="mb-6 flex items-baseline justify-between border-b-2 border-black pb-3">
-        <div>
-          <h1 className="text-xl font-bold">FC Nexus — Relatório de Orçamento</h1>
-          <p className="text-xs text-zinc-600">Arquivo: {nomeArquivo}</p>
+      <header className="mb-6 flex items-start justify-between border-b-2 border-black pb-3">
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/macfab-logo.png" alt="Macfab" className="h-8 w-auto" />
+          <div>
+            <h1 className="text-lg font-bold">{MACFAB_NOME}</h1>
+            <p className="text-xs text-zinc-600">CNPJ {MACFAB_CNPJ}</p>
+          </div>
         </div>
-        <p className="text-xs text-zinc-600">Gerado em {geradoEm}</p>
+        <div className="text-right">
+          <p className="text-[9px] text-zinc-400">FC Nexus — Orçamento Industrial I.A.</p>
+          <p className="text-xs text-zinc-600">Arquivo: {nomeArquivo}</p>
+          <p className="text-xs text-zinc-600">Gerado em {geradoEm}</p>
+        </div>
       </header>
 
       <section className="mb-5">
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide">Identificação</h2>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide">Identificação do cliente</h2>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
           <div className="flex justify-between border-b border-zinc-300 py-1">
-            <dt className="text-zinc-600">Cliente</dt>
-            <dd className="font-medium">{valorCampo(id.cliente)}</dd>
+            <dt className="text-zinc-600">CNPJ</dt>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.cnpj)}</dd>
           </div>
           <div className="flex justify-between border-b border-zinc-300 py-1">
-            <dt className="text-zinc-600">Número do desenho</dt>
-            <dd className="font-medium">{valorCampo(id.numero_desenho)}</dd>
+            <dt className="text-zinc-600">Cliente</dt>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.nomeCliente)}</dd>
+          </div>
+          <div className="col-span-2 flex justify-between border-b border-zinc-300 py-1">
+            <dt className="text-zinc-600">Endereço</dt>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.endereco)}</dd>
           </div>
           <div className="flex justify-between border-b border-zinc-300 py-1">
             <dt className="text-zinc-600">Revisão</dt>
-            <dd className="font-medium">{valorCampo(id.revisao)}</dd>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.revisao)}</dd>
           </div>
           <div className="flex justify-between border-b border-zinc-300 py-1">
-            <dt className="text-zinc-600">Código do equipamento</dt>
-            <dd className="font-medium">{valorCampo(id.codigo_equipamento)}</dd>
+            <dt className="text-zinc-600">Condição de pagamento</dt>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.condicaoPagamento)}</dd>
           </div>
           <div className="col-span-2 flex justify-between border-b border-zinc-300 py-1">
-            <dt className="text-zinc-600">Pedido/PO</dt>
-            <dd className="font-medium">{valorCampo(id.pedido_po)}</dd>
+            <dt className="text-zinc-600">Pedido</dt>
+            <dd className="font-medium">{valorCampo(identificacaoCliente.pedido)}</dd>
           </div>
         </dl>
       </section>
@@ -140,9 +163,15 @@ export default function RelatorioImpressao({
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide">Resumo comercial</h2>
         <dl className="grid grid-cols-3 gap-x-4 gap-y-2 text-xs">
           <div>
-            <dt className="text-zinc-600">Peso líquido</dt>
+            <dt className="text-zinc-600">Peso líquido {pesoFoiAjustadoManualmente ? "(manual)" : ""}</dt>
             <dd className="font-medium">{formatarNumero(orcamento.comercial.peso_liquido_kg)} kg</dd>
           </div>
+          {pesoFoiAjustadoManualmente && (
+            <div>
+              <dt className="text-zinc-600">Peso bruto (calculado pelo sistema)</dt>
+              <dd className="font-medium">{formatarNumero(pesoBrutoCalculado)} kg</dd>
+            </div>
+          )}
           <div>
             <dt className="text-zinc-600">Custo industrial</dt>
             <dd className="font-medium">{formatarMoeda(orcamento.comercial.custo_industrial)}</dd>
