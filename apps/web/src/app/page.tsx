@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
@@ -29,6 +31,7 @@ function nomeSugerido(
 }
 
 export default function Home() {
+  const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
@@ -53,6 +56,13 @@ export default function Home() {
   const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
   const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
+
+  async function handleSair() {
+    const supabase = criarClienteSupabaseNavegador();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
 
   async function handleAnalisar(arquivo: File, estimativas: EstimativasOrcamento) {
     setCarregando(true);
@@ -259,16 +269,25 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            {resultado && (
+            <div className="flex shrink-0 items-center gap-2">
+              {resultado && (
+                <button
+                  type="button"
+                  onClick={handleSalvarOrcamento}
+                  disabled={salvando}
+                  className="rounded-lg bg-cyan-500 px-6 py-3 text-base font-bold text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {salvando ? "Salvando…" : "Salvar orçamento"}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleSalvarOrcamento}
-                disabled={salvando}
-                className="shrink-0 rounded-lg bg-cyan-500 px-6 py-3 text-base font-bold text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleSair}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
               >
-                {salvando ? "Salvando…" : "Salvar orçamento"}
+                Sair
               </button>
-            )}
+            </div>
           </div>
           {resultado && (
             <div className="flex flex-wrap items-center gap-2">
