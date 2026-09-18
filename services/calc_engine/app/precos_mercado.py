@@ -9,12 +9,14 @@ distintas no Supabase, alimentadas do ERP (SQL Server da Macfab) por
      por kg" nos cartões de cálculo (`buscar_preco_chapa`), do jeito que já
      acontece com densidade — auto-preenche mas continua editável.
 
-  2. `historico_compras_geral` (ver
-     supabase/migrations/0007_historico_compras_geral.sql) — QUALQUER item
-     de compra (tinta, parafuso, porca, consumível etc.), sem exigir
-     catálogo de engenharia — pedido explícito do usuário pra aba
-     "Referência de preços" mostrar o histórico completo, não só matéria-
-     prima estrutural.
+  2. `historico_compras_geral` (ver supabase/migrations/0007 e
+     0008_historico_geral_ultimo_preco.sql) — QUALQUER item de compra
+     (tinta, parafuso, porca, consumível etc.), sem exigir catálogo de
+     engenharia — pedido explícito do usuário pra aba "Referência de
+     preços" mostrar tudo, não só matéria-prima estrutural. Mesma lógica
+     do relatório "Sectra" que a empresa já usa: guarda só o ÚLTIMO preço
+     por (material, unidade), não o log de toda transação — é uma
+     referência de preço atual, não um histórico de série temporal.
 
 Antes esta tela dependia de uma planilha local (`dados-locais/Lista sectra
 de material.xlsx`, só existente na máquina com o OneDrive do projeto
@@ -24,9 +26,9 @@ agora é rodar `importar_precos_erp.py` periodicamente (agendado numa
 máquina dentro da rede da Macfab, único lugar que alcança o ERP) — ver
 README do calc_engine.
 
-Quando a mesma norma+espessura (fonte 1) tem mais de uma compra, usa a
-mais recente por `data_compra` — mesma estratégia "último comprado" já
-documentada em `repositorio_materiais.py`.
+Quando a mesma norma+espessura (fonte 1) ou material+unidade (fonte 2) tem
+mais de uma compra, usa a mais recente por `data_compra` — mesma
+estratégia "último comprado" já documentada em `repositorio_materiais.py`.
 
 Cache: TTL simples (não tem mais arquivo com mtime pra vigiar) — reconsulta
 o banco a cada `TETO_SEGUNDOS`, ou na primeira chamada."""
@@ -56,15 +58,16 @@ class PrecoChapa:
 
 @dataclass
 class LinhaCompra:
-    """Linha de `historico_compras_geral` — qualquer item de compra do ERP
-    (tinta, parafuso, porca, matéria-prima etc.), sem exigir catálogo de
-    engenharia. Usada pela aba "Referência de preços" do frontend, que
-    pediu pra ver o histórico completo, não só o subconjunto estrutural
-    (chapa/barra/perfil) usado no auto-preenchimento (`buscar_preco_chapa`).
+    """Último preço de `historico_compras_geral` — qualquer item de compra
+    do ERP (tinta, parafuso, porca, matéria-prima etc.), sem exigir
+    catálogo de engenharia. Usada pela aba "Referência de preços" do
+    frontend, que pediu pra ver o histórico completo, não só o subconjunto
+    estrutural (chapa/barra/perfil) usado no auto-preenchimento
+    (`buscar_preco_chapa`).
 
-    `material` sempre vem vazio: esta fonte não cruza com o catálogo
-    `materiais` (é cópia fiel do item de compra, não dado de engenharia
-    validado)."""
+    `material` aqui é o código do material no ERP (`NI.MATERIAL`), não a
+    norma validada da fonte 1 — esta fonte não cruza com o catálogo
+    `materiais`."""
 
     codigo: str
     material: str
@@ -111,24 +114,25 @@ def _consultar_precos_chapa(cur) -> list[PrecoChapa]:
 
 
 def _consultar_historico_geral(cur) -> list[LinhaCompra]:
-    """Histórico completo (qualquer item — tinta, parafuso, porca,
-    matéria-prima etc.), sem exigir catálogo de engenharia — ver
-    `historico_compras_geral` (migração 0007)."""
+    """Último preço conhecido por (material, unidade) — qualquer item
+    (tinta, parafuso, porca, matéria-prima etc.), sem exigir catálogo de
+    engenharia — ver `historico_compras_geral` (migrações 0007/0008)."""
     cur.execute(
         """
-        select codigo_item, descricao, preco_unitario, unidade, fornecedor, obra, data_compra
+        select material_codigo, codigo_item, descricao, preco_unitario, unidade, fornecedor, obra, data_compra
         from historico_compras_geral
         order by data_compra desc
         """
     )
     return [
         LinhaCompra(
-            codigo=codigo_item or "", material="", descricao=descricao,
+            codigo=codigo_item or "", material=material_codigo or "", descricao=descricao,
             preco_unitario=float(preco_unitario), unidade=unidade or "",
             fornecedor=(fornecedor or "").strip(), obra=(obra or "").strip(),
             data_compra=data_compra.isoformat() if data_compra else None,
         )
-        for codigo_item, descricao, preco_unitario, unidade, fornecedor, obra, data_compra in cur.fetchall()
+        for material_codigo, codigo_item, descricao, preco_unitario, unidade, fornecedor, obra, data_compra
+        in cur.fetchall()
     ]
 
 

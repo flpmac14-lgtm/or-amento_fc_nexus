@@ -157,12 +157,13 @@ def buscar_compras_erp(desde: str) -> list[LinhaErp]:
 
 @dataclass
 class LinhaErpGeral:
-    """Qualquer item de compra do ERP, sem filtro de descrição/unidade —
-    tinta, parafuso, porca, consumível, matéria-prima, o que for. Ver
-    `sincronizar_geral` (grava em `historico_compras_geral`)."""
+    """Último preço conhecido por (material, unidade) — qualquer item do
+    ERP, sem filtro de descrição/tipo (tinta, parafuso, porca, consumível,
+    matéria-prima, o que for). Ver `sincronizar_geral` (grava em
+    `historico_compras_geral`)."""
 
     nfe_codigo: int
-    nfe_seq: int
+    material_codigo: str | None
     codigo_item: str | None
     descricao: str
     unidade: str
@@ -173,25 +174,40 @@ class LinhaErpGeral:
 
 
 def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
+    """Mesma lógica do relatório "Sectra" que a Macfab já usa (recebido do
+    usuário) — ROW_NUMBER() particionado por (MATERIAL, UNIDADE), pegando só
+    o mais recente (DTLANCAMENTO desc, NFE desc como desempate). Isto é uma
+    referência de PREÇO ATUAL por item, não um log de toda transação."""
     conn = _conectar_erp()
     cur = conn.cursor()
     cur.execute(
         f"""
-        SELECT NI.NFE, NI.SEQ, NI.CODIGO, NI.DESCRICAO, NI.UNIDADE, NI.VLRUNITARIO,
-               NI.OBRA, N.DTLANCAMENTO, F.FANTASIA AS FORNECEDOR
-        FROM FN_NFEITENS AS NI
-        INNER JOIN FN_NFE AS N ON N.CODIGO = NI.NFE
-        LEFT JOIN FN_FORNECEDORES AS F ON F.CODIGO = N.FORNECEDOR
-        WHERE N.DTLANCAMENTO >= ?
-          AND NI.CFOP IN ({",".join("?" for _ in CFOP_COMPRA)})
-          AND NI.DESCRICAO IS NOT NULL
-          AND NI.VLRUNITARIO IS NOT NULL
+        WITH ULTIMO_VALOR AS (
+            SELECT
+                NI.NFE, NI.CODIGO, NI.MATERIAL, NI.DESCRICAO, NI.VLRUNITARIO,
+                NI.UNIDADE, NI.OBRA, N.DTLANCAMENTO, F.FANTASIA AS FORNECEDOR,
+                ROW_NUMBER() OVER (
+                    PARTITION BY NI.MATERIAL, NI.UNIDADE
+                    ORDER BY N.DTLANCAMENTO DESC, NI.NFE DESC
+                ) AS ORDEM
+            FROM FN_NFEITENS AS NI
+            INNER JOIN FN_NFE AS N ON N.CODIGO = NI.NFE
+            LEFT JOIN FN_FORNECEDORES AS F ON F.CODIGO = N.FORNECEDOR
+            WHERE N.DTLANCAMENTO >= ?
+              AND NI.CFOP IN ({",".join("?" for _ in CFOP_COMPRA)})
+              AND NI.DESCRICAO IS NOT NULL
+              AND NI.VLRUNITARIO IS NOT NULL
+        )
+        SELECT NFE, CODIGO, MATERIAL, DESCRICAO, VLRUNITARIO, UNIDADE, OBRA, DTLANCAMENTO, FORNECEDOR
+        FROM ULTIMO_VALOR
+        WHERE ORDEM = 1
         """,
         (desde, *CFOP_COMPRA),
     )
     linhas = [
         LinhaErpGeral(
-            nfe_codigo=int(row.NFE), nfe_seq=int(row.SEQ),
+            nfe_codigo=int(row.NFE),
+            material_codigo=(str(row.MATERIAL).strip() if row.MATERIAL is not None else None),
             codigo_item=(str(row.CODIGO).strip() if row.CODIGO is not None else None),
             descricao=str(row.DESCRICAO).strip(), unidade=(row.UNIDADE or "").strip(),
             preco_unitario=float(row.VLRUNITARIO),
@@ -207,7 +223,7 @@ def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
 
 def sincronizar_geral(desde: str, dry_run: bool) -> None:
     linhas = buscar_compras_geral_erp(desde)
-    print(f"\n{len(linhas)} linhas de compra (qualquer item) lidas do ERP desde {desde}.")
+    print(f"\n{len(linhas)} referências (último preço por material+unidade) lidas do ERP desde {desde}.")
 
     supabase_url = os.environ["SUPABASE_DB_URL"]
     with psycopg.connect(supabase_url, connect_timeout=15, prepare_threshold=None) as conn:
@@ -217,19 +233,19 @@ def sincronizar_geral(desde: str, dry_run: bool) -> None:
                     cur.execute(
                         """
                         insert into historico_compras_geral
-                            (nfe_codigo, nfe_seq, codigo_item, descricao, preco_unitario,
+                            (nfe_codigo, material_codigo, codigo_item, descricao, preco_unitario,
                              unidade, fornecedor, obra, data_compra)
                         values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        on conflict (nfe_codigo, nfe_seq) do update set
+                        on conflict (material_codigo, unidade) do update set
+                            nfe_codigo = excluded.nfe_codigo,
                             codigo_item = excluded.codigo_item,
                             descricao = excluded.descricao,
                             preco_unitario = excluded.preco_unitario,
-                            unidade = excluded.unidade,
                             fornecedor = excluded.fornecedor,
                             obra = excluded.obra,
                             data_compra = excluded.data_compra
                         """,
-                        (linha.nfe_codigo, linha.nfe_seq, linha.codigo_item, linha.descricao,
+                        (linha.nfe_codigo, linha.material_codigo, linha.codigo_item, linha.descricao,
                          linha.preco_unitario, linha.unidade, linha.fornecedor, linha.obra,
                          linha.data_compra),
                     )
@@ -238,7 +254,7 @@ def sincronizar_geral(desde: str, dry_run: bool) -> None:
         else:
             conn.commit()
 
-    print(f"{'[dry-run] ' if dry_run else ''}Histórico geral sincronizado: {len(linhas)} linhas.")
+    print(f"{'[dry-run] ' if dry_run else ''}Histórico geral sincronizado: {len(linhas)} referências.")
 
 
 def upsert_fornecedor(cur, nome: str | None) -> str | None:
