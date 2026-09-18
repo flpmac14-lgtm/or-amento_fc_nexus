@@ -63,6 +63,30 @@ export async function analisarPdf(
   return resposta.json();
 }
 
+/** Estudo técnico completo por IA (geometria, BOM, peso estimado,
+ * fabricação, solda, usinagem, pintura, análise crítica) — só informativo,
+ * não alimenta o orçamento real. Demora (1-3 min é normal, é uma análise
+ * grande) — sem timeout próprio no fetch, deixa a chamada terminar. */
+export async function gerarRelatorioTecnico(arquivo: File): Promise<string> {
+  const formData = new FormData();
+  formData.set("file", arquivo);
+
+  const resposta = await fetch(`${CALC_ENGINE_URL}/relatorio-tecnico`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao gerar o relatório técnico (${resposta.status}). ${corpo || "Tente de novo."}`,
+    );
+  }
+
+  const dados = await resposta.json();
+  return dados.relatorio_markdown as string;
+}
+
 export async function recalcularOrcamento(entrada: Record<string, unknown>): Promise<ResultadoOrcamentoDTO> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamento`, {
     method: "POST",

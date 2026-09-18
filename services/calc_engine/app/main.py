@@ -452,6 +452,38 @@ async def orcamento_de_pdf(
     return _montar_resposta(resultado_extracao, estimativas)
 
 
+@app.post("/relatorio-tecnico")
+async def relatorio_tecnico(file: UploadFile) -> dict:
+    """Repassa pro extractor (POST /relatorio-tecnico) — estudo técnico
+    completo por IA (geometria, BOM, peso estimado, fabricação, solda,
+    usinagem, pintura, análise crítica), só informativo. O peso/custo que
+    aparece nesse relatório é estimativa da IA, NUNCA o valor oficial do
+    orçamento — esse continua vindo só do motor de cálculo determinístico
+    a partir dos itens confirmados nos cartões de cálculo manual.
+
+    Timeout bem mais alto que os outros proxies (10 min): é uma geração
+    longa (streaming no extractor, ver app/ai_fallback/relatorio_tecnico.py)."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
+
+    conteudo = await file.read()
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            resp = await client.post(
+                f"{EXTRACTOR_URL}/relatorio-tecnico",
+                files=[("file", (file.filename, conteudo, "application/pdf"))],
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Não consegui falar com o serviço de extração em {EXTRACTOR_URL}. Ele está rodando?",
+        ) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+
+
 @app.post("/orcamento-de-texto")
 async def orcamento_de_texto(
     texto: Annotated[str, Form()],

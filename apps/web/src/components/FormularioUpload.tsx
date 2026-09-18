@@ -4,6 +4,7 @@ import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
+import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
 import type {
   EstadoCalculoManual,
   EstimativasOrcamento,
@@ -167,6 +168,8 @@ export default function FormularioUpload({
           )}
         </div>
       )}
+
+      {modo === "arquivo" && <RelatorioTecnicoIA arquivo={arquivo} />}
 
       {modo === "arquivo" && (
       <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">

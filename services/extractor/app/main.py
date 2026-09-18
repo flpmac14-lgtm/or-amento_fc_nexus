@@ -6,6 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 
+from app.ai_fallback.relatorio_tecnico import fallback_habilitado as relatorio_habilitado
+from app.ai_fallback.relatorio_tecnico import gerar_relatorio
+from app.extraction.page_render import renderizar_paginas_png
 from app.pipeline import processar_pdf, processar_pdfs, processar_texto, status_dependencias
 
 load_dotenv()  # antes de ler EXTRACTOR_AI_FALLBACK_ENABLED/ANTHROPIC_API_KEY do ambiente
@@ -22,7 +25,7 @@ app = FastAPI(
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", **status_dependencias()}
+    return {"status": "ok", **status_dependencias(), "relatorio_tecnico_habilitado": relatorio_habilitado()}
 
 
 @app.post("/extract")
@@ -64,3 +67,28 @@ def extract_de_texto(texto: str = Body(..., embed=True)) -> dict:
     if not texto or not texto.strip():
         raise HTTPException(status_code=400, detail="Texto vazio")
     return processar_texto(texto)
+
+
+@app.post("/relatorio-tecnico")
+async def relatorio_tecnico(file: UploadFile) -> dict:
+    """Estudo técnico completo (geometria, BOM, peso estimado, fabricação,
+    solda, usinagem, pintura, análise crítica) gerado por IA — ver
+    app/ai_fallback/relatorio_tecnico.py. É só um relatório de APOIO em
+    Markdown: o peso/custo que aparece aqui é estimativa da IA, nunca o
+    valor oficial do orçamento (esse continua vindo do motor de cálculo
+    determinístico, a partir dos itens que o orçamentista confirma)."""
+    if not relatorio_habilitado():
+        raise HTTPException(status_code=503, detail="Relatório técnico por IA não está configurado neste ambiente.")
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
+
+    conteudo = await file.read()
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf_path = Path(tmp) / file.filename
+        pdf_path.write_bytes(conteudo)
+        paginas_png = renderizar_paginas_png(str(pdf_path))
+
+    relatorio = gerar_relatorio(paginas_png)
+    if relatorio is None:
+        raise HTTPException(status_code=502, detail="Não foi possível gerar o relatório técnico agora. Tente de novo.")
+    return {"relatorio_markdown": relatorio}
