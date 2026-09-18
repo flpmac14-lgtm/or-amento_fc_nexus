@@ -32,7 +32,7 @@ def _db_url() -> str:
 def _conectar():
     import psycopg  # import tardio: só exige o driver instalado quando o DB está configurado
 
-    return psycopg.connect(_db_url(), connect_timeout=10)
+    return psycopg.connect(_db_url(), connect_timeout=10, prepare_threshold=None)
 
 
 def salvar(

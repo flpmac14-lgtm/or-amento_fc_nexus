@@ -62,6 +62,13 @@ PRECO_KG_MAX_RAZOAVEL = 50.0
 NORMAS_RECONHECIDAS = [
     (re.compile(r"\bA ?572\b"), "ASTM A572"),
     (re.compile(r"\bA ?36\b"), "ASTM A36"),
+    # "A240-304"/"A240 304" = ASTM A240 tipo 304 — especificação de chapa
+    # inox, mesmo material de "AISI 304" (mesma norma comercial, nome
+    # diferente porque A240 é a especificação de PRODUTO/chapa, não da
+    # liga em si). Checar ANTES do padrão AISI304 abaixo não importa aqui
+    # (não colidem), mas a ordem da lista é sempre norma mais específica
+    # primeiro por clareza.
+    (re.compile(r"\bA ?240.*304L?\b"), "AISI 304"),
     (re.compile(r"\bAISI ?304L?\b"), "AISI 304"),
     (re.compile(r"\bSAE ?1020\b"), "SAE 1020"),
 ]
@@ -101,7 +108,7 @@ def extrai_espessura_chapa(descricao: str) -> float | None:
     return float(m.group(1).replace(",", ".")) if m else None
 
 
-def buscar_compras_erp(desde: str) -> list[LinhaErp]:
+def _conectar_erp():
     conn_str = (
         "DRIVER={ODBC Driver 17 for SQL Server};"
         f"SERVER={os.environ['ERP_SQL_SERVER']};"
@@ -113,6 +120,11 @@ def buscar_compras_erp(desde: str) -> list[LinhaErp]:
     conn.setdecoding(pyodbc.SQL_CHAR, encoding="latin1")
     conn.setdecoding(pyodbc.SQL_WCHAR, encoding="latin1")
     conn.setencoding(encoding="latin1")
+    return conn
+
+
+def buscar_compras_erp(desde: str) -> list[LinhaErp]:
+    conn = _conectar_erp()
     cur = conn.cursor()
     cur.execute(
         f"""
@@ -141,6 +153,92 @@ def buscar_compras_erp(desde: str) -> list[LinhaErp]:
     ]
     conn.close()
     return linhas
+
+
+@dataclass
+class LinhaErpGeral:
+    """Qualquer item de compra do ERP, sem filtro de descrição/unidade —
+    tinta, parafuso, porca, consumível, matéria-prima, o que for. Ver
+    `sincronizar_geral` (grava em `historico_compras_geral`)."""
+
+    nfe_codigo: int
+    nfe_seq: int
+    codigo_item: str | None
+    descricao: str
+    unidade: str
+    preco_unitario: float
+    obra: str | None
+    data_compra: str
+    fornecedor: str | None
+
+
+def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
+    conn = _conectar_erp()
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT NI.NFE, NI.SEQ, NI.CODIGO, NI.DESCRICAO, NI.UNIDADE, NI.VLRUNITARIO,
+               NI.OBRA, N.DTLANCAMENTO, F.FANTASIA AS FORNECEDOR
+        FROM FN_NFEITENS AS NI
+        INNER JOIN FN_NFE AS N ON N.CODIGO = NI.NFE
+        LEFT JOIN FN_FORNECEDORES AS F ON F.CODIGO = N.FORNECEDOR
+        WHERE N.DTLANCAMENTO >= ?
+          AND NI.CFOP IN ({",".join("?" for _ in CFOP_COMPRA)})
+          AND NI.DESCRICAO IS NOT NULL
+          AND NI.VLRUNITARIO IS NOT NULL
+        """,
+        (desde, *CFOP_COMPRA),
+    )
+    linhas = [
+        LinhaErpGeral(
+            nfe_codigo=int(row.NFE), nfe_seq=int(row.SEQ),
+            codigo_item=(str(row.CODIGO).strip() if row.CODIGO is not None else None),
+            descricao=str(row.DESCRICAO).strip(), unidade=(row.UNIDADE or "").strip(),
+            preco_unitario=float(row.VLRUNITARIO),
+            obra=(str(row.OBRA).strip() if row.OBRA else None),
+            data_compra=row.DTLANCAMENTO.strftime("%Y-%m-%d"),
+            fornecedor=(row.FORNECEDOR or "").strip() or None,
+        )
+        for row in cur.fetchall()
+    ]
+    conn.close()
+    return linhas
+
+
+def sincronizar_geral(desde: str, dry_run: bool) -> None:
+    linhas = buscar_compras_geral_erp(desde)
+    print(f"\n{len(linhas)} linhas de compra (qualquer item) lidas do ERP desde {desde}.")
+
+    supabase_url = os.environ["SUPABASE_DB_URL"]
+    with psycopg.connect(supabase_url, connect_timeout=15, prepare_threshold=None) as conn:
+        with conn.cursor() as cur:
+            if not dry_run:
+                for linha in linhas:
+                    cur.execute(
+                        """
+                        insert into historico_compras_geral
+                            (nfe_codigo, nfe_seq, codigo_item, descricao, preco_unitario,
+                             unidade, fornecedor, obra, data_compra)
+                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        on conflict (nfe_codigo, nfe_seq) do update set
+                            codigo_item = excluded.codigo_item,
+                            descricao = excluded.descricao,
+                            preco_unitario = excluded.preco_unitario,
+                            unidade = excluded.unidade,
+                            fornecedor = excluded.fornecedor,
+                            obra = excluded.obra,
+                            data_compra = excluded.data_compra
+                        """,
+                        (linha.nfe_codigo, linha.nfe_seq, linha.codigo_item, linha.descricao,
+                         linha.preco_unitario, linha.unidade, linha.fornecedor, linha.obra,
+                         linha.data_compra),
+                    )
+        if dry_run:
+            conn.rollback()
+        else:
+            conn.commit()
+
+    print(f"{'[dry-run] ' if dry_run else ''}Histórico geral sincronizado: {len(linhas)} linhas.")
 
 
 def upsert_fornecedor(cur, nome: str | None) -> str | None:
@@ -187,7 +285,7 @@ def main() -> None:
     ja_existiam = 0
     sem_material_cadastrado: dict[tuple[str, str], int] = {}
 
-    with psycopg.connect(supabase_url, connect_timeout=15) as conn:
+    with psycopg.connect(supabase_url, connect_timeout=15, prepare_threshold=None) as conn:
         with conn.cursor() as cur:
             cache_material: dict[tuple[str, str], str | None] = {}
             for linha, tipo, norma in candidatas:
@@ -247,6 +345,10 @@ def main() -> None:
         print("\nDescrições sem tipo/norma reconhecidos (ignoradas):")
         for (tipo, norma), n in sorted(ignorados.items(), key=lambda x: -x[1])[:10]:
             print(f"  tipo={tipo} norma={norma}: {n}")
+
+    # Histórico completo (tinta, parafuso, porca, qualquer item) — aba
+    # "Referência de preços" do frontend, sem exigir cadastro de engenharia.
+    sincronizar_geral(args.desde, args.dry_run)
 
 
 if __name__ == "__main__":

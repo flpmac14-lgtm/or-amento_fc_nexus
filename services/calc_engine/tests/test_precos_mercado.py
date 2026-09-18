@@ -1,5 +1,4 @@
 import sys
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -10,14 +9,11 @@ from app import precos_mercado
 
 
 class _CursorFalso:
-    def __init__(self, linhas: list[tuple]) -> None:
-        self._linhas = linhas
-
     def execute(self, *_args, **_kwargs) -> None:
         pass
 
-    def fetchall(self) -> list[tuple]:
-        return self._linhas
+    def fetchall(self):
+        return []
 
     def __enter__(self) -> "_CursorFalso":
         return self
@@ -27,11 +23,8 @@ class _CursorFalso:
 
 
 class _ConexaoFalsa:
-    def __init__(self, linhas: list[tuple]) -> None:
-        self._linhas = linhas
-
     def cursor(self) -> _CursorFalso:
-        return _CursorFalso(self._linhas)
+        return _CursorFalso()
 
     def __enter__(self) -> "_ConexaoFalsa":
         return self
@@ -40,31 +33,39 @@ class _ConexaoFalsa:
         pass
 
 
-def _linha(norma, tipo, espessura_mm, preco_kg, data_compra, fornecedor="GERDAU", descricao_original=None):
-    """Uma linha no mesmo formato/ordem do SELECT de _consultar_historico."""
-    return (norma, tipo, espessura_mm, preco_kg, data_compra, fornecedor, descricao_original)
-
-
 @pytest.fixture(autouse=True)
 def _cache_isolado(monkeypatch):
     """Cada teste usa cache zerado e SUPABASE_DB_URL configurada — evita um
-    teste vazar estado (cache lido) pro próximo."""
+    teste vazar estado (cache lido) pro próximo. `psycopg.connect` sempre
+    devolve uma conexão falsa: quem decide o que as consultas devolvem é
+    `_consultar_precos_chapa`/`_consultar_historico_geral`, mockadas por
+    teste."""
+    import psycopg
+
     monkeypatch.setattr(precos_mercado, "_cache", precos_mercado._Cache())
     monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://fake")
+    monkeypatch.setattr(psycopg, "connect", lambda *_a, **_kw: _ConexaoFalsa())
     yield
 
 
-def _mockar_linhas(monkeypatch, linhas: list[tuple]) -> None:
-    import psycopg
-
-    monkeypatch.setattr(psycopg, "connect", lambda *_a, **_kw: _ConexaoFalsa(linhas))
+def _mockar_precos_chapa(monkeypatch, precos: list[precos_mercado.PrecoChapa]) -> None:
+    monkeypatch.setattr(precos_mercado, "_consultar_precos_chapa", lambda _cur: precos)
 
 
-def test_le_chapa_kg_e_ignora_outros_tipos(monkeypatch):
-    _mockar_linhas(monkeypatch, [
-        _linha("ASTM A36", "chapa", 6.35, 5.98, __import__("datetime").date(2026, 9, 9), "GERDAU"),
-        _linha("ASTM A36", "perfil", None, 4900, __import__("datetime").date(2026, 6, 30), "REGENFER"),
-    ])
+def _mockar_historico_geral(monkeypatch, linhas: list[precos_mercado.LinhaCompra]) -> None:
+    monkeypatch.setattr(precos_mercado, "_consultar_historico_geral", lambda _cur: linhas)
+
+
+def _preco(norma, espessura_mm, preco_kg, data_compra, fornecedor="GERDAU"):
+    return precos_mercado.PrecoChapa(
+        norma=norma, norma_original=norma, espessura_mm=espessura_mm,
+        preco_kg=preco_kg, fornecedor=fornecedor, data_compra=data_compra,
+    )
+
+
+def test_le_precos_de_chapa(monkeypatch):
+    _mockar_precos_chapa(monkeypatch, [_preco("ASTM A36", 6.35, 5.98, "2026-09-09")])
+    _mockar_historico_geral(monkeypatch, [])
 
     precos = precos_mercado.listar_precos_chapa()
 
@@ -76,26 +77,9 @@ def test_le_chapa_kg_e_ignora_outros_tipos(monkeypatch):
     assert precos[0].data_compra == "2026-09-09"
 
 
-def test_mesma_norma_espessura_usa_a_compra_mais_recente(monkeypatch):
-    import datetime
-
-    _mockar_linhas(monkeypatch, [
-        _linha("ASTM A36", "chapa", 12.7, 5.0, datetime.date(2026, 1, 10), "FORNECEDOR ANTIGO"),
-        _linha("ASTM A36", "chapa", 12.7, 6.5, datetime.date(2026, 8, 20), "FORNECEDOR NOVO"),
-    ])
-
-    precos = precos_mercado.listar_precos_chapa()
-
-    assert len(precos) == 1
-    assert precos[0].preco_kg == 6.5
-    assert precos[0].fornecedor == "FORNECEDOR NOVO"
-    assert precos[0].data_compra == "2026-08-20"
-
-
 def test_busca_por_norma_e_espessura_exata(monkeypatch):
-    import datetime
-
-    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
+    _mockar_precos_chapa(monkeypatch, [_preco("ASTM A36", 6.35, 5.98, "2026-09-09")])
+    _mockar_historico_geral(monkeypatch, [])
 
     resultado = precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)
 
@@ -106,9 +90,8 @@ def test_busca_por_norma_e_espessura_exata(monkeypatch):
 
 
 def test_busca_com_espessura_proxima_marca_como_nao_exato(monkeypatch):
-    import datetime
-
-    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
+    _mockar_precos_chapa(monkeypatch, [_preco("ASTM A36", 6.35, 5.98, "2026-09-09")])
+    _mockar_historico_geral(monkeypatch, [])
 
     resultado = precos_mercado.buscar_preco_chapa("ASTM A36", 6.5)
 
@@ -119,9 +102,8 @@ def test_busca_com_espessura_proxima_marca_como_nao_exato(monkeypatch):
 
 
 def test_busca_fora_da_tolerancia_nao_encontra(monkeypatch):
-    import datetime
-
-    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
+    _mockar_precos_chapa(monkeypatch, [_preco("ASTM A36", 6.35, 5.98, "2026-09-09")])
+    _mockar_historico_geral(monkeypatch, [])
 
     assert precos_mercado.buscar_preco_chapa("ASTM A36", 10.0) is None
     assert precos_mercado.buscar_preco_chapa("ASTM A572 Gr.50", 6.35) is None
@@ -139,12 +121,11 @@ def test_sem_supabase_db_url_nao_quebra(monkeypatch):
 
 
 def test_erro_de_conexao_nao_quebra_e_mantem_cache_anterior(monkeypatch):
-    import datetime
+    _mockar_precos_chapa(monkeypatch, [_preco("ASTM A36", 6.35, 5.98, "2026-09-09")])
+    _mockar_historico_geral(monkeypatch, [])
+    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
 
     import psycopg
-
-    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
-    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
 
     def _falha(*_a, **_kw):
         raise RuntimeError("banco indisponível")
@@ -157,16 +138,24 @@ def test_erro_de_conexao_nao_quebra_e_mantem_cache_anterior(monkeypatch):
     assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
 
 
-def test_listar_todas_compras_inclui_qualquer_tipo(monkeypatch):
-    import datetime
-
-    _mockar_linhas(monkeypatch, [
-        _linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9), descricao_original="CHAPA #6,35 A36"),
-        _linha("ASTM A572 Gr.50", "perfil", None, 4900, datetime.date(2026, 6, 30), fornecedor="REGENFER"),
+def test_listar_todas_compras_inclui_qualquer_item(monkeypatch):
+    _mockar_precos_chapa(monkeypatch, [])
+    _mockar_historico_geral(monkeypatch, [
+        precos_mercado.LinhaCompra(
+            codigo="10020029", material="", descricao="TINTA EPOXI",
+            preco_unitario=120.5, unidade="LT", fornecedor="INTERGARD",
+            obra="MAC.464.25", data_compra="2026-09-09",
+        ),
+        precos_mercado.LinhaCompra(
+            codigo="10020030", material="", descricao="PARAFUSO SEXTAVADO M12",
+            preco_unitario=0.85, unidade="PC", fornecedor="CISER",
+            obra="MAC.464.25", data_compra="2026-06-30",
+        ),
     ])
 
     todas = precos_mercado.listar_todas_compras()
 
     assert len(todas) == 2
     assert todas[0].data_compra == "2026-09-09"  # ordenado por data desc
-    assert todas[1].fornecedor == "REGENFER"
+    assert todas[0].descricao == "TINTA EPOXI"
+    assert todas[1].descricao == "PARAFUSO SEXTAVADO M12"
