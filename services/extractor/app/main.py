@@ -3,9 +3,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 
 from app.pipeline import processar_pdf, processar_pdfs, processar_texto, status_dependencias
+
+load_dotenv()  # antes de ler EXTRACTOR_AI_FALLBACK_ENABLED/ANTHROPIC_API_KEY do ambiente
 
 app = FastAPI(
     title="FC Nexus - Extrator de Desenhos",

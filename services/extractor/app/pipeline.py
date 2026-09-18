@@ -17,12 +17,13 @@ o desenho principal tem isso), BOM é a concatenação da BOM de todos.
 
 from __future__ import annotations
 
-from app.ai_fallback.client import fallback_habilitado
+from app.ai_fallback.client import analisar_paginas, fallback_habilitado
 from app.extraction import bom_parser
 from app.extraction.bom_sap_export import extrair_bom_sap_export
-from app.extraction.bom_table import extrair_bom_de_tabelas
+from app.extraction.bom_table import _campo, extrair_bom_de_tabelas
 from app.extraction.bom_texto_manual import extrair_bom_de_texto_manual
 from app.extraction.ocr import ocr_pagina, tesseract_disponivel
+from app.extraction.page_render import renderizar_paginas_png
 from app.extraction.text_extract import extrair_texto_nativo
 
 LIMIAR_CONFIANCA_CAMPO_ESSENCIAL = 0.6
@@ -101,10 +102,11 @@ def processar_pdfs(pdf_paths: list[str]) -> dict:
     algum_campo_incerto = any(c < LIMIAR_CONFIANCA_CAMPO_ESSENCIAL for c in campos_essenciais.values())
 
     usou_ia_externa = False
-    if algum_campo_incerto and fallback_habilitado():
-        # Aqui entraria a chamada real ao ai_fallback.client.complementar_com_ia
-        # por página, mesclando de volta só os campos que ainda faltam.
-        usou_ia_externa = False  # ainda não implementado (ver ai_fallback/client.py)
+    if (algum_campo_incerto or not bom) and fallback_habilitado():
+        identificacao, bom, usou_ia_externa = _complementar_com_ia(pdf_paths[0], identificacao, bom)
+        campos_essenciais = {
+            nome: getattr(identificacao, nome).confianca for nome in CAMPOS_IDENTIFICACAO
+        }
 
     confiancas = [c for c in campos_essenciais.values() if c > 0] or [0.0]
     confianca_geral = sum(confiancas) / len(confiancas)
@@ -147,6 +149,72 @@ def processar_texto(texto: str) -> dict:
         texto_bruto=texto,
     )
     return resultado.model_dump()
+
+
+def _complementar_com_ia(pdf_principal: str, identificacao, bom: list[dict]) -> tuple:
+    """Renderiza as páginas do desenho principal como imagem e manda pra
+    IA externa — só substitui um campo de identificação se a IA veio mais
+    confiante que o pipeline local, e só preenche a BOM com a "pré-lista"
+    da IA quando a extração local não achou nenhum item (nunca sobrepõe
+    uma BOM local já extraída). Devolve (identificacao, bom, usou_ia)."""
+    from app.schemas import Identificacao
+
+    try:
+        paginas_png = renderizar_paginas_png(pdf_principal)
+    except Exception:
+        return identificacao, bom, False
+
+    resposta = analisar_paginas(paginas_png)
+    if resposta is None:
+        return identificacao, bom, False
+
+    usou = False
+
+    campos_ia = {
+        "numero_desenho": resposta.identificacao.numero_desenho,
+        "revisao": resposta.identificacao.revisao,
+        "pedido_po": resposta.identificacao.pedido_po,
+        "codigo_equipamento": resposta.identificacao.codigo_equipamento,
+    }
+    identificacao_dict = identificacao.model_dump()
+    for nome, campo_ia in campos_ia.items():
+        if campo_ia.valor and campo_ia.confianca > identificacao_dict[nome]["confianca"]:
+            identificacao_dict[nome] = {
+                "valor": campo_ia.valor, "confianca": campo_ia.confianca, "origem": "ia_externa",
+            }
+            usou = True
+    identificacao = Identificacao(**identificacao_dict)
+
+    if not bom and resposta.itens_bom:
+        # Pré-lista só: posição/descrição/norma/quantidade. Tipo de
+        # geometria e medidas ficam de fora de propósito — o orçamentista
+        # escolhe isso no cartão de cálculo manual (pedido explícito do
+        # usuário: a IA nunca calcula peso, só estrutura o que leu).
+        bom = [
+            {
+                "item_numero": _campo(item.posicao, item.confianca, origem="ia_externa"),
+                "descricao": _campo(item.descricao, item.confianca, origem="ia_externa"),
+                "norma": _campo(item.norma, item.confianca if item.norma else 0.0, origem="ia_externa"),
+                "material": _campo(item.norma, item.confianca if item.norma else 0.0, origem="ia_externa"),
+                "quantidade": _campo(
+                    item.quantidade if item.quantidade is not None else 1.0,
+                    item.confianca if item.quantidade is not None else 0.0,
+                    origem="ia_externa",
+                ),
+                "tipo_geometria": _campo(None, 0.0, origem="ia_externa"),
+                "perfil": _campo(None, 0.0, origem="ia_externa"),
+                "espessura_mm": _campo(None, 0.0, origem="ia_externa"),
+                "comprimento_mm": _campo(None, 0.0, origem="ia_externa"),
+                "largura_mm": _campo(None, 0.0, origem="ia_externa"),
+                "diametro_mm": _campo(None, 0.0, origem="ia_externa"),
+                "usinado": _campo(False, 0.0, origem="ia_externa"),
+                "peso_kg": _campo(None, 0.0, origem="ia_externa"),
+            }
+            for item in resposta.itens_bom
+        ]
+        usou = True
+
+    return identificacao, bom, usou
 
 
 def _mesclar_identificacao(textos_por_arquivo: list[str]):
