@@ -66,6 +66,9 @@ NORMAS_RECONHECIDAS = [
     (re.compile(r"\bSAE ?1020\b"), "SAE 1020"),
 ]
 
+# "CHAPA #<espessura> <norma>" — mesmo padrão de app/precos_mercado.py.
+_PADRAO_ESPESSURA_CHAPA = re.compile(r"^CHAPA\s*#\s*([0-9]+[,.][0-9]+)", re.IGNORECASE)
+
 
 @dataclass
 class LinhaErp:
@@ -91,6 +94,11 @@ def classifica(descricao: str) -> tuple[str | None, str | None]:
         if padrao.search(d):
             return tipo, norma
     return tipo, None
+
+
+def extrai_espessura_chapa(descricao: str) -> float | None:
+    m = _PADRAO_ESPESSURA_CHAPA.match(descricao.strip())
+    return float(m.group(1).replace(",", ".")) if m else None
 
 
 def buscar_compras_erp(desde: str) -> list[LinhaErp]:
@@ -193,14 +201,17 @@ def main() -> None:
                     continue
 
                 fornecedor_id = upsert_fornecedor(cur, linha.fornecedor)
+                espessura_mm = extrai_espessura_chapa(linha.descricao) if tipo == "chapa" else None
 
                 cur.execute(
                     """
                     select 1 from historico_compras
                     where material_id = %s and preco_kg = %s and data_compra = %s
                       and (fornecedor_id = %s or (fornecedor_id is null and %s is null))
+                      and (espessura_mm = %s::numeric or (espessura_mm is null and %s::numeric is null))
                     """,
-                    (material_id, linha.preco_kg, linha.data_compra, fornecedor_id, fornecedor_id),
+                    (material_id, linha.preco_kg, linha.data_compra, fornecedor_id, fornecedor_id,
+                     espessura_mm, espessura_mm),
                 )
                 if cur.fetchone():
                     ja_existiam += 1
@@ -209,10 +220,12 @@ def main() -> None:
                 if not args.dry_run:
                     cur.execute(
                         """
-                        insert into historico_compras (material_id, fornecedor_id, preco_kg, data_compra)
-                        values (%s, %s, %s, %s)
+                        insert into historico_compras
+                            (material_id, fornecedor_id, preco_kg, data_compra, espessura_mm, descricao_original)
+                        values (%s, %s, %s, %s, %s, %s)
                         """,
-                        (material_id, fornecedor_id, linha.preco_kg, linha.data_compra),
+                        (material_id, fornecedor_id, linha.preco_kg, linha.data_compra,
+                         espessura_mm, linha.descricao),
                     )
                 inseridos += 1
 

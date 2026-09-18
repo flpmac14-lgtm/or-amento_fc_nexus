@@ -49,22 +49,22 @@ export default function ReferenciaPrecosMP() {
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
         <p className="text-slate-300">
-          Planilha de compras completa, sincronizada do histórico real de aquisições — os preços
-          de chapa por norma/espessura pré-preenchem &quot;Preço por kg&quot; nos cartões de
-          cálculo, do jeito que a densidade já é pré-preenchida pelo material. Sempre editável na
-          hora do cálculo; isto aqui é só o histórico de referência, com todas as linhas da
-          planilha (qualquer material, qualquer unidade).
+          Histórico de compras real, importado do ERP pro Supabase — os preços de chapa por
+          norma/espessura pré-preenchem &quot;Preço por kg&quot; nos cartões de cálculo, do jeito
+          que a densidade já é pré-preenchida pelo material. Sempre editável na hora do cálculo;
+          isto aqui é só o histórico de referência, com todas as linhas já importadas (qualquer
+          material).
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
           <span>
-            Arquivo:{" "}
-            {dados?.arquivo_encontrado ? (
-              <span className="text-slate-400">{dados.caminho}</span>
+            Fonte:{" "}
+            {dados?.fonte_disponivel ? (
+              <span className="text-slate-400">{dados.fonte}</span>
             ) : (
-              <span className="text-red-400">não encontrado ({dados?.caminho ?? "…"})</span>
+              <span className="text-red-400">indisponível ({dados?.fonte ?? "…"})</span>
             )}
           </span>
-          <span>{dados?.total_referencias ?? 0} linhas da planilha</span>
+          <span>{dados?.total_referencias ?? 0} compras no histórico</span>
           <span>Sincronizado em: {formatarDataHoraBr(dados?.sincronizado_em ?? null)}</span>
           <button
             type="button"

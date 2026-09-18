@@ -1,5 +1,5 @@
-import datetime
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -8,38 +8,63 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import precos_mercado
 
-COLUNAS = ["CODIGO", "MATERIAL", "DESCRICAO", "VLRUNITARIO", "UNIDADE", "FORNECEDOR", "OBRA", "DTLANCAMENTO"]
+
+class _CursorFalso:
+    def __init__(self, linhas: list[tuple]) -> None:
+        self._linhas = linhas
+
+    def execute(self, *_args, **_kwargs) -> None:
+        pass
+
+    def fetchall(self) -> list[tuple]:
+        return self._linhas
+
+    def __enter__(self) -> "_CursorFalso":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        pass
 
 
-def _gravar_planilha(caminho: Path, linhas: list[tuple]) -> None:
-    import openpyxl
+class _ConexaoFalsa:
+    def __init__(self, linhas: list[tuple]) -> None:
+        self._linhas = linhas
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Consulta1"
-    ws.append(COLUNAS)
-    for linha in linhas:
-        ws.append(linha)
-    wb.save(caminho)
+    def cursor(self) -> _CursorFalso:
+        return _CursorFalso(self._linhas)
+
+    def __enter__(self) -> "_ConexaoFalsa":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        pass
+
+
+def _linha(norma, tipo, espessura_mm, preco_kg, data_compra, fornecedor="GERDAU", descricao_original=None):
+    """Uma linha no mesmo formato/ordem do SELECT de _consultar_historico."""
+    return (norma, tipo, espessura_mm, preco_kg, data_compra, fornecedor, descricao_original)
 
 
 @pytest.fixture(autouse=True)
-def _cache_isolado(monkeypatch, tmp_path):
-    """Cada teste usa seu próprio arquivo + cache zerado — evita um teste
-    vazar estado (mtime lido, preços) pro próximo."""
+def _cache_isolado(monkeypatch):
+    """Cada teste usa cache zerado e SUPABASE_DB_URL configurada — evita um
+    teste vazar estado (cache lido) pro próximo."""
     monkeypatch.setattr(precos_mercado, "_cache", precos_mercado._Cache())
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://fake")
     yield
 
 
-def test_le_chapa_kg_e_ignora_outras_unidades_e_formatos(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "50010057", "CHAPA #6,35 A36", 5.98, "KG", "GERDAU", "MAC.464.25", datetime.datetime(2026, 9, 9)),
-        (2, "10020029", "OLHAL DE ICAMENTO", 324.34, "PC", "RUD", "0722.26", datetime.datetime(2026, 8, 3)),
-        (3, "10020280", "CHAPA POLICARBONATO", 301.81, "M2", "ELETRICA", "EMPRESA", datetime.datetime(2026, 5, 18)),
-        (4, "50010052", "CHAPA #44,45 A36", 4900, "PC", "REGENFER", "0618.26", datetime.datetime(2026, 6, 30)),
+def _mockar_linhas(monkeypatch, linhas: list[tuple]) -> None:
+    import psycopg
+
+    monkeypatch.setattr(psycopg, "connect", lambda *_a, **_kw: _ConexaoFalsa(linhas))
+
+
+def test_le_chapa_kg_e_ignora_outros_tipos(monkeypatch):
+    _mockar_linhas(monkeypatch, [
+        _linha("ASTM A36", "chapa", 6.35, 5.98, __import__("datetime").date(2026, 9, 9), "GERDAU"),
+        _linha("ASTM A36", "perfil", None, 4900, __import__("datetime").date(2026, 6, 30), "REGENFER"),
     ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
 
     precos = precos_mercado.listar_precos_chapa()
 
@@ -51,13 +76,13 @@ def test_le_chapa_kg_e_ignora_outras_unidades_e_formatos(tmp_path, monkeypatch):
     assert precos[0].data_compra == "2026-09-09"
 
 
-def test_mesma_norma_espessura_usa_a_compra_mais_recente(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #12,7 A36", 5.0, "KG", "FORNECEDOR ANTIGO", "OBRA1", datetime.datetime(2026, 1, 10)),
-        (2, "X", "CHAPA #12,7 A36", 6.5, "KG", "FORNECEDOR NOVO", "OBRA2", datetime.datetime(2026, 8, 20)),
+def test_mesma_norma_espessura_usa_a_compra_mais_recente(monkeypatch):
+    import datetime
+
+    _mockar_linhas(monkeypatch, [
+        _linha("ASTM A36", "chapa", 12.7, 5.0, datetime.date(2026, 1, 10), "FORNECEDOR ANTIGO"),
+        _linha("ASTM A36", "chapa", 12.7, 6.5, datetime.date(2026, 8, 20), "FORNECEDOR NOVO"),
     ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
 
     precos = precos_mercado.listar_precos_chapa()
 
@@ -67,12 +92,10 @@ def test_mesma_norma_espessura_usa_a_compra_mais_recente(tmp_path, monkeypatch):
     assert precos[0].data_compra == "2026-08-20"
 
 
-def test_busca_por_norma_e_espessura_exata(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #6,35 A36", 5.98, "KG", "GERDAU", "O1", datetime.datetime(2026, 9, 9)),
-    ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
+def test_busca_por_norma_e_espessura_exata(monkeypatch):
+    import datetime
+
+    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
 
     resultado = precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)
 
@@ -82,12 +105,10 @@ def test_busca_por_norma_e_espessura_exata(tmp_path, monkeypatch):
     assert preco.preco_kg == 5.98
 
 
-def test_busca_com_espessura_proxima_marca_como_nao_exato(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #6,35 A36", 5.98, "KG", "GERDAU", "O1", datetime.datetime(2026, 9, 9)),
-    ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
+def test_busca_com_espessura_proxima_marca_como_nao_exato(monkeypatch):
+    import datetime
+
+    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
 
     resultado = precos_mercado.buscar_preco_chapa("ASTM A36", 6.5)
 
@@ -97,12 +118,10 @@ def test_busca_com_espessura_proxima_marca_como_nao_exato(tmp_path, monkeypatch)
     assert preco.espessura_mm == 6.35
 
 
-def test_busca_fora_da_tolerancia_nao_encontra(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #6,35 A36", 5.98, "KG", "GERDAU", "O1", datetime.datetime(2026, 9, 9)),
-    ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
+def test_busca_fora_da_tolerancia_nao_encontra(monkeypatch):
+    import datetime
+
+    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
 
     assert precos_mercado.buscar_preco_chapa("ASTM A36", 10.0) is None
     assert precos_mercado.buscar_preco_chapa("ASTM A572 Gr.50", 6.35) is None
@@ -110,40 +129,44 @@ def test_busca_fora_da_tolerancia_nao_encontra(tmp_path, monkeypatch):
     assert precos_mercado.buscar_preco_chapa("ASTM A36", None) is None
 
 
-def test_norma_erp_mapeia_para_norma_da_biblioteca(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #15,88 A572-50", 8.25, "KG", "AÇOS FATIMA", "O1", datetime.datetime(2026, 1, 12)),
-        (2, "X", "CHAPA #19,05 AISI 316L", 30.0, "KG", "FORN", "O2", datetime.datetime(2026, 2, 1)),
-    ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
-
-    precos = {p.espessura_mm: p for p in precos_mercado.listar_precos_chapa()}
-    assert precos[15.88].norma == "ASTM A572 Gr.50"
-    assert precos[15.88].norma_original == "A572-50"
-    assert precos[19.05].norma == "AISI 316"
-
-
-def test_arquivo_inexistente_nao_quebra(tmp_path, monkeypatch):
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(tmp_path / "nao_existe.xlsx"))
+def test_sem_supabase_db_url_nao_quebra(monkeypatch):
+    monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
 
     assert precos_mercado.listar_precos_chapa() == []
     assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35) is None
     status = precos_mercado.status_sincronizacao()
-    assert status["arquivo_encontrado"] is False
+    assert status["fonte_disponivel"] is False
 
 
-def test_releitura_pega_mudanca_de_mtime(tmp_path, monkeypatch):
-    caminho = tmp_path / "compras.xlsx"
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #6,35 A36", 5.0, "KG", "F1", "O1", datetime.datetime(2026, 1, 1)),
+def test_erro_de_conexao_nao_quebra_e_mantem_cache_anterior(monkeypatch):
+    import datetime
+
+    import psycopg
+
+    _mockar_linhas(monkeypatch, [_linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9))])
+    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
+
+    def _falha(*_a, **_kw):
+        raise RuntimeError("banco indisponível")
+
+    monkeypatch.setattr(psycopg, "connect", _falha)
+    # Força nova tentativa de leitura (ignora o TTL) sem apagar o cache atual.
+    precos_mercado._cache.lido_em_monotonic = None
+
+    # Não levanta exceção — mantém o último resultado bom conhecido.
+    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
+
+
+def test_listar_todas_compras_inclui_qualquer_tipo(monkeypatch):
+    import datetime
+
+    _mockar_linhas(monkeypatch, [
+        _linha("ASTM A36", "chapa", 6.35, 5.98, datetime.date(2026, 9, 9), descricao_original="CHAPA #6,35 A36"),
+        _linha("ASTM A572 Gr.50", "perfil", None, 4900, datetime.date(2026, 6, 30), fornecedor="REGENFER"),
     ])
-    monkeypatch.setenv("PRECOS_MERCADO_XLSX_PATH", str(caminho))
-    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.0
 
-    # Reescreve com preço novo — mtime muda, próxima consulta tem que
-    # refletir sem precisar esperar o teto de 15 min.
-    _gravar_planilha(caminho, [
-        (1, "X", "CHAPA #6,35 A36", 9.0, "KG", "F2", "O1", datetime.datetime(2026, 2, 1)),
-    ])
-    assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 9.0
+    todas = precos_mercado.listar_todas_compras()
+
+    assert len(todas) == 2
+    assert todas[0].data_compra == "2026-09-09"  # ordenado por data desc
+    assert todas[1].fornecedor == "REGENFER"

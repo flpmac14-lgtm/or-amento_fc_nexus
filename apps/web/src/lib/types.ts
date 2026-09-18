@@ -370,8 +370,8 @@ export interface CompraMercadoLinha {
 }
 
 export interface PrecosMercadoLista {
-  arquivo_encontrado: boolean;
-  caminho: string;
+  fonte_disponivel: boolean;
+  fonte: string;
   total_referencias: number;
   sincronizado_em: string | null;
   compras: CompraMercadoLinha[];

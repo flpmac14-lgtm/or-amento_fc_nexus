@@ -243,9 +243,9 @@ def materiais_catalogo() -> dict:
 
 @app.get("/materiais/precos-mercado")
 def materiais_precos_mercado() -> dict:
-    """Planilha de compras 2026 completa, sem filtro de material/unidade
+    """Histórico de compras completo (Supabase), sem filtro de material/tipo
     (ver app/precos_mercado.py) — alimenta a aba "Referência de preços" do
-    frontend, que pediu pra ver tudo que está na planilha, não só o
+    frontend, que pediu pra ver tudo que já foi importado do ERP, não só o
     subconjunto chapa/KG usado no auto-preenchimento (`/materiais/preco-mercado`)."""
     status = status_sincronizacao()
     compras = listar_todas_compras()
