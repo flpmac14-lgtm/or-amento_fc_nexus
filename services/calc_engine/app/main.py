@@ -101,11 +101,13 @@ app = FastAPI(
     description="Motor de cálculo determinístico (peso, custo por processo, preço de venda).",
 )
 
-# Libera o frontend local (Next.js em dev, porta 3000) a chamar esta API
-# direto do navegador. Em produção isso deve restringir pro domínio real.
+# Origens que podem chamar esta API direto do navegador — "http://localhost:3000"
+# sempre liberado pro dev local; ALLOWED_ORIGINS (separadas por vírgula) adiciona
+# o domínio real do frontend hospedado (ex.: https://fc-nexus.vercel.app).
+_ORIGENS_EXTRA = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", *_ORIGENS_EXTRA],
     allow_methods=["*"],
     allow_headers=["*"],
 )
