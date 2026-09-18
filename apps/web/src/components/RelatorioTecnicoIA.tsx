@@ -4,25 +4,36 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { gerarRelatorioTecnico } from "@/lib/api";
 
+interface Props {
+  arquivo: File | null;
+  // Controlado pelo pai (page.tsx) — sobrevive a "Salvar orçamento" e a
+  // reabrir um orçamento salvo (onde não tem mais o File original, só o
+  // texto que ficou salvo).
+  relatorio: string | null;
+  onRelatorioChange: (relatorio: string | null) => void;
+  // Imprimir mora em page.tsx (window.print() de um único documento de
+  // impressão por vez, pra não imprimir o orçamento e este relatório juntos).
+  onImprimir: () => void;
+}
+
 // Estudo técnico completo por IA (geometria, BOM, peso estimado, solda,
 // usinagem, pintura, análise crítica) — pedido explícito do usuário.
 // SÓ INFORMATIVO: o peso/custo aqui é estimativa da IA, nunca o valor do
 // orçamento (esse continua vindo do motor de cálculo determinístico a
 // partir dos itens confirmados no cálculo manual). Por isso fica separado
 // do fluxo de "Analisar desenho", num painel à parte.
-export default function RelatorioTecnicoIA({ arquivo }: { arquivo: File | null }) {
+export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChange, onImprimir }: Props) {
   const [gerando, setGerando] = useState(false);
-  const [relatorio, setRelatorio] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   async function handleGerar() {
     if (!arquivo) return;
     setGerando(true);
     setErro(null);
-    setRelatorio(null);
+    onRelatorioChange(null);
     try {
       const texto = await gerarRelatorioTecnico(arquivo);
-      setRelatorio(texto);
+      onRelatorioChange(texto);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao gerar o relatório.");
     } finally {
@@ -30,7 +41,7 @@ export default function RelatorioTecnicoIA({ arquivo }: { arquivo: File | null }
     }
   }
 
-  if (!arquivo) return null;
+  if (!arquivo && !relatorio) return null;
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
@@ -43,14 +54,31 @@ export default function RelatorioTecnicoIA({ arquivo }: { arquivo: File | null }
             cálculo determinístico. Pode levar 1–3 minutos.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleGerar}
-          disabled={gerando}
-          className="shrink-0 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {gerando ? "Gerando… (1–3 min)" : "Gerar relatório técnico"}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {arquivo && (
+            <button
+              type="button"
+              onClick={handleGerar}
+              disabled={gerando}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {gerando
+                ? "Gerando… (1–3 min)"
+                : relatorio
+                  ? "Gerar de novo"
+                  : "Gerar relatório técnico"}
+            </button>
+          )}
+          {relatorio && (
+            <button
+              type="button"
+              onClick={onImprimir}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+            >
+              PDF
+            </button>
+          )}
+        </div>
       </div>
 
       {erro && (

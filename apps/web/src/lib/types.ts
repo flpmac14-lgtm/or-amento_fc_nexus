@@ -310,6 +310,9 @@ export interface OrcamentoSalvoCompleto {
   resultado: RespostaOrcamentoDePdf;
   estado_manual: EstadoCalculoManual | null;
   estado_texto: { texto: string; estimativas: EstimativasOrcamento } | null;
+  // Estudo técnico completo por IA (Markdown), quando gerado — só leitura de
+  // apoio, ver components/RelatorioTecnicoIA.tsx.
+  relatorio_tecnico: string | null;
   created_at: string;
   updated_at: string;
 }

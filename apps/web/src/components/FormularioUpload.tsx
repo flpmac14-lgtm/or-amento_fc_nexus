@@ -30,6 +30,11 @@ interface Props {
   // item (bug relatado pelo usuário: aplicar o líquido e o resumo voltar
   // pro bruto depois de qualquer interação em Cálculo manual).
   pesoLiquidoManualAtivo: number | null;
+  // Estudo técnico completo por IA (Markdown) — mora no componente pai
+  // (page.tsx) pra sobreviver a "Salvar orçamento"/reabrir um salvo.
+  relatorioTecnico: string | null;
+  onRelatorioTecnicoChange: (relatorio: string | null) => void;
+  onImprimirRelatorioTecnico: () => void;
 }
 
 export default function FormularioUpload({
@@ -43,6 +48,9 @@ export default function FormularioUpload({
   onEstadoManualChange,
   onAbrirSalvo,
   pesoLiquidoManualAtivo,
+  relatorioTecnico,
+  onRelatorioTecnicoChange,
+  onImprimirRelatorioTecnico,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -169,7 +177,14 @@ export default function FormularioUpload({
         </div>
       )}
 
-      {modo === "arquivo" && <RelatorioTecnicoIA arquivo={arquivo} />}
+      {modo === "arquivo" && (
+        <RelatorioTecnicoIA
+          arquivo={arquivo}
+          relatorio={relatorioTecnico}
+          onRelatorioChange={onRelatorioTecnicoChange}
+          onImprimir={onImprimirRelatorioTecnico}
+        />
+      )}
 
       {modo === "arquivo" && (
       <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">

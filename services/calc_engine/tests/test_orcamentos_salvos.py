@@ -78,6 +78,32 @@ def test_salvar_listar_buscar_atualizar_e_excluir_ciclo_completo():
 
 
 @pytest.mark.skipif(SEM_BANCO, reason="SUPABASE_DB_URL não configurada nesta máquina")
+def test_relatorio_tecnico_salvo_e_preservado_em_update_sem_relatorio():
+    criado = orcamentos_salvos.salvar(
+        nome="Orçamento com relatório — pytest",
+        origem="pdf",
+        resultado=_resultado_exemplo(),
+        relatorio_tecnico="# Estudo técnico\n\nConteúdo de teste.",
+    )
+    orcamento_id = criado["id"]
+    try:
+        completo = orcamentos_salvos.buscar(orcamento_id)
+        assert completo["relatorio_tecnico"] == "# Estudo técnico\n\nConteúdo de teste."
+
+        # Atualiza sem reenviar relatorio_tecnico — não pode apagar o que já tinha.
+        orcamentos_salvos.salvar(
+            nome="Orçamento com relatório — pytest (editado)",
+            origem="pdf",
+            resultado=_resultado_exemplo(peso=150.0),
+            orcamento_id=orcamento_id,
+        )
+        recarregado = orcamentos_salvos.buscar(orcamento_id)
+        assert recarregado["relatorio_tecnico"] == "# Estudo técnico\n\nConteúdo de teste."
+    finally:
+        orcamentos_salvos.excluir(orcamento_id)
+
+
+@pytest.mark.skipif(SEM_BANCO, reason="SUPABASE_DB_URL não configurada nesta máquina")
 def test_atualizar_id_inexistente_da_erro_claro():
     with pytest.raises(ValueError, match="não encontrado"):
         orcamentos_salvos.salvar(

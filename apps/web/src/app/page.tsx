@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
+import RelatorioTecnicoImpressao from "@/components/RelatorioTecnicoImpressao";
 import PainelIdentificacaoCliente from "@/components/PainelIdentificacaoCliente";
 import { analisarPdf, baixarExcel, recalcularOrcamento, salvarOrcamento } from "@/lib/api";
 import {
@@ -56,6 +57,19 @@ export default function Home() {
   const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
   const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
+  // Estudo técnico completo por IA (Markdown) — gerado à parte (ver
+  // RelatorioTecnicoIA.tsx), mas salvo junto do orçamento quando existe
+  // (pedido explícito do usuário, pra não perder o relatório ao reabrir).
+  const [relatorioTecnico, setRelatorioTecnico] = useState<string | null>(null);
+  // Qual documento imprimir — só um "hidden print:block" pode estar ativo
+  // de cada vez, senão window.print() imprimiria os dois juntos.
+  const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | "relatorio-ia" | null>(null);
+
+  useEffect(() => {
+    if (!alvoImpressao) return;
+    window.print();
+    setAlvoImpressao(null);
+  }, [alvoImpressao]);
 
   async function handleSair() {
     const supabase = criarClienteSupabaseNavegador();
@@ -108,6 +122,7 @@ export default function Home() {
     setNomeOrcamento(salvo.nome);
     setOrcamentoSalvoId(salvo.id);
     setOrigemAtual(salvo.origem);
+    setRelatorioTecnico(salvo.relatorio_tecnico ?? null);
     // Mesma lógica de mesclar com o inicial (orçamentos salvos antes desse
     // campo existir não têm `identificacao_cliente`).
     setIdentificacaoCliente({
@@ -137,6 +152,7 @@ export default function Home() {
     setOrigemAtual(null);
     setEstadoManual(ESTADO_CALCULO_MANUAL_INICIAL);
     setIdentificacaoCliente(IDENTIFICACAO_CLIENTE_INICIAL);
+    setRelatorioTecnico(null);
     setModo("arquivo");
   }
 
@@ -152,6 +168,7 @@ export default function Home() {
         origem: origemAtual,
         resultado: { ...resultado, identificacao_cliente: identificacaoCliente },
         estado_manual: origemAtual === "manual" ? estadoManual : null,
+        relatorio_tecnico: relatorioTecnico,
       });
       setOrcamentoSalvoId(r.id);
       setNomeOrcamento(nome);
@@ -307,7 +324,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => setAlvoImpressao("orcamento")}
                 className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
               >
                 Relatório (PDF)
@@ -345,6 +362,9 @@ export default function Home() {
           onEstadoManualChange={handleEstadoManualChange}
           onAbrirSalvo={handleAbrirSalvo}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+          relatorioTecnico={relatorioTecnico}
+          onRelatorioTecnicoChange={setRelatorioTecnico}
+          onImprimirRelatorioTecnico={() => setAlvoImpressao("relatorio-ia")}
         />
 
         {erro && (
@@ -364,12 +384,15 @@ export default function Home() {
         </footer>
       </main>
 
-      {resultado && (
+      {alvoImpressao === "orcamento" && resultado && (
         <RelatorioImpressao
           resultado={resultado}
           nomeArquivo={nomeArquivo}
           identificacaoCliente={identificacaoCliente}
         />
+      )}
+      {alvoImpressao === "relatorio-ia" && relatorioTecnico && (
+        <RelatorioTecnicoImpressao relatorio={relatorioTecnico} />
       )}
     </div>
   );
