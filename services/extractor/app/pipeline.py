@@ -92,7 +92,7 @@ def processar_pdfs(pdf_paths: list[str]) -> dict:
     identificacao = _mesclar_identificacao(textos_por_arquivo)
 
     caracteristicas = CaracteristicasGerais(
-        normas=bom_parser.extrair_normas(texto_completo),
+        normas=bom_parser.extrair_normas(texto_completo).model_dump(),
         numero_folhas=_campo_len(paginas_total),
     )
 
@@ -237,13 +237,18 @@ def _mesclar_identificacao(textos_por_arquivo: list[str]):
             if melhores[nome].confianca == 0 and campo.confianca > 0:
                 melhores[nome] = campo
 
-    return Identificacao(**melhores)
+    # .model_dump() em vez de passar as instâncias direto: Identificacao
+    # espera CampoExtraido[str] (genérico parametrizado) e `melhores` tem
+    # CampoExtraido "cru" (sem parâmetro) — algumas versões do Pydantic
+    # rejeitam a instância não-parametrizada num field parametrizado
+    # (ValidationError "Input should be a valid dictionary or instance of
+    # CampoExtraido[str]"), mesmo sendo, na prática, os mesmos dados. Dict
+    # sempre revalida limpo, independente da versão do Pydantic instalada.
+    return Identificacao(**{nome: campo.model_dump() for nome, campo in melhores.items()})
 
 
-def _campo_len(numero_folhas: int):
-    from app.schemas import CampoExtraido
-
-    return CampoExtraido(valor=numero_folhas, confianca=1.0, origem="regra_local")
+def _campo_len(numero_folhas: int) -> dict:
+    return {"valor": numero_folhas, "confianca": 1.0, "origem": "regra_local"}
 
 
 def status_dependencias() -> dict:
