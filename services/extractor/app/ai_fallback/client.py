@@ -114,8 +114,11 @@ def analisar_paginas(paginas_png: list[bytes]) -> RespostaIA | None:
             output_format=RespostaIA,
         )
         return resposta.parsed_output
-    except Exception:
+    except Exception as exc:
         # Qualquer erro (rede, chave inválida, rate limit, JSON fora do
-        # schema) — loga implicitamente via retorno None; quem chama decide
-        # o que fazer sem propagar exceção pro pipeline determinístico.
+        # schema) devolve None — quem chama decide o que fazer sem propagar
+        # exceção pro pipeline determinístico. Loga pra dar pra diagnosticar
+        # depois (sem isto, uma falha aqui vira só "veio tudo vazio", sem
+        # pista nenhuma nos logs do Render).
+        print(f"[ai_fallback] analisar_paginas falhou: {type(exc).__name__}: {exc}")
         return None
