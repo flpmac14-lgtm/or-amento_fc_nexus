@@ -81,12 +81,12 @@ export default function FormularioUpload({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="flex gap-1 rounded-lg border border-slate-800 bg-slate-900/40 p-1 text-sm">
+      <div className="flex gap-1 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
         <button
           type="button"
           onClick={() => setModo("arquivo")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "arquivo" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+            modo === "arquivo" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
           }`}
         >
           Enviar desenho (PDF)
@@ -95,7 +95,7 @@ export default function FormularioUpload({
           type="button"
           onClick={() => setModo("manual")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "manual" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+            modo === "manual" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
           }`}
         >
           Cálculo manual
@@ -104,7 +104,7 @@ export default function FormularioUpload({
           type="button"
           onClick={() => setModo("referencia")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "referencia" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+            modo === "referencia" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
           }`}
         >
           Referência de preços
@@ -113,7 +113,7 @@ export default function FormularioUpload({
           type="button"
           onClick={() => setModo("salvos")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "salvos" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+            modo === "salvos" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
           }`}
         >
           Orçamentos salvos
@@ -148,14 +148,14 @@ export default function FormularioUpload({
           }}
           className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
             arrastando
-              ? "border-cyan-400 bg-cyan-500/10"
-              : "border-slate-700 bg-slate-900/40"
+              ? "border-green-500 dark:border-cyan-400 bg-green-600/10 dark:bg-cyan-500/10"
+              : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900/40"
           }`}
         >
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-stone-600 dark:text-slate-400">
             Arraste o desenho técnico (PDF) aqui, ou
           </p>
-          <label className="cursor-pointer rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-cyan-400">
+          <label className="cursor-pointer rounded-md bg-green-600 dark:bg-cyan-500 px-4 py-2 text-sm font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400">
             Escolher arquivo
             <input
               type="file"
@@ -165,7 +165,7 @@ export default function FormularioUpload({
             />
           </label>
           {arquivo && (
-            <p className="mt-2 text-sm font-medium text-slate-100">
+            <p className="mt-2 text-sm font-medium text-stone-900 dark:text-slate-100">
               {arquivo.name}
             </p>
           )}
@@ -180,51 +180,51 @@ export default function FormularioUpload({
       )}
 
       {modo === "arquivo" && (
-      <details className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
-        <summary className="cursor-pointer font-medium text-slate-200">
+      <details className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 text-sm">
+        <summary className="cursor-pointer font-medium text-stone-800 dark:text-slate-200">
           Estimativas manuais (o que ainda não dá pra calcular sozinho)
         </summary>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
-            <span className="text-slate-400">Peso líquido (kg)</span>
+            <span className="text-stone-600 dark:text-slate-400">Peso líquido (kg)</span>
             <input
               type="number"
               step="0.01"
               value={pesoLiquidoKg}
               onChange={(e) => setPesoLiquidoKg(e.target.value)}
               placeholder="ex: 3319"
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-slate-400">Área de pintura (m²)</span>
+            <span className="text-stone-600 dark:text-slate-400">Área de pintura (m²)</span>
             <input
               type="number"
               step="0.01"
               value={areaPinturaM2}
               onChange={(e) => setAreaPinturaM2(e.target.value)}
               placeholder="ex: 83"
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-slate-400">Posições de engenharia</span>
+            <span className="text-stone-600 dark:text-slate-400">Posições de engenharia</span>
             <input
               type="number"
               value={qtdPosicoesEngenharia}
               onChange={(e) => setQtdPosicoesEngenharia(e.target.value)}
               placeholder="ex: 38"
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-slate-400">Cenário comercial</span>
+            <span className="text-stone-600 dark:text-slate-400">Cenário comercial</span>
             <select
               value={cenarioComercial}
               onChange={(e) =>
                 setCenarioComercial(e.target.value as EstimativasOrcamento["cenario_comercial"])
               }
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             >
               <option value="venda_fabricacao">Venda de fabricação</option>
               <option value="industrializacao">Industrialização</option>
@@ -238,7 +238,7 @@ export default function FormularioUpload({
               onChange={(e) => setUsarHistorico(e.target.checked)}
               className="accent-cyan-500"
             />
-            <span className="text-slate-400">
+            <span className="text-stone-600 dark:text-slate-400">
               Combinar horas de caldeiraria com o histórico Macfab (camada 2)
             </span>
           </label>
@@ -250,7 +250,7 @@ export default function FormularioUpload({
         <button
           type="submit"
           disabled={!arquivo || carregando}
-          className="rounded-md bg-cyan-500 px-4 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-md bg-green-600 dark:bg-cyan-500 px-4 py-2.5 font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {carregando ? "Analisando…" : "Analisar desenho"}
         </button>

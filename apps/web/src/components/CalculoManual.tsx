@@ -491,7 +491,7 @@ export default function CalculoManual({
     .sort((a, b) => a.posicao.localeCompare(b.posicao, "pt-BR", { numeric: true }));
 
   if (!catalogo) {
-    return <p className="text-sm text-slate-500">Carregando tipos de geometria…</p>;
+    return <p className="text-sm text-stone-500 dark:text-slate-500">Carregando tipos de geometria…</p>;
   }
 
   const posicaoProps = { posicaoNum, itemNum, setPosicaoNum, setItemNum };
@@ -520,10 +520,10 @@ export default function CalculoManual({
       {/* Coluna esquerda — onde o orçamentista vai adicionando as peças/itens */}
       <div className="flex min-w-0 flex-col gap-6">
         <div>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-500">
             Peças (geometria)
           </h2>
-          <p className="mb-3 text-sm text-slate-400">
+          <p className="mb-3 text-sm text-stone-600 dark:text-slate-400">
             Escolha o tipo de peça, informe as medidas e adicione à posição/item do orçamento — um
             orçamento pode ter várias posições, cada uma com várias peças.
           </p>
@@ -532,8 +532,8 @@ export default function CalculoManual({
               preço/kg de referência (costume da empresa é 160%) — editável
               por item nos cartões abaixo, ou aplicado de uma vez em todos
               os itens já adicionados que têm preço de referência. */}
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-cyan-500/30 bg-slate-900/40 p-3 text-xs">
-            <span className="text-slate-400">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3 text-xs">
+            <span className="text-stone-600 dark:text-slate-400">
               Acréscimo padrão sobre preço de referência (ex.: R$ 5,97/kg + 160% = R$ 15,52/kg) —
               vale pros próximos itens de matéria-prima; ajuste em cada cartão se precisar de um
               valor diferente.
@@ -544,14 +544,14 @@ export default function CalculoManual({
                 inputMode="decimal"
                 value={acrescimoPercentualPadrao}
                 onChange={(e) => onEstadoChange({ acrescimoPercentualPadrao: e.target.value })}
-                className="w-16 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                className="w-16 rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
               />
-              <span className="text-slate-400">%</span>
+              <span className="text-stone-600 dark:text-slate-400">%</span>
               <button
                 type="button"
                 onClick={aplicarAcrescimoATodos}
                 title="Recalcula o preço/kg de todos os itens que têm preço de referência, a partir do valor original"
-                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+                className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 font-medium text-stone-800 dark:text-slate-200 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
               >
                 Aplicar a todos
               </button>
@@ -566,8 +566,8 @@ export default function CalculoManual({
                 onClick={() => abrirCartao(tipo)}
                 className={`flex flex-col items-center gap-2 rounded-lg border p-3 text-center text-xs font-medium transition-colors ${
                   tipoAberto === tipo
-                    ? "border-cyan-400 bg-cyan-500/15 text-cyan-300"
-                    : "border-slate-800 bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                    ? "border-green-500 dark:border-cyan-400 bg-green-600/15 dark:bg-cyan-500/15 text-green-700 dark:text-cyan-300"
+                    : "border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 text-stone-700 dark:text-slate-300 hover:border-stone-300 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-900"
                 }`}
               >
                 <GeometriaIcone tipo={tipo} className="h-10 w-10 text-current opacity-90" />
@@ -592,13 +592,13 @@ export default function CalculoManual({
               type="button"
               onClick={() => inputExcelRef.current?.click()}
               disabled={importandoExcel}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-xs font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {importandoExcel ? "Importando…" : "Importar Excel (BOM da IA)"}
             </button>
           </div>
           {itensIgnoradosImportacao.length > 0 && (
-            <div className="mt-2 rounded-lg border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-300">
+            <div className="mt-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
               <p className="mb-1 font-medium">
                 {itensIgnoradosImportacao.length} item(ns) da planilha não entraram — revise e adicione à mão:
               </p>
@@ -663,8 +663,8 @@ export default function CalculoManual({
           />
         )}
 
-        <div className="flex flex-col gap-6 border-t border-slate-800 pt-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="flex flex-col gap-6 border-t border-stone-200 dark:border-slate-800 pt-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-500">
             Itens comerciais, insumos e serviços
           </h2>
 
@@ -732,10 +732,10 @@ export default function CalculoManual({
           adicionado sem precisar rolar até o fim da tela. Cresce com o
           orçamento, mas a lista de itens rola por dentro (o resumo/botão
           de calcular ficam sempre visíveis) quando tem muito item. */}
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
+      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
         <div>
-          <h3 className="font-semibold text-white">Itens do orçamento</h3>
-          <p className="mt-1 text-xs text-slate-400">
+          <h3 className="font-semibold text-stone-900 dark:text-white">Itens do orçamento</h3>
+          <p className="mt-1 text-xs text-stone-600 dark:text-slate-400">
             {formatarNumero(pesoTotal, 2)} kg de matéria-prima
             {totaisExtras.length > 0 && (
               <>
@@ -748,38 +748,38 @@ export default function CalculoManual({
 
         <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
           {itensPorPosicao.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
+            <p className="py-8 text-center text-sm text-stone-500 dark:text-slate-500">
               Nenhum item adicionado ainda — use os cartões ao lado.
             </p>
           ) : (
             itensPorPosicao.map((grupo) => (
               <div key={grupo.posicao}>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-cyan-400">
                   {grupo.posicao}
                 </p>
-                <ul className="divide-y divide-slate-800 rounded-md border border-slate-800">
+                <ul className="divide-y divide-slate-800 rounded-md border border-stone-200 dark:border-slate-800">
                   {grupo.linhas.map((linha) => (
                     <li key={linha.chave} className="flex flex-col gap-1 px-3 py-2 text-sm">
-                      <span className="text-slate-300">{linha.descricao}</span>
+                      <span className="text-stone-700 dark:text-slate-300">{linha.descricao}</span>
                       <span className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs text-slate-100">
+                        <span className="font-mono text-xs text-stone-900 dark:text-slate-100">
                           {linha.detalhe}
                           {linha.custoTotal !== undefined && (
-                            <span className="ml-2 text-cyan-300">{formatarMoeda(linha.custoTotal)}</span>
+                            <span className="ml-2 text-green-700 dark:text-cyan-300">{formatarMoeda(linha.custoTotal)}</span>
                           )}
                         </span>
                         <span className="flex shrink-0 gap-2">
                           <button
                             type="button"
                             onClick={linha.editar}
-                            className="text-xs text-cyan-400 hover:text-cyan-300"
+                            className="text-xs text-green-600 dark:text-cyan-400 hover:text-green-700 dark:hover:text-cyan-300"
                           >
                             editar
                           </button>
                           <button
                             type="button"
                             onClick={linha.remover}
-                            className="text-xs text-red-400 hover:text-red-300"
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                           >
                             remover
                           </button>
@@ -793,13 +793,13 @@ export default function CalculoManual({
           )}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-800 pt-3">
+        <div className="flex flex-col gap-3 border-t border-stone-200 dark:border-slate-800 pt-3">
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Cenário comercial</span>
+            <span className="text-stone-600 dark:text-slate-400">Cenário comercial</span>
             <select
               value={cenarioComercial}
               onChange={(e) => onEstadoChange({ cenarioComercial: e.target.value as EstimativasOrcamento["cenario_comercial"] })}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             >
               <option value="venda_fabricacao">Venda de fabricação</option>
               <option value="industrializacao">Industrialização</option>
@@ -807,26 +807,26 @@ export default function CalculoManual({
             </select>
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Insumos de corte (R$/kg)</span>
+            <span className="text-stone-600 dark:text-slate-400">Insumos de corte (R$/kg)</span>
             <input
               type="text"
               inputMode="decimal"
               value={corteValorKg}
               onChange={(e) => onEstadoChange({ corteValorKg: e.target.value })}
               title="Custo médio de oxicorte/plasma/laser — multiplica o peso líquido total dos itens"
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="w-full rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           <button
             type="button"
             onClick={calcularOrcamento}
             disabled={analisando || totalItens === 0}
-            className="w-full rounded-md bg-cyan-500 px-4 py-2 font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-md bg-green-600 dark:bg-cyan-500 px-4 py-2 font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analisando ? "Calculando orçamento…" : "Recalcular agora"}
           </button>
           {totalItens > 0 && (
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-stone-500 dark:text-slate-500">
               O orçamento recalcula sozinho a cada item adicionado — esse botão só força na hora.
             </p>
           )}

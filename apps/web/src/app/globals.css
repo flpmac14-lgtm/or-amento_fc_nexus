@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
-/* Paleta fixa (não depende de prefers-color-scheme): navy escuro + ciano,
-   pedida explicitamente pelo usuário a partir de uma referência visual. */
+/* Tema fixo por padrão (não depende de prefers-color-scheme) — escuro
+   navy + ciano é o original, pedido explicitamente pelo usuário a partir
+   de uma referência visual. Toggle manual (botão no canto superior
+   esquerdo, ver ThemeToggle.tsx) alterna pra um tema claro inspirado na
+   paleta da logo da Macfab (verde + laranja sobre branco), persistido em
+   localStorage — nunca segue a preferência do sistema.
+   `dark:` nas classes do app = tema escuro (data-theme="dark", o padrão);
+   sem prefixo = tema claro. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
+  --background: #f8faf7;
+  --foreground: #14231a;
+}
+
+:root[data-theme="dark"] {
   --background: #020617;
   --foreground: #f1f5f9;
 }

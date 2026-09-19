@@ -198,17 +198,17 @@ function LinhaDeCusto({
   }
 
   return (
-    <div className="border-b border-slate-800 last:border-0">
+    <div className="border-b border-stone-200 dark:border-slate-800 last:border-0">
       <div
         onClick={() => !editando && setAberta((v) => !v)}
         className="flex w-full cursor-pointer items-center justify-between gap-4 py-3 text-left"
       >
         <div>
-          <p className="font-medium text-slate-100">
+          <p className="font-medium text-stone-900 dark:text-slate-100">
             {NOMES_PROCESSO[linha.codigo] ?? linha.descricao}
           </p>
           {linha.horas !== null && (
-            <p className="text-xs text-slate-500">{formatarNumero(linha.horas)} h</p>
+            <p className="text-xs text-stone-500 dark:text-slate-500">{formatarNumero(linha.horas)} h</p>
           )}
         </div>
         {editando ? (
@@ -218,7 +218,7 @@ function LinhaDeCusto({
           >
             {camposParametro?.map((campo) => (
               <label key={campo.chave} className="flex items-center gap-1">
-                <span className="text-xs text-slate-500">{campo.rotulo}</span>
+                <span className="text-xs text-stone-500 dark:text-slate-500">{campo.rotulo}</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -226,7 +226,7 @@ function LinhaDeCusto({
                   onChange={(e) =>
                     setValores((v) => ({ ...v, [campo.chave]: e.target.value }))
                   }
-                  className="w-20 rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                  className="w-20 rounded border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
                 />
               </label>
             ))}
@@ -234,7 +234,7 @@ function LinhaDeCusto({
               type="button"
               onClick={salvarEdicao}
               disabled={salvando}
-              className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
+              className="rounded border border-green-600/40 dark:border-cyan-500/40 px-2 py-1 text-xs text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {salvando ? "salvando…" : "salvar"}
             </button>
@@ -242,14 +242,14 @@ function LinhaDeCusto({
               type="button"
               onClick={() => setEditando(false)}
               disabled={salvando}
-              className="text-xs text-slate-500 hover:text-slate-300"
+              className="text-xs text-stone-500 dark:text-slate-500 hover:text-stone-700 dark:hover:text-slate-300"
             >
               cancelar
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <span className="font-mono text-sm text-slate-100">
+            <span className="font-mono text-sm text-stone-900 dark:text-slate-100">
               {formatarMoeda(linha.valor_liquido)}
             </span>
             {onEditar && camposParametro && (
@@ -259,18 +259,18 @@ function LinhaDeCusto({
                   e.stopPropagation();
                   iniciarEdicao();
                 }}
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-green-600 dark:text-cyan-400 hover:text-green-700 dark:hover:text-cyan-300"
               >
                 editar
               </button>
             )}
-            <span className="text-xs text-cyan-400">{aberta ? "▲" : "▼"} Ver cálculo</span>
+            <span className="text-xs text-green-600 dark:text-cyan-400">{aberta ? "▲" : "▼"} Ver cálculo</span>
           </div>
         )}
       </div>
-      {erro && <p className="pb-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="pb-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
       {aberta && !editando && (
-        <div className="mb-3 rounded-md border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+        <div className="mb-3 rounded-md border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3 text-xs text-stone-600 dark:text-slate-400">
           <ul className="list-inside list-disc space-y-1">
             {linha.memoria_calculo.map((m, i) => (
               <li key={i} className="font-mono">{m}</li>
@@ -322,15 +322,15 @@ export default function ResultadoOrcamento({ resultado, onEditarLinhaCusto }: Pr
           extração do PDF (páginas/OCR/BOM), e só quando veio de PDF de
           verdade (cálculo manual não tem nada disso pra mostrar). */}
       {extracao.paginas_total > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+        <section className="rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-white">Extração do desenho</h2>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
+            <h2 className="font-semibold text-stone-900 dark:text-white">Extração do desenho</h2>
+            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-slate-500">
               <span>Confiança geral</span>
               <Confianca valor={extracao.confianca_geral} />
             </div>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-stone-500 dark:text-slate-500">
             {extracao.paginas_total} página(s) — {extracao.paginas_com_texto_nativo} com texto
             nativo, {extracao.paginas_via_ocr} via OCR · {extracao.bom_itens_extraidos} item(ns) de
             BOM extraído(s)
@@ -339,11 +339,11 @@ export default function ResultadoOrcamento({ resultado, onEditarLinhaCusto }: Pr
       )}
 
       {itens_para_revisao.length > 0 && (
-        <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
-          <h2 className="mb-2 font-semibold text-amber-300">
+        <section className="rounded-xl border border-amber-500/40 dark:border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/10 p-5">
+          <h2 className="mb-2 font-semibold text-amber-800 dark:text-amber-300">
             Itens para revisão ({itens_para_revisao.length})
           </h2>
-          <ul className="space-y-1 text-sm text-amber-200/90">
+          <ul className="space-y-1 text-sm text-amber-800/90 dark:text-amber-200/90">
             {itens_para_revisao.map((item, i) => (
               <li key={i}>
                 {item.item_numero && <span className="font-medium">Item {item.item_numero}: </span>}
@@ -354,8 +354,8 @@ export default function ResultadoOrcamento({ resultado, onEditarLinhaCusto }: Pr
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <h2 className="mb-2 font-semibold text-white">
+      <section className="rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
+        <h2 className="mb-2 font-semibold text-stone-900 dark:text-white">
           Custo por processo
         </h2>
         <div>
@@ -371,42 +371,42 @@ export default function ResultadoOrcamento({ resultado, onEditarLinhaCusto }: Pr
         </div>
       </section>
 
-      <section className="rounded-xl border-2 border-cyan-500/40 bg-slate-900/60 p-5 shadow-[0_0_40px_-15px_rgba(34,211,238,0.4)]">
-        <h2 className="mb-4 font-semibold text-white">Resumo comercial</h2>
+      <section className="rounded-xl border-2 border-green-600/40 dark:border-cyan-500/40 bg-white dark:bg-slate-900/60 p-5 shadow-[0_0_40px_-15px_rgba(34,211,238,0.4)]">
+        <h2 className="mb-4 font-semibold text-stone-900 dark:text-white">Resumo comercial</h2>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-slate-500">Peso líquido</dt>
-            <dd className="font-medium text-slate-100">{formatarNumero(orcamento.comercial.peso_liquido_kg)} kg</dd>
+            <dt className="text-stone-500 dark:text-slate-500">Peso líquido</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">{formatarNumero(orcamento.comercial.peso_liquido_kg)} kg</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Custo industrial</dt>
-            <dd className="font-medium text-slate-100">{formatarMoeda(orcamento.comercial.custo_industrial)}</dd>
+            <dt className="text-stone-500 dark:text-slate-500">Custo industrial</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">{formatarMoeda(orcamento.comercial.custo_industrial)}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Margem</dt>
-            <dd className="font-medium text-slate-100">
+            <dt className="text-stone-500 dark:text-slate-500">Margem</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">
               {formatarMoeda(orcamento.comercial.margem_lucro)} (
               {formatarPercentual(orcamento.comercial.margem_percentual)})
             </dd>
           </div>
           <div>
-            <dt className="text-slate-500">Impostos</dt>
-            <dd className="font-medium text-slate-100">{formatarMoeda(orcamento.comercial.imposto_a_pagar)}</dd>
+            <dt className="text-stone-500 dark:text-slate-500">Impostos</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">{formatarMoeda(orcamento.comercial.imposto_a_pagar)}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Venda (s/ impostos)</dt>
-            <dd className="font-medium text-slate-100">
+            <dt className="text-stone-500 dark:text-slate-500">Venda (s/ impostos)</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">
               {formatarMoeda(orcamento.comercial.preco_venda_sem_impostos)}
             </dd>
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <dt className="text-slate-500">R$/kg</dt>
-            <dd className="font-medium text-slate-100">{formatarMoeda(orcamento.comercial.preco_venda_por_kg)}</dd>
+            <dt className="text-stone-500 dark:text-slate-500">R$/kg</dt>
+            <dd className="font-medium text-stone-900 dark:text-slate-100">{formatarMoeda(orcamento.comercial.preco_venda_por_kg)}</dd>
           </div>
         </dl>
-        <div className="mt-4 flex items-baseline justify-between border-t border-slate-800 pt-4">
-          <span className="text-slate-400">Preço de venda (c/ impostos)</span>
-          <span className="text-2xl font-bold text-cyan-400">
+        <div className="mt-4 flex items-baseline justify-between border-t border-stone-200 dark:border-slate-800 pt-4">
+          <span className="text-stone-600 dark:text-slate-400">Preço de venda (c/ impostos)</span>
+          <span className="text-2xl font-bold text-green-600 dark:text-cyan-400">
             {formatarMoeda(orcamento.comercial.preco_venda_com_impostos)}
           </span>
         </div>

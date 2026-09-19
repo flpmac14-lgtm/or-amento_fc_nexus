@@ -130,9 +130,9 @@ export default function CartaoInsumoPintura({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
-      <h3 className="mb-1 font-semibold text-white">Insumos de pintura</h3>
-      <p className="mb-3 text-xs text-slate-400">
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
+      <h3 className="mb-1 font-semibold text-stone-900 dark:text-white">Insumos de pintura</h3>
+      <p className="mb-3 text-xs text-stone-600 dark:text-slate-400">
         Tinta de fundo, intermediária, acabamento, diluente etc. — varia conforme o plano de
         pintura pedido para o item, por isso é lançado produto a produto (igual aos itens standard
         comerciais, já que tinta também é material comprado de terceiro), com a mesma referência
@@ -142,7 +142,7 @@ export default function CartaoInsumoPintura({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div className="relative sm:col-span-2">
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Descrição</span>
+            <span className="text-stone-600 dark:text-slate-400">Descrição</span>
             <input
               type="text"
               value={descricao}
@@ -150,21 +150,21 @@ export default function CartaoInsumoPintura({
               onFocus={() => setSugestoesAbertas(true)}
               onBlur={() => setTimeout(() => setSugestoesAbertas(false), 150)}
               placeholder="ex: tinta macropoxy, diluente…"
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           {sugestoesAbertas && sugestoes.length > 0 && (
-            <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-slate-700 bg-slate-900 shadow-lg">
+            <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg">
               {sugestoes.map((s, i) => (
                 <li key={`${s.codigo}-${i}`}>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selecionarSugestao(s)}
-                    className="flex w-full flex-col gap-0.5 border-b border-slate-800 px-3 py-2 text-left text-xs last:border-0 hover:bg-slate-800"
+                    className="flex w-full flex-col gap-0.5 border-b border-stone-200 dark:border-slate-800 px-3 py-2 text-left text-xs last:border-0 hover:bg-stone-100 dark:hover:bg-slate-800"
                   >
-                    <span className="text-slate-200">{s.descricao}</span>
-                    <span className="text-slate-500">
+                    <span className="text-stone-800 dark:text-slate-200">{s.descricao}</span>
+                    <span className="text-stone-500 dark:text-slate-500">
                       R$ {formatarNumero(s.preco_unitario, 2)} / {s.unidade || "un"} ·{" "}
                       {s.fornecedor || "fornecedor não informado"}
                       {s.data_compra ? ` · ${formatarDataBr(s.data_compra)}` : ""}
@@ -175,25 +175,25 @@ export default function CartaoInsumoPintura({
             </ul>
           )}
           {descricao && sugestoesAbertas && sugestoes.length === 0 && (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-slate-500">
               Sem referência de compra anterior pra esse produto — informe o preço manualmente.
             </p>
           )}
         </div>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade (L)</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade (L)</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">
+          <span className="text-stone-600 dark:text-slate-400">
             Preço por litro (R$/L) {referencia && !precoEditado ? "" : "— sem referência"}
           </span>
           <div className="flex items-center gap-1">
@@ -204,10 +204,10 @@ export default function CartaoInsumoPintura({
               readOnly={Boolean(referencia) && !precoEditado}
               onChange={(e) => setPrecoManual(e.target.value)}
               placeholder="informe manualmente"
-              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
+              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
                 referencia && !precoEditado
-                  ? "border-slate-800 bg-slate-950 text-cyan-300"
-                  : "border-slate-700 bg-slate-900 text-slate-100"
+                  ? "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300"
+                  : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
               }`}
             />
             {referencia && (
@@ -215,7 +215,7 @@ export default function CartaoInsumoPintura({
                 type="button"
                 title={precoEditado ? "Voltar a usar o preço de referência" : "Editar manualmente"}
                 onClick={alternarPrecoManual}
-                className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+                className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
               >
                 ✎
               </button>
@@ -225,14 +225,14 @@ export default function CartaoInsumoPintura({
       </div>
 
       {referencia && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-stone-500 dark:text-slate-500">
           Ref.: {referencia.fornecedor || "fornecedor não informado"}
           {referencia.data_compra ? ` · última compra em ${formatarDataBr(referencia.data_compra)}` : ""}
           {referencia.unidade ? ` · unidade da compra: ${referencia.unidade}` : ""}
         </p>
       )}
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {custoTotal !== null && (
         <PainelResultadoCalculo
@@ -256,7 +256,7 @@ export default function CartaoInsumoPintura({
           type="button"
           onClick={adicionar}
           disabled={!custoTotal}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

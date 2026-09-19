@@ -162,9 +162,9 @@ export default function CartaoPesoDireto({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
-      <h3 className="mb-1 font-semibold text-white">Peso direto (peça já calculada)</h3>
-      <p className="mb-3 text-xs text-slate-400">
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
+      <h3 className="mb-1 font-semibold text-stone-900 dark:text-white">Peso direto (peça já calculada)</h3>
+      <p className="mb-3 text-xs text-stone-600 dark:text-slate-400">
         Para peças cujo peso líquido já foi determinado fora do sistema (memorial de cálculo
         externo, planilha própria, cotação do fornecedor) — sem recalcular geometria, só peso,
         material/norma, preço, quantidade e posição/item.
@@ -172,33 +172,33 @@ export default function CartaoPesoDireto({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Descrição — opcional</span>
+          <span className="text-stone-600 dark:text-slate-400">Descrição — opcional</span>
           <input
             type="text"
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="ex: base soldada conforme desenho X"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Peso unitário (kg)</span>
+          <span className="text-stone-600 dark:text-slate-400">Peso unitário (kg)</span>
           <input
             type="text"
             inputMode="decimal"
             value={pesoUnitario}
             onChange={(e) => setPesoUnitario(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Material/Norma</span>
+          <span className="text-stone-600 dark:text-slate-400">Material/Norma</span>
           <select
             value={materialIndice}
             onChange={(e) => selecionarMaterial(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           >
             <option value="">Selecione…</option>
             {materiais.map((m, i) => (
@@ -208,30 +208,30 @@ export default function CartaoPesoDireto({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Espessura (mm) — só p/ referência de preço</span>
+          <span className="text-stone-600 dark:text-slate-400">Espessura (mm) — só p/ referência de preço</span>
           <input
             type="text"
             inputMode="decimal"
             value={espessuraRef}
             onChange={(e) => setEspessuraRef(e.target.value)}
             placeholder="ex: 12,7 — não afeta o peso"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">
+          <span className="text-stone-600 dark:text-slate-400">
             Preço por kg (R$/kg) {precoReferencia?.encontrado && !precoEditado ? "" : "— sem referência"}
           </span>
           <div className="flex items-center gap-1">
@@ -242,10 +242,10 @@ export default function CartaoPesoDireto({
               readOnly={Boolean(precoReferencia?.encontrado) && !precoEditado}
               onChange={(e) => setPrecoManual(e.target.value)}
               placeholder="informe manualmente"
-              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
+              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
                 precoReferencia?.encontrado && !precoEditado
-                  ? "border-slate-800 bg-slate-950 text-cyan-300"
-                  : "border-slate-700 bg-slate-900 text-slate-100"
+                  ? "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300"
+                  : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
               }`}
             />
             {precoReferencia?.encontrado && (
@@ -253,14 +253,14 @@ export default function CartaoPesoDireto({
                 type="button"
                 title={precoEditado ? "Voltar a usar o preço de referência" : "Editar manualmente (caso excepcional)"}
                 onClick={alternarPrecoManual}
-                className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+                className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
               >
                 ✎
               </button>
             )}
           </div>
           {precoReferencia?.encontrado && (
-            <span className="text-slate-500">
+            <span className="text-stone-500 dark:text-slate-500">
               Ref.: R$ {formatarNumero(precoReferencia.preco_kg, 2)}/kg ·{" "}
               {precoReferencia.fornecedor || "fornecedor não informado"}
               {precoReferencia.data_compra ? ` · ${formatarDataBr(precoReferencia.data_compra)}` : ""}
@@ -271,19 +271,19 @@ export default function CartaoPesoDireto({
 
         {precoReferencia?.encontrado && !precoEditado && (
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Acréscimo sobre referência (%)</span>
+            <span className="text-stone-600 dark:text-slate-400">Acréscimo sobre referência (%)</span>
             <input
               type="text"
               inputMode="decimal"
               value={percentualAcrescimo}
               onChange={(e) => setPercentualAcrescimo(e.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
         )}
       </div>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {calculo && materialAtual && (
         <PainelResultadoCalculo
@@ -309,7 +309,7 @@ export default function CartaoPesoDireto({
           type="button"
           onClick={adicionar}
           disabled={!calculo}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

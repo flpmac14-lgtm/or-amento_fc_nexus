@@ -35,12 +35,12 @@ export default function PainelIdentificacaoCliente({ valor, onChange }: Props) {
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-      <h2 className="mb-3 font-semibold text-white">Identificação do cliente</h2>
+    <section className="rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
+      <h2 className="mb-3 font-semibold text-stone-900 dark:text-white">Identificação do cliente</h2>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">CNPJ</span>
+          <span className="text-stone-600 dark:text-slate-400">CNPJ</span>
           <div className="flex items-center gap-1">
             <input
               type="text"
@@ -54,13 +54,13 @@ export default function PainelIdentificacaoCliente({ valor, onChange }: Props) {
                 }
               }}
               placeholder="00.000.000/0000-00"
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="w-full rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
             <button
               type="button"
               onClick={buscar}
               disabled={buscando || !valor.cnpj.trim()}
-              className="shrink-0 rounded-md border border-cyan-500/40 px-2 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 rounded-md border border-green-600/40 dark:border-cyan-500/40 px-2 py-1.5 text-xs text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {buscando ? "Buscando…" : "Buscar"}
             </button>
@@ -68,60 +68,60 @@ export default function PainelIdentificacaoCliente({ valor, onChange }: Props) {
         </label>
 
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Nome do cliente</span>
+          <span className="text-stone-600 dark:text-slate-400">Nome do cliente</span>
           <input
             type="text"
             value={valor.nomeCliente}
             onChange={(e) => onChange({ nomeCliente: e.target.value })}
             placeholder="preenchido pela busca de CNPJ, ou digite direto"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs sm:col-span-2 lg:col-span-3">
-          <span className="text-slate-400">Endereço</span>
+          <span className="text-stone-600 dark:text-slate-400">Endereço</span>
           <input
             type="text"
             value={valor.endereco}
             onChange={(e) => onChange({ endereco: e.target.value })}
             placeholder="preenchido pela busca de CNPJ, ou digite direto"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Revisão</span>
+          <span className="text-stone-600 dark:text-slate-400">Revisão</span>
           <input
             type="text"
             value={valor.revisao}
             onChange={(e) => onChange({ revisao: e.target.value })}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Condição de pagamento</span>
+          <span className="text-stone-600 dark:text-slate-400">Condição de pagamento</span>
           <input
             type="text"
             value={valor.condicaoPagamento}
             onChange={(e) => onChange({ condicaoPagamento: e.target.value })}
             placeholder="ex: 30/60/90 dias"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Pedido</span>
+          <span className="text-stone-600 dark:text-slate-400">Pedido</span>
           <input
             type="text"
             value={valor.pedido}
             onChange={(e) => onChange({ pedido: e.target.value })}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
       </div>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
     </section>
   );
 }

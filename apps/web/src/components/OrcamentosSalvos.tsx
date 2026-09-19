@@ -64,26 +64,26 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-stone-600 dark:text-slate-400">
           Orçamentos salvos — clique em &quot;Abrir&quot; pra continuar de onde parou. Só os de{" "}
-          <span className="text-slate-300">cálculo manual</span> reabrem com a lista de itens
+          <span className="text-stone-700 dark:text-slate-300">cálculo manual</span> reabrem com a lista de itens
           editável; os de PDF/texto reabrem só o resultado já calculado.
         </p>
         <button
           type="button"
           onClick={buscar}
           disabled={carregando}
-          className="shrink-0 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-500 hover:text-cyan-300 disabled:opacity-50"
+          className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-2 py-1 text-xs text-stone-700 dark:text-slate-300 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300 disabled:opacity-50"
         >
           {carregando ? "Atualizando…" : "Atualizar"}
         </button>
       </div>
 
-      {erro && <p className="text-sm text-red-400">{erro}</p>}
+      {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-white dark:bg-slate-900/60 text-left text-xs uppercase tracking-wide text-stone-500 dark:text-slate-500">
             <tr>
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">Origem</th>
@@ -96,26 +96,26 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-800">
             {lista.map((o) => (
-              <tr key={o.id} className="text-slate-200">
+              <tr key={o.id} className="text-stone-800 dark:text-slate-200">
                 <td className="px-3 py-2">{o.nome}</td>
-                <td className="px-3 py-2 text-slate-400">{ORIGEM_ROTULO[o.origem] ?? o.origem}</td>
-                <td className="px-3 py-2 text-slate-400">
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{ORIGEM_ROTULO[o.origem] ?? o.origem}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">
                   {[o.resumo.cliente, o.resumo.numero_desenho].filter(Boolean).join(" — ") || "—"}
                 </td>
                 <td className="px-3 py-2 font-mono">
                   {o.resumo.peso_liquido_kg != null ? `${formatarNumero(o.resumo.peso_liquido_kg, 2)} kg` : "—"}
                 </td>
-                <td className="px-3 py-2 font-mono text-cyan-300">
+                <td className="px-3 py-2 font-mono text-green-700 dark:text-cyan-300">
                   {formatarMoeda(o.resumo.preco_venda_com_impostos)}
                 </td>
-                <td className="px-3 py-2 text-slate-400">{new Date(o.updated_at).toLocaleString("pt-BR")}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{new Date(o.updated_at).toLocaleString("pt-BR")}</td>
                 <td className="px-3 py-2">
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => abrir(o.id)}
                       disabled={abrindoId === o.id}
-                      className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
+                      className="rounded border border-green-600/40 dark:border-cyan-500/40 px-2 py-1 text-xs text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10 disabled:opacity-50"
                     >
                       {abrindoId === o.id ? "Abrindo…" : "Abrir"}
                     </button>
@@ -123,7 +123,7 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
                       type="button"
                       onClick={() => excluir(o.id)}
                       disabled={excluindoId === o.id}
-                      className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      className="rounded border border-red-400/40 dark:border-red-500/30 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/10 disabled:opacity-50"
                     >
                       {excluindoId === o.id ? "Excluindo…" : "Excluir"}
                     </button>
@@ -133,7 +133,7 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-stone-500 dark:text-slate-500">
                   {carregando ? "Carregando…" : "Nenhum orçamento salvo ainda."}
                 </td>
               </tr>

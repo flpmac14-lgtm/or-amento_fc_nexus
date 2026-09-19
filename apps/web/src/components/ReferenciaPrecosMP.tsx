@@ -47,21 +47,21 @@ export default function ReferenciaPrecosMP() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm">
-        <p className="text-slate-300">
+      <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 text-sm">
+        <p className="text-stone-700 dark:text-slate-300">
           Histórico de compras real, importado do ERP pro Supabase — os preços de chapa por
           norma/espessura pré-preenchem &quot;Preço por kg&quot; nos cartões de cálculo, do jeito
           que a densidade já é pré-preenchida pelo material. Sempre editável na hora do cálculo;
           isto aqui é só o histórico de referência, com todas as linhas já importadas (qualquer
           material).
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-stone-500 dark:text-slate-500">
           <span>
             Fonte:{" "}
             {dados?.fonte_disponivel ? (
-              <span className="text-slate-400">{dados.fonte}</span>
+              <span className="text-stone-600 dark:text-slate-400">{dados.fonte}</span>
             ) : (
-              <span className="text-red-400">indisponível ({dados?.fonte ?? "…"})</span>
+              <span className="text-red-600 dark:text-red-400">indisponível ({dados?.fonte ?? "…"})</span>
             )}
           </span>
           <span>{dados?.total_referencias ?? 0} compras no histórico</span>
@@ -70,26 +70,26 @@ export default function ReferenciaPrecosMP() {
             type="button"
             onClick={verificarAgora}
             disabled={carregando}
-            className="rounded border border-slate-700 px-2 py-1 text-slate-300 hover:border-cyan-500 hover:text-cyan-300 disabled:opacity-50"
+            className="rounded border border-stone-300 dark:border-slate-700 px-2 py-1 text-stone-700 dark:text-slate-300 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300 disabled:opacity-50"
           >
             {carregando ? "Verificando…" : "Verificar atualização agora"}
           </button>
         </div>
       </div>
 
-      {erro && <p className="text-sm text-red-400">{erro}</p>}
+      {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
 
       <input
         type="text"
         value={filtro}
         onChange={(e) => setFiltro(e.target.value)}
         placeholder="filtrar por código, material, descrição, unidade, fornecedor ou obra…"
-        className="w-full max-w-md rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+        className="w-full max-w-md rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
       />
 
-      <div className="overflow-x-auto rounded-lg border border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-white dark:bg-slate-900/60 text-left text-xs uppercase tracking-wide text-stone-500 dark:text-slate-500">
             <tr>
               <th className="px-3 py-2">Código</th>
               <th className="px-3 py-2">Material</th>
@@ -103,20 +103,20 @@ export default function ReferenciaPrecosMP() {
           </thead>
           <tbody className="divide-y divide-slate-800">
             {linhas.map((c, i) => (
-              <tr key={`${c.codigo}-${c.data_compra}-${i}`} className="text-slate-200">
-                <td className="px-3 py-2 font-mono text-slate-400">{c.codigo || "—"}</td>
-                <td className="px-3 py-2 text-slate-400">{c.material || "—"}</td>
+              <tr key={`${c.codigo}-${c.data_compra}-${i}`} className="text-stone-800 dark:text-slate-200">
+                <td className="px-3 py-2 font-mono text-stone-600 dark:text-slate-400">{c.codigo || "—"}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{c.material || "—"}</td>
                 <td className="px-3 py-2">{c.descricao}</td>
-                <td className="px-3 py-2 font-mono text-cyan-300">R$ {formatarNumero(c.preco_unitario, 2)}</td>
-                <td className="px-3 py-2 text-slate-400">{c.unidade || "—"}</td>
-                <td className="px-3 py-2 text-slate-400">{c.fornecedor || "—"}</td>
-                <td className="px-3 py-2 text-slate-400">{c.obra || "—"}</td>
-                <td className="px-3 py-2 text-slate-400">{formatarDataBr(c.data_compra)}</td>
+                <td className="px-3 py-2 font-mono text-green-700 dark:text-cyan-300">R$ {formatarNumero(c.preco_unitario, 2)}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{c.unidade || "—"}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{c.fornecedor || "—"}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{c.obra || "—"}</td>
+                <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{formatarDataBr(c.data_compra)}</td>
               </tr>
             ))}
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={8} className="px-3 py-6 text-center text-stone-500 dark:text-slate-500">
                   {carregando ? "Carregando…" : "Nenhuma referência encontrada."}
                 </td>
               </tr>

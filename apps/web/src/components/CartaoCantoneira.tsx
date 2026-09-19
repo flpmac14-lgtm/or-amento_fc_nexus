@@ -194,21 +194,21 @@ export default function CartaoCantoneira({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold text-white">Cantoneira L (abas iguais)</h3>
-        <div className="flex overflow-hidden rounded-md border border-slate-700 text-xs">
+        <h3 className="font-semibold text-stone-900 dark:text-white">Cantoneira L (abas iguais)</h3>
+        <div className="flex overflow-hidden rounded-md border border-stone-300 dark:border-slate-700 text-xs">
           <button
             type="button"
             onClick={() => setModoManual(false)}
-            className={`px-2 py-1 ${!modoManual ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"}`}
+            className={`px-2 py-1 ${!modoManual ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"}`}
           >
             Catálogo
           </button>
           <button
             type="button"
             onClick={() => setModoManual(true)}
-            className={`px-2 py-1 ${modoManual ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"}`}
+            className={`px-2 py-1 ${modoManual ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"}`}
           >
             Manual
           </button>
@@ -218,7 +218,7 @@ export default function CartaoCantoneira({
       {!modoManual ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-            <span className="text-slate-400">Bitola (ex: L 2&quot; x 2&quot; x 1/4&quot;)</span>
+            <span className="text-stone-600 dark:text-slate-400">Bitola (ex: L 2&quot; x 2&quot; x 1/4&quot;)</span>
             <input
               type="text"
               list="lista-cantoneiras-catalogo"
@@ -228,7 +228,7 @@ export default function CartaoCantoneira({
                 setKgMEditado(false);
               }}
               placeholder="digite pra buscar…"
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
             <datalist id="lista-cantoneiras-catalogo">
               {catalogo.map((c) => (
@@ -236,11 +236,11 @@ export default function CartaoCantoneira({
               ))}
             </datalist>
             {designacao && !cantoneiraEncontrada && (
-              <span className="text-amber-400">não encontrada — informe o kg/m manualmente ou use o modo manual</span>
+              <span className="text-amber-700 dark:text-amber-400">não encontrada — informe o kg/m manualmente ou use o modo manual</span>
             )}
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Peso/m {cantoneiraEncontrada && !kgMEditado ? "(catálogo)" : "(manual)"}</span>
+            <span className="text-stone-600 dark:text-slate-400">Peso/m {cantoneiraEncontrada && !kgMEditado ? "(catálogo)" : "(manual)"}</span>
             <div className="flex items-center gap-1">
               <input
                 type="text"
@@ -248,15 +248,15 @@ export default function CartaoCantoneira({
                 value={kgM}
                 readOnly={Boolean(cantoneiraEncontrada) && !kgMEditado}
                 onChange={(e) => setKgMManual(e.target.value)}
-                className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
-                  cantoneiraEncontrada && !kgMEditado ? "border-slate-800 bg-slate-950 text-cyan-300" : "border-slate-700 bg-slate-900 text-slate-100"
+                className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
+                  cantoneiraEncontrada && !kgMEditado ? "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300" : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
                 }`}
               />
               {cantoneiraEncontrada && (
                 <button
                   type="button"
                   onClick={alternarKgMManual}
-                  className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+                  className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
                 >
                   ✎
                 </button>
@@ -267,23 +267,23 @@ export default function CartaoCantoneira({
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Aba (mm)</span>
+            <span className="text-stone-600 dark:text-slate-400">Aba (mm)</span>
             <input
               type="text"
               inputMode="decimal"
               value={aba}
               onChange={(e) => setAba(e.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Espessura (mm)</span>
+            <span className="text-stone-600 dark:text-slate-400">Espessura (mm)</span>
             <input
               type="text"
               inputMode="decimal"
               value={espessura}
               onChange={(e) => setEspessura(e.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
         </div>
@@ -291,11 +291,11 @@ export default function CartaoCantoneira({
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Material/Norma</span>
+          <span className="text-stone-600 dark:text-slate-400">Material/Norma</span>
           <select
             value={materialIndice}
             onChange={(e) => setMaterialIndice(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           >
             <option value="">Selecione…</option>
             {materiais.map((m, i) => (
@@ -304,55 +304,55 @@ export default function CartaoCantoneira({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Comprimento (mm)</span>
+          <span className="text-stone-600 dark:text-slate-400">Comprimento (mm)</span>
           <input
             type="text"
             inputMode="decimal"
             value={comprimento}
             onChange={(e) => setComprimento(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Perda de material (%)</span>
+          <span className="text-stone-600 dark:text-slate-400">Perda de material (%)</span>
           <input
             type="text"
             inputMode="decimal"
             value={perdaPct}
             onChange={(e) => setPerdaPct(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Preço por kg (R$/kg) — opcional</span>
+          <span className="text-stone-600 dark:text-slate-400">Preço por kg (R$/kg) — opcional</span>
           <input
             type="text"
             inputMode="decimal"
             value={precoKg}
             onChange={(e) => setPrecoKg(e.target.value)}
             placeholder="deixe em branco para usar o preço padrão"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Arredondar peso bruto p/ cima em (kg)</span>
+          <span className="text-stone-600 dark:text-slate-400">Arredondar peso bruto p/ cima em (kg)</span>
           <input
             type="text"
             inputMode="decimal"
             value={arredondamento}
             onChange={(e) => setArredondamento(e.target.value)}
             placeholder="ex: 1 — em branco não arredonda"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
       </div>
@@ -362,13 +362,13 @@ export default function CartaoCantoneira({
           type="button"
           onClick={calcularManual}
           disabled={calculandoManual}
-          className="mt-3 rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:opacity-50"
+          className="mt-3 rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           {calculandoManual ? "Calculando…" : "Calcular"}
         </button>
       )}
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {calculo && materialAtual && (
         <PainelResultadoCalculo
@@ -402,7 +402,7 @@ export default function CartaoCantoneira({
           type="button"
           onClick={adicionar}
           disabled={!calculo}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

@@ -333,15 +333,15 @@ export default function Home() {
       : null;
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
       <main className="print:hidden mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
         {/* Sticky: fica visível no canto superior mesmo rolando a página —
             pedido explícito do usuário pra não precisar voltar ao topo toda
             vez que salvar depois de editar uma linha de custo. */}
-        <header className="sticky top-0 z-20 -mx-6 flex flex-col gap-4 border-b border-slate-800 bg-slate-950/95 px-6 pb-6 pt-6 backdrop-blur-sm">
+        <header className="sticky top-0 z-20 -mx-6 flex flex-col gap-4 border-b border-stone-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 px-6 pb-6 pt-6 backdrop-blur-sm">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/15 dark:bg-cyan-500/15 text-green-600 dark:text-cyan-400">
                 <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 19V5a1 1 0 0 1 1-1h9l6 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" strokeLinejoin="round" />
                   <path d="M14 4v5a1 1 0 0 0 1 1h5" strokeLinejoin="round" />
@@ -349,10 +349,10 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">
-                  FC Nexus <span className="text-cyan-400">—</span> Orçamento Industrial I.A.
+                <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
+                  FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> Orçamento Industrial I.A.
                 </h1>
-                <p className="mt-1 text-sm text-slate-400">
+                <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">
                   Arraste um desenho técnico em PDF e receba a análise de fabricação e o
                   orçamento calculado automaticamente.
                 </p>
@@ -367,14 +367,14 @@ export default function Home() {
                 type="button"
                 onClick={() => handleSalvarOrcamento()}
                 disabled={salvando || !resultado || !origemAtual}
-                className="rounded-lg bg-cyan-500 px-6 py-3 text-base font-bold text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-green-600 dark:bg-cyan-500 px-6 py-3 text-base font-bold text-white dark:text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {salvando ? "Salvando…" : "Salvar orçamento"}
               </button>
               <button
                 type="button"
                 onClick={handleSair}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
               >
                 Sair
               </button>
@@ -386,12 +386,12 @@ export default function Home() {
               value={nomeOrcamento}
               onChange={(e) => setNomeOrcamento(e.target.value)}
               placeholder="nome do orçamento"
-              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 sm:flex-none sm:w-56"
+              className="min-w-0 flex-1 rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500 sm:flex-none sm:w-56"
             />
             <button
               type="button"
               onClick={handleNovoOrcamento}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+              className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-800 dark:text-slate-200 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
             >
               Novo orçamento
             </button>
@@ -400,7 +400,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setAlvoImpressao("orcamento")}
-                  className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+                  className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-800 dark:text-slate-200 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
                 >
                   Relatório (PDF)
                 </button>
@@ -408,7 +408,7 @@ export default function Home() {
                   type="button"
                   onClick={handleBaixarExcel}
                   disabled={baixandoExcel}
-                  className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-800 dark:text-slate-200 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {baixandoExcel ? "Gerando…" : "Excel (editável)"}
                 </button>
@@ -442,13 +442,13 @@ export default function Home() {
         />
 
         {erro && (
-          <div className="rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-300">
+          <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-300">
             {erro}
           </div>
         )}
 
         {avisoBom && (
-          <div className="rounded-lg border border-cyan-800 bg-cyan-950/30 p-4 text-sm text-cyan-300">
+          <div className="rounded-lg border border-green-300 dark:border-cyan-800 bg-green-50 dark:bg-cyan-950/30 p-4 text-sm text-green-700 dark:text-cyan-300">
             {avisoBom}
           </div>
         )}
@@ -457,7 +457,7 @@ export default function Home() {
           <ResultadoOrcamento resultado={resultado} onEditarLinhaCusto={handleEditarLinhaCusto} />
         )}
 
-        <footer className="mt-8 text-xs text-slate-500">
+        <footer className="mt-8 text-xs text-stone-500 dark:text-slate-500">
           A IA não calcula custo, hora ou preço — todo cálculo comercial é feito pelo motor
           determinístico (<code>services/calc_engine</code>). O peso da lista de materiais
           inserida automaticamente como &quot;Peso direto&quot; vem extraído/estimado pela IA a

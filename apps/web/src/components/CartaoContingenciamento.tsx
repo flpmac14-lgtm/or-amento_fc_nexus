@@ -54,49 +54,49 @@ export default function CartaoContingenciamento({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
-      <h3 className="mb-1 font-semibold text-white">Qualificações / contingência</h3>
-      <p className="mb-3 text-xs text-slate-400">
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
+      <h3 className="mb-1 font-semibold text-stone-900 dark:text-white">Qualificações / contingência</h3>
+      <p className="mb-3 text-xs text-stone-600 dark:text-slate-400">
         Provisão de risco/qualificação do orçamento (contingenciamento etc.) — não é compra de
         terceiro, por isso sem ICMS/PIS-COFINS.
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Descrição</span>
+          <span className="text-stone-600 dark:text-slate-400">Descrição</span>
           <input
             type="text"
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Valor unitário (R$)</span>
+          <span className="text-stone-600 dark:text-slate-400">Valor unitário (R$)</span>
           <input
             type="text"
             inputMode="decimal"
             value={valorUnitario}
             onChange={(e) => setValorUnitario(e.target.value)}
             placeholder="ex: 150"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
       </div>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {custoTotal !== null && (
         <PainelResultadoCalculo
@@ -120,7 +120,7 @@ export default function CartaoContingenciamento({
           type="button"
           onClick={adicionar}
           disabled={!custoTotal}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

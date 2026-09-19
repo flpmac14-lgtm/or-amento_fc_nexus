@@ -116,7 +116,7 @@ function calcularExtras(tipo: string, m: Record<string, string>): { rotulo: stri
 
 function IlustracaoSemianguloCone() {
   return (
-    <svg viewBox="0 0 120 70" className="h-16 w-28 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.4}>
+    <svg viewBox="0 0 120 70" className="h-16 w-28 shrink-0 text-stone-600 dark:text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.4}>
       <line x1="60" y1="8" x2="60" y2="62" strokeDasharray="3 2" opacity={0.6} />
       <line x1="60" y1="8" x2="20" y2="62" />
       <line x1="60" y1="8" x2="100" y2="62" />
@@ -339,23 +339,23 @@ export default function CartaoGeometriaPadrao({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
-      <h3 className="mb-3 font-semibold text-white">{def.rotulo}</h3>
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
+      <h3 className="mb-3 font-semibold text-stone-900 dark:text-white">{def.rotulo}</h3>
       {tipo === "cone_angulo" && (
-        <div className="mb-3 flex items-center gap-3 rounded-md border border-slate-800 bg-slate-950/60 p-2">
+        <div className="mb-3 flex items-center gap-3 rounded-md border border-stone-200 dark:border-slate-800 bg-stone-100/60 dark:bg-slate-950/60 p-2">
           <IlustracaoSemianguloCone />
-          <p className="text-xs text-slate-400">
-            α é o <strong className="text-slate-200">semiângulo em relação ao eixo central</strong> (linha
+          <p className="text-xs text-stone-600 dark:text-slate-400">
+            α é o <strong className="text-stone-800 dark:text-slate-200">semiângulo em relação ao eixo central</strong> (linha
             tracejada) — não o ângulo total de abertura entre as duas laterais do cone.
           </p>
         </div>
       )}
-      {NOTAS_TIPO[tipo] && <p className="mb-3 text-xs text-amber-400/90">{NOTAS_TIPO[tipo]}</p>}
+      {NOTAS_TIPO[tipo] && <p className="mb-3 text-xs text-amber-700/90 dark:text-amber-400/90">{NOTAS_TIPO[tipo]}</p>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {campos.map((campo) => (
           <label key={campo.chave} className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">
+            <span className="text-stone-600 dark:text-slate-400">
               {campo.rotulo} ({campo.unidade})
             </span>
             <input
@@ -363,17 +363,17 @@ export default function CartaoGeometriaPadrao({
               inputMode="decimal"
               value={medidas[campo.chave] ?? ""}
               onChange={(e) => setMedidas((m) => ({ ...m, [campo.chave]: e.target.value }))}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
         ))}
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Material/Norma</span>
+          <span className="text-stone-600 dark:text-slate-400">Material/Norma</span>
           <select
             value={materialIndice}
             onChange={(e) => selecionarMaterial(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           >
             <option value="">Selecione…</option>
             {materiais.map((m, i) => (
@@ -383,7 +383,7 @@ export default function CartaoGeometriaPadrao({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">
+          <span className="text-stone-600 dark:text-slate-400">
             Densidade (kg/m³) {materialAtual && !densidadeEditada ? "" : "(editado)"}
           </span>
           <div className="flex items-center gap-1">
@@ -393,10 +393,10 @@ export default function CartaoGeometriaPadrao({
               value={densidade}
               readOnly={Boolean(materialAtual) && !densidadeEditada}
               onChange={(e) => setDensidadeManual(e.target.value)}
-              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
+              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
                 materialAtual && !densidadeEditada
-                  ? "border-slate-800 bg-slate-950 text-cyan-300"
-                  : "border-slate-700 bg-slate-900 text-slate-100"
+                  ? "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300"
+                  : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
               }`}
             />
             {materialAtual && (
@@ -404,7 +404,7 @@ export default function CartaoGeometriaPadrao({
                 type="button"
                 title="Editar densidade manualmente (material especial)"
                 onClick={alternarDensidadeManual}
-                className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+                className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
               >
                 ✎
               </button>
@@ -413,29 +413,29 @@ export default function CartaoGeometriaPadrao({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Perda de material (%)</span>
+          <span className="text-stone-600 dark:text-slate-400">Perda de material (%)</span>
           <input
             type="text"
             inputMode="decimal"
             value={perdaPct}
             onChange={(e) => setPerdaPct(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">
+          <span className="text-stone-600 dark:text-slate-400">
             Preço por kg (R$/kg) {precoReferencia?.encontrado && !precoEditado ? "" : "— opcional"}
           </span>
           <div className="flex items-center gap-1">
@@ -446,10 +446,10 @@ export default function CartaoGeometriaPadrao({
               readOnly={Boolean(precoReferencia?.encontrado) && !precoEditado}
               onChange={(e) => setPrecoManual(e.target.value)}
               placeholder="sem referência — informe manualmente"
-              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
+              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
                 precoReferencia?.encontrado && !precoEditado
-                  ? "border-slate-800 bg-slate-950 text-cyan-300"
-                  : "border-slate-700 bg-slate-900 text-slate-100"
+                  ? "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300"
+                  : "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
               }`}
             />
             {precoReferencia?.encontrado && (
@@ -457,14 +457,14 @@ export default function CartaoGeometriaPadrao({
                 type="button"
                 title={precoEditado ? "Voltar a usar o preço de referência" : "Editar manualmente (caso excepcional)"}
                 onClick={alternarPrecoManual}
-                className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+                className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
               >
                 ✎
               </button>
             )}
           </div>
           {precoReferencia?.encontrado && (
-            <span className="text-slate-500">
+            <span className="text-stone-500 dark:text-slate-500">
               Ref.: R$ {formatarNumero(precoReferencia.preco_kg, 2)}/kg ·{" "}
               {precoReferencia.fornecedor || "fornecedor não informado"}
               {precoReferencia.data_compra ? ` · ${formatarDataBr(precoReferencia.data_compra)}` : ""}
@@ -475,26 +475,26 @@ export default function CartaoGeometriaPadrao({
 
         {precoReferencia?.encontrado && !precoEditado && (
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-slate-400">Acréscimo sobre referência (%)</span>
+            <span className="text-stone-600 dark:text-slate-400">Acréscimo sobre referência (%)</span>
             <input
               type="text"
               inputMode="decimal"
               value={percentualAcrescimo}
               onChange={(e) => setPercentualAcrescimo(e.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
         )}
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Arredondar peso bruto p/ cima em (kg)</span>
+          <span className="text-stone-600 dark:text-slate-400">Arredondar peso bruto p/ cima em (kg)</span>
           <input
             type="text"
             inputMode="decimal"
             value={arredondamento}
             onChange={(e) => setArredondamento(e.target.value)}
             placeholder="ex: 1 — em branco não arredonda"
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
       </div>
@@ -503,12 +503,12 @@ export default function CartaoGeometriaPadrao({
         type="button"
         onClick={calcular}
         disabled={calculando}
-        className="mt-3 rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-cyan-400 disabled:opacity-50"
+        className="mt-3 rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
       >
         {calculando ? "Calculando…" : "Calcular"}
       </button>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {calculo && materialAtual && (
         <PainelResultadoCalculo
@@ -545,7 +545,7 @@ export default function CartaoGeometriaPadrao({
           type="button"
           onClick={adicionar}
           disabled={!calculo}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

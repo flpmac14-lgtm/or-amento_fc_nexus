@@ -69,37 +69,37 @@ export default function CartaoEngenhariaIndustrial({
   }
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-4">
-      <h3 className="mb-1 font-semibold text-white">Engenharia Industrial</h3>
-      <p className="mb-3 text-xs text-slate-400">
+    <div className="rounded-xl border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/60 p-4">
+      <h3 className="mb-1 font-semibold text-stone-900 dark:text-white">Engenharia Industrial</h3>
+      <p className="mb-3 text-xs text-stone-600 dark:text-slate-400">
         Desenho/croqui para delineamento — descritivo fixo, cobrado por posição de engenharia
         (quantidade de peças), não por peso.
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-          <span className="text-slate-400">Descrição</span>
+          <span className="text-stone-600 dark:text-slate-400">Descrição</span>
           <input
             type="text"
             value={DESCRICAO_FIXA}
             readOnly
-            className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-slate-300 outline-none"
+            className="rounded-md border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 px-2 py-1.5 text-sm text-stone-700 dark:text-slate-300 outline-none"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">Quantidade (pç)</span>
+          <span className="text-stone-600 dark:text-slate-400">Quantidade (pç)</span>
           <input
             type="text"
             inputMode="decimal"
             value={quantidade}
             onChange={(e) => setQuantidade(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-slate-400">R$/pç</span>
+          <span className="text-stone-600 dark:text-slate-400">R$/pç</span>
           <div className="flex items-center gap-1">
             <input
               type="text"
@@ -107,17 +107,17 @@ export default function CartaoEngenhariaIndustrial({
               value={valorUnitario}
               readOnly={!editandoValor}
               onChange={(e) => setValorUnitario(e.target.value)}
-              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-cyan-500 ${
+              className={`w-full rounded-md border px-2 py-1.5 text-sm outline-none focus:border-green-600 dark:focus:border-cyan-500 ${
                 editandoValor
-                  ? "border-slate-700 bg-slate-900 text-slate-100"
-                  : "border-slate-800 bg-slate-950 text-cyan-300"
+                  ? "border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-900 dark:text-slate-100"
+                  : "border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 text-green-700 dark:text-cyan-300"
               }`}
             />
             <button
               type="button"
               title={editandoValor ? "Travar no padrão" : "Editar manualmente"}
               onClick={() => setEditandoValor((v) => !v)}
-              className="shrink-0 rounded border border-slate-700 px-1.5 py-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-300"
+              className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-1.5 py-1 text-stone-600 dark:text-slate-400 hover:border-green-600 dark:hover:border-cyan-500 hover:text-green-700 dark:hover:text-cyan-300"
             >
               ✎
             </button>
@@ -125,7 +125,7 @@ export default function CartaoEngenhariaIndustrial({
         </label>
       </div>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
 
       {custoTotal !== null && (
         <PainelResultadoCalculo
@@ -149,7 +149,7 @@ export default function CartaoEngenhariaIndustrial({
           type="button"
           onClick={adicionar}
           disabled={!custoTotal}
-          className="ml-auto rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="ml-auto rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           Adicionar ao orçamento
         </button>

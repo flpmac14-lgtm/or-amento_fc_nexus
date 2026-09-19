@@ -54,17 +54,17 @@ export default function PainelPesoBase({ pesoBrutoCalculado, pesoEfetivo, onApli
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-      <h2 className="mb-2 font-semibold text-white">Peso do orçamento</h2>
-      <p className="mb-3 text-xs text-slate-400">
+    <section className="rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
+      <h2 className="mb-2 font-semibold text-stone-900 dark:text-white">Peso do orçamento</h2>
+      <p className="mb-3 text-xs text-stone-600 dark:text-slate-400">
         Peso bruto calculado pelo sistema:{" "}
-        <span className="font-medium text-slate-200">{formatarNumero(pesoBrutoCalculado, 2)} kg</span>.
+        <span className="font-medium text-stone-800 dark:text-slate-200">{formatarNumero(pesoBrutoCalculado, 2)} kg</span>.
         Se a peça foi pesada de verdade e o valor líquido real é outro, informe abaixo e escolha qual
         dos dois entra no cálculo de custo/preço.
       </p>
 
       <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-slate-300">
           <input
             type="radio"
             name="modo-peso-base"
@@ -75,7 +75,7 @@ export default function PainelPesoBase({ pesoBrutoCalculado, pesoEfetivo, onApli
           Peso bruto ({formatarNumero(pesoBrutoCalculado, 2)} kg)
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-slate-300">
           <input
             type="radio"
             name="modo-peso-base"
@@ -93,7 +93,7 @@ export default function PainelPesoBase({ pesoBrutoCalculado, pesoEfetivo, onApli
               setModo("liquido");
             }}
             placeholder="ex: 3319"
-            className="w-28 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            className="w-28 rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
           />
           kg
         </label>
@@ -102,13 +102,13 @@ export default function PainelPesoBase({ pesoBrutoCalculado, pesoEfetivo, onApli
           type="button"
           onClick={aplicar}
           disabled={salvando}
-          className="rounded-md bg-cyan-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="rounded-md bg-green-600 dark:bg-cyan-500 px-3 py-1.5 text-sm font-medium text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:opacity-50"
         >
           {salvando ? "Aplicando…" : "Aplicar"}
         </button>
       </div>
 
-      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{erro}</p>}
     </section>
   );
 }
