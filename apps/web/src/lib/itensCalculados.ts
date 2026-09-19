@@ -1,4 +1,4 @@
-import type { ItemEstruturadoIA } from "./api";
+import { buscarPrecoMercado, type ItemEstruturadoIA } from "./api";
 import type { ItemCalculado } from "./types";
 
 // Ordena pela POS do desenho (crescente) e numera o "Item" sequencialmente
@@ -59,9 +59,19 @@ function formatarDimensoes(item: ItemEstruturadoIA): string {
 // do Cálculo manual só mostra a descrição e o peso total (ver
 // CalculoManual.tsx::linhasExibicao) — sem isso essa informação ficaria
 // invisível até abrir o item pra editar.
-export function converterParaPesoDireto(
+//
+// Busca o preço/kg de referência por norma+espessura (mesma fonte que o
+// cartão "Peso direto" manual usa) ANTES de montar o item — sem isso o
+// backend não consegue calcular o custo desse item (CATEGORIA_PRECO_POR_TIPO
+// não conhece "peso_direto", então ele não sabe em qual tabela de preço
+// procurar) e o item inteiro cai em "itens para revisão" em vez de entrar
+// no orçamento (bug real encontrado testando em produção: 7/7 itens
+// inseridos, mas orçamento saía zerado). Item sem norma reconhecida ou sem
+// referência de preço continua sem preço — vai pra revisão mesmo, que é o
+// comportamento certo (não inventar preço).
+export async function converterParaPesoDireto(
   itens: ItemEstruturadoIA[],
-): { itens: ItemCalculado[]; ignorados: { posicao: string; descricao: string; motivo: string }[] } {
+): Promise<{ itens: ItemCalculado[]; ignorados: { posicao: string; descricao: string; motivo: string }[] }> {
   const calculados: ItemCalculado[] = [];
   const ignorados: { posicao: string; descricao: string; motivo: string }[] = [];
 
@@ -83,6 +93,18 @@ export function converterParaPesoDireto(
       .join(" · ");
     const espessura = typeof item.espessura_mm === "number" ? item.espessura_mm : null;
 
+    let precoKg: number | undefined;
+    if (item.norma && espessura !== null) {
+      try {
+        const preco = await buscarPrecoMercado(item.norma, espessura);
+        if (preco.encontrado) precoKg = preco.preco_kg;
+      } catch {
+        // Sem referência de preço pra essa norma/espessura — item ainda
+        // entra no Cálculo manual, só não terá custo calculado até o
+        // orçamentista informar o preço/kg manualmente.
+      }
+    }
+
     calculados.push({
       posicao: item.posicao,
       tipo: "peso_direto",
@@ -92,6 +114,7 @@ export function converterParaPesoDireto(
       quantidade,
       peso_kg: pesoUnitario * quantidade,
       memoria_calculo: `${pesoUnitario} kg/un (extraído/estimado pela IA) × qtd ${quantidade} = ${(pesoUnitario * quantidade).toFixed(2)} kg`,
+      preco_kg: precoKg,
       formSnapshot: espessura !== null ? { espessura_mm: String(espessura) } : undefined,
     });
   }

@@ -201,7 +201,7 @@ export default function Home() {
       setAvisoBom(null);
       return;
     }
-    const { itens: calculados, ignorados } = converterParaPesoDireto(itens);
+    const { itens: calculados, ignorados } = await converterParaPesoDireto(itens);
     if (calculados.length === 0) {
       setAvisoBom(
         `Lista de materiais da IA: nenhum item pôde ser inserido (${ignorados.length} sem peso estimado) — adicione manualmente no Cálculo manual.`,
