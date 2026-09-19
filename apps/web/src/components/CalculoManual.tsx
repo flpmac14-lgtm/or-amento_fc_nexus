@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { analisarBom, buscarCatalogoGeometria, buscarCatalogoProcessosTerceirizados, buscarMateriais } from "@/lib/api";
+import {
+  analisarBom,
+  buscarCatalogoGeometria,
+  buscarCatalogoProcessosTerceirizados,
+  buscarMateriais,
+  importarExcelRelatorioTecnico,
+} from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import GeometriaIcone from "@/components/icones/GeometriaIcone";
 import CartaoPerfilLaminado from "@/components/CartaoPerfilLaminado";
@@ -92,6 +98,15 @@ export default function CalculoManual({
   const [analisando, setAnalisando] = useState(false);
   const [edicao, setEdicao] = useState<EdicaoAtual | null>(null);
   const proximoIdEdicao = useRef(1);
+  // Importação da planilha do relatório técnico por IA (ver
+  // RelatorioTecnicoIA.tsx > "Excel (BOM editável)" e
+  // app/relatorio_excel.py::calcular_itens_da_planilha) — peso sempre vem
+  // recalculado pelo backend, nunca lido direto da planilha.
+  const [importandoExcel, setImportandoExcel] = useState(false);
+  const [itensIgnoradosImportacao, setItensIgnoradosImportacao] = useState<
+    { posicao: string; descricao: string; motivo: string }[]
+  >([]);
+  const inputExcelRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     buscarCatalogoGeometria()
@@ -134,6 +149,28 @@ export default function CalculoManual({
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+  }
+
+  // Cada item importado vira uma posição/item novo na sequência atual —
+  // mesma numeração de adicionarItem, só que em lote.
+  async function handleImportarExcel(arquivo: File) {
+    setImportandoExcel(true);
+    setItensIgnoradosImportacao([]);
+    try {
+      const { itens: itensImportados, itensIgnorados } = await importarExcelRelatorioTecnico(arquivo);
+      let iNum = itemNum;
+      const novos = itensImportados.map((item) => {
+        const posicao = `Posição ${posicaoNum} - Item ${iNum}`;
+        iNum += 1;
+        return { ...item, posicao };
+      });
+      onEstadoChange({ itens: [...itens, ...novos], itemNum: iNum });
+      setItensIgnoradosImportacao(itensIgnorados);
+    } catch (e) {
+      onErro(e instanceof Error ? e.message : "Erro desconhecido ao importar a planilha.");
+    } finally {
+      setImportandoExcel(false);
+    }
   }
 
   function editarItem(indice: number) {
@@ -488,6 +525,42 @@ export default function CalculoManual({
               </button>
             ))}
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              ref={inputExcelRef}
+              type="file"
+              accept=".xlsx,.xlsm"
+              className="hidden"
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                if (arquivo) handleImportarExcel(arquivo);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => inputExcelRef.current?.click()}
+              disabled={importandoExcel}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {importandoExcel ? "Importando…" : "Importar Excel (BOM da IA)"}
+            </button>
+          </div>
+          {itensIgnoradosImportacao.length > 0 && (
+            <div className="mt-2 rounded-lg border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-300">
+              <p className="mb-1 font-medium">
+                {itensIgnoradosImportacao.length} item(ns) da planilha não entraram — revise e adicione à mão:
+              </p>
+              <ul className="list-disc space-y-0.5 pl-4">
+                {itensIgnoradosImportacao.map((item, i) => (
+                  <li key={i}>
+                    {item.posicao} — {item.descricao || "(sem descrição)"}: {item.motivo}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {tipoAberto === "perfil" && (

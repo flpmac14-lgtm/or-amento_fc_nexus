@@ -90,6 +90,7 @@ from app.orcamentos_salvos import listar as listar_orcamentos_salvos
 from app.orcamentos_salvos import salvar as salvar_orcamento_salvo
 from app.perfis_catalogo import buscar_perfis, listar_tipos as listar_tipos_perfil
 from app.precos_mercado import buscar_preco_chapa, listar_todas_compras, status_sincronizacao
+from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar_excel_bom, ler_excel
 from app.tubos_catalogo import buscar_tubos
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
@@ -483,6 +484,41 @@ async def relatorio_tecnico(file: UploadFile) -> dict:
         ) from e
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+
+
+@app.post("/relatorio-tecnico/excel")
+def relatorio_tecnico_excel(pedido: dict) -> Response:
+    """Excel parametrizado dos itens estruturados que o relatório técnico
+    devolveu (ver app/relatorio_excel.py) — uma coluna por medida que o
+    motor de geometria usa, com lista suspensa de tipos válidos. Editável
+    e reimportável em /relatorio-tecnico/importar-excel."""
+    itens = pedido.get("itens") or []
+    conteudo = gerar_excel_bom(itens)
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=lista-materiais-ia.xlsx"},
+    )
+
+
+@app.post("/relatorio-tecnico/importar-excel")
+async def relatorio_tecnico_importar_excel(file: UploadFile) -> dict:
+    """Lê a planilha (gerada por /relatorio-tecnico/excel, editada ou não)
+    e RECALCULA o peso de cada item pelo motor determinístico — nunca usa
+    um peso vindo de fora. Item sem tipo de geometria reconhecido ou com
+    medida faltando vira "ignorado" em vez de forçar um cálculo errado
+    (ver app/relatorio_excel.py::calcular_itens_da_planilha)."""
+    if not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .xlsx")
+
+    conteudo = await file.read()
+    try:
+        itens_planilha = ler_excel(conteudo)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Não consegui ler a planilha: {e}") from e
+
+    calculados, ignorados = calcular_itens_da_planilha(itens_planilha)
+    return {"itens": calculados, "itens_ignorados": ignorados}
 
 
 @app.post("/orcamento-de-texto")

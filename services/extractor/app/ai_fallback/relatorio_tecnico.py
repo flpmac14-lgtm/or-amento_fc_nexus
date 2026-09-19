@@ -22,7 +22,11 @@ MODEL_ID = "claude-opus-5"
 
 MAX_PAGINAS_RELATORIO = 15
 
-MAX_TOKENS_RELATORIO = 12000
+# O texto do relatório sozinho já chega a ~11500 tokens em desenhos
+# complexos — 18000 dá margem sem reintroduzir a lentidão que motivou o teto
+# original (ver histórico: 32000 -> 12000). A extração estruturada da BOM
+# NÃO disputa esse orçamento: é uma 2a chamada separada (ver gerar_relatorio).
+MAX_TOKENS_RELATORIO = 18000
 
 PROMPT_RELATORIO = """# FUNÇÃO DA IA
 
@@ -423,7 +427,84 @@ Sempre que houver incerteza relevante, informe-a.
 
 O objetivo não é simplesmente produzir uma resposta.
 
-O objetivo é entregar um **estudo técnico rastreável, verificável e útil para engenharia, PCP, compras, fabricação e orçamento industrial**."""
+O objetivo é entregar um **estudo técnico rastreável, verificável e útil para engenharia, PCP, compras, fabricação e orçamento industrial**.
+
+Depois de escrever o relatório em Markdown, chame a ferramenta
+`reportar_bom_estruturada` com a mesma lista de itens da seção D (Lista de
+Materiais) em formato estruturado — um item por peça, sem duplicar peças
+repetidas em vistas diferentes. Isto alimenta o cálculo manual do sistema
+(que recalcula o peso pela geometria, nunca usa o peso que você estimou
+aqui diretamente), então:
+
+- `tipo_geometria` só pode ser um dos valores exatos listados no schema da
+  ferramenta, ou null se não conseguir classificar com confiança.
+- Preencha só as medidas que esse `tipo_geometria` realmente usa (ver
+  descrição de cada campo) — deixe as demais null.
+- Não informe densidade — o sistema já busca isso automaticamente a
+  partir da norma do material.
+- `confianca` reflete o quão certo você está da geometria e das medidas
+  desse item especificamente (pode ser baixa mesmo com posição/descrição
+  certas, se a geometria for incerta)."""
+
+# Tipos exatos de services/calc_engine/app/geometria_dispatch.py::TIPOS_GEOMETRIA
+# — precisa bater com essas chaves pra /geometria/calcular aceitar.
+_TIPOS_GEOMETRIA_VALIDOS = [
+    "chapa_retangular", "chapa_circular", "chapa_triangular", "chapa_losango",
+    "chapa_trapezoidal", "chapa_anel", "cilindro", "cone_altura", "cone_angulo",
+    "cantoneira", "barra_redonda", "tubo_redondo", "perfil",
+]
+
+_CAMPO_NUM = {"type": ["number", "null"]}
+
+TOOL_BOM_ESTRUTURADA = {
+    "name": "reportar_bom_estruturada",
+    "description": (
+        "Reporta a lista de materiais do desenho em formato estruturado, um item por "
+        "peça, pra montagem automática no cálculo manual do sistema."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "posicao": {"type": "string"},
+                        "descricao": {"type": "string"},
+                        "quantidade": {"type": "number"},
+                        "norma": {"type": ["string", "null"]},
+                        "tipo_geometria": {
+                            "type": ["string", "null"],
+                            "enum": [*_TIPOS_GEOMETRIA_VALIDOS, None],
+                        },
+                        "comprimento_mm": {**_CAMPO_NUM, "description": "chapa_retangular, cilindro, cantoneira, barra_redonda, tubo_redondo, perfil"},
+                        "largura_mm": {**_CAMPO_NUM, "description": "chapa_retangular"},
+                        "espessura_mm": {**_CAMPO_NUM, "description": "todos os tipos de chapa/cilindro/cone/cantoneira"},
+                        "diametro_mm": {**_CAMPO_NUM, "description": "chapa_circular, cilindro, barra_redonda"},
+                        "diametro_externo_mm": {**_CAMPO_NUM, "description": "chapa_anel, tubo_redondo"},
+                        "diametro_interno_mm": {**_CAMPO_NUM, "description": "chapa_anel"},
+                        "diametro_maior_mm": {**_CAMPO_NUM, "description": "cone_altura, cone_angulo"},
+                        "diametro_menor_mm": {**_CAMPO_NUM, "description": "cone_altura, cone_angulo (0 = cone fechado)"},
+                        "base_mm": {**_CAMPO_NUM, "description": "chapa_triangular"},
+                        "altura_mm": {**_CAMPO_NUM, "description": "chapa_triangular, chapa_trapezoidal, cone_altura"},
+                        "base_menor_mm": {**_CAMPO_NUM, "description": "chapa_trapezoidal"},
+                        "base_maior_mm": {**_CAMPO_NUM, "description": "chapa_trapezoidal"},
+                        "diagonal_maior_mm": {**_CAMPO_NUM, "description": "chapa_losango"},
+                        "diagonal_menor_mm": {**_CAMPO_NUM, "description": "chapa_losango"},
+                        "aba_mm": {**_CAMPO_NUM, "description": "cantoneira (medida da aba)"},
+                        "angulo_graus": {**_CAMPO_NUM, "description": "cone_angulo (semiângulo)"},
+                        "espessura_parede_mm": {**_CAMPO_NUM, "description": "tubo_redondo"},
+                        "peso_kg_m": {**_CAMPO_NUM, "description": "perfil (peso por metro de catálogo, se legível no desenho)"},
+                        "confianca": {"type": "number", "minimum": 0, "maximum": 1},
+                    },
+                    "required": ["posicao", "descricao", "quantidade", "confianca"],
+                },
+            },
+        },
+        "required": ["itens"],
+    },
+}
 
 
 def fallback_habilitado() -> bool:
@@ -432,8 +513,45 @@ def fallback_habilitado() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
 
 
-def gerar_relatorio(paginas_png: list[bytes]) -> str | None:
-    """Devolve o relatório em Markdown, ou None em qualquer falha (nunca
+class RelatorioCompleto:
+    def __init__(self, texto: str, itens_estruturados: list[dict]) -> None:
+        self.texto = texto
+        self.itens_estruturados = itens_estruturados
+
+
+def _validar_item_estruturado(bruto: dict) -> dict:
+    """Mantém só os campos conhecidos e garante tipo_geometria dentro do
+    enum — a IA às vezes inventa um valor fora do combinado, mais seguro
+    descartar (vira null = "revisar manualmente") do que mandar pro
+    /geometria/calcular um tipo que ele não reconhece."""
+    tipo = bruto.get("tipo_geometria")
+    if tipo not in _TIPOS_GEOMETRIA_VALIDOS:
+        tipo = None
+
+    campos_medida = (
+        "comprimento_mm", "largura_mm", "espessura_mm", "diametro_mm",
+        "diametro_externo_mm", "diametro_interno_mm", "diametro_maior_mm",
+        "diametro_menor_mm", "base_mm", "altura_mm", "base_menor_mm",
+        "base_maior_mm", "diagonal_maior_mm", "diagonal_menor_mm", "aba_mm",
+        "angulo_graus", "espessura_parede_mm", "peso_kg_m",
+    )
+    item = {
+        "posicao": str(bruto.get("posicao") or ""),
+        "descricao": str(bruto.get("descricao") or ""),
+        "quantidade": float(bruto.get("quantidade") or 1),
+        "norma": bruto.get("norma") or None,
+        "tipo_geometria": tipo,
+        "confianca": float(bruto.get("confianca") or 0),
+    }
+    for campo in campos_medida:
+        valor = bruto.get(campo)
+        item[campo] = float(valor) if isinstance(valor, (int, float)) else None
+    return item
+
+
+def gerar_relatorio(paginas_png: list[bytes]) -> RelatorioCompleto | None:
+    """Devolve o relatório (texto em Markdown + itens estruturados da BOM
+    pra montar o Excel/cálculo manual), ou None em qualquer falha (nunca
     propaga exceção — é um recurso de apoio, não pode derrubar nada)."""
     if not fallback_habilitado():
         return None
@@ -454,17 +572,22 @@ def gerar_relatorio(paginas_png: list[bytes]) -> str | None:
         }
         for png in paginas_png
     ]
+    # cache_control no último bloco cacheia o turno inteiro (imagens +
+    # instrução) — a 2a chamada abaixo reusa esse cache em vez de pagar de
+    # novo o custo de reprocessar as imagens.
     conteudo.append({
         "type": "text",
         "text": "Analise este desenho técnico e gere o estudo completo conforme as instruções.",
+        "cache_control": {"type": "ephemeral"},
     })
+    system_blocks = [{"type": "text", "text": PROMPT_RELATORIO, "cache_control": {"type": "ephemeral"}}]
 
     try:
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         with client.with_options(timeout=600.0).messages.stream(
             model=MODEL_ID,
             max_tokens=MAX_TOKENS_RELATORIO,
-            system=PROMPT_RELATORIO,
+            system=system_blocks,
             messages=[{"role": "user", "content": conteudo}],
             output_config={"effort": "medium"},
         ) as stream:
@@ -472,7 +595,52 @@ def gerar_relatorio(paginas_png: list[bytes]) -> str | None:
 
         partes_texto = [b.text for b in resposta.content if b.type == "text"]
         texto = "\n".join(partes_texto).strip()
-        return texto or None
+        if not texto:
+            return None
+
+        # 2a chamada, separada, só pra estruturar a BOM que a IA acabou de
+        # escrever. Testado empiricamente: pedir o texto E a ferramenta na
+        # mesma resposta (tool_choice "auto", mesmo com instrução explícita
+        # e teto de tokens alto) faz o modelo terminar o relatório e parar
+        # sem chamar a ferramenta (stop_reason "end_turn", 0 itens). Forçar
+        # tool_choice="any"/"tool" na mesma chamada também não serve: aí o
+        # modelo pula o texto inteiro e só devolve a ferramenta. Por isso a
+        # extração vira uma chamada à parte com tool_choice forçado — como o
+        # prompt do sistema e o turno com as imagens têm cache_control, essa
+        # chamada extra sai barata (cache hit) e rápida (sem gerar texto).
+        # Nunca deixa a extração estruturada derrubar o relatório: falhando,
+        # devolve o texto com itens_estruturados vazio.
+        itens_estruturados: list[dict] = []
+        try:
+            resposta_bom = client.with_options(timeout=180.0).messages.create(
+                model=MODEL_ID,
+                max_tokens=4000,
+                system=system_blocks,
+                messages=[
+                    {"role": "user", "content": conteudo},
+                    {"role": "assistant", "content": [{"type": "text", "text": texto}]},
+                    {
+                        "role": "user",
+                        "content": [{
+                            "type": "text",
+                            "text": (
+                                "Agora chame a ferramenta reportar_bom_estruturada com a lista de "
+                                "materiais (BOM) do relatório acima, um item por posição/peça."
+                            ),
+                        }],
+                    },
+                ],
+                tools=[TOOL_BOM_ESTRUTURADA],
+                tool_choice={"type": "tool", "name": "reportar_bom_estruturada"},
+            )
+            for bloco in resposta_bom.content:
+                if bloco.type == "tool_use" and bloco.name == "reportar_bom_estruturada":
+                    for bruto in bloco.input.get("itens", []):
+                        itens_estruturados.append(_validar_item_estruturado(bruto))
+        except Exception as exc:
+            print(f"[ai_fallback] extração estruturada da BOM falhou: {type(exc).__name__}: {exc}")
+
+        return RelatorioCompleto(texto=texto, itens_estruturados=itens_estruturados)
     except Exception as exc:
         print(f"[ai_fallback] gerar_relatorio falhou: {type(exc).__name__}: {exc}")
         return None

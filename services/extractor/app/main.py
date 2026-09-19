@@ -91,4 +91,4 @@ async def relatorio_tecnico(file: UploadFile) -> dict:
     relatorio = gerar_relatorio(paginas_png)
     if relatorio is None:
         raise HTTPException(status_code=502, detail="Não foi possível gerar o relatório técnico agora. Tente de novo.")
-    return {"relatorio_markdown": relatorio}
+    return {"relatorio_markdown": relatorio.texto, "itens_estruturados": relatorio.itens_estruturados}

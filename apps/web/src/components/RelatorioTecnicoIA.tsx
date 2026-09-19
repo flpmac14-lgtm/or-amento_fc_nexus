@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { gerarRelatorioTecnico } from "@/lib/api";
+import { baixarExcelRelatorioTecnico, gerarRelatorioTecnico, type ItemEstruturadoIA } from "@/lib/api";
 
 interface Props {
   arquivo: File | null;
@@ -25,19 +25,38 @@ interface Props {
 export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChange, onImprimir }: Props) {
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Itens da BOM extraídos pela IA junto do relatório — só vivem enquanto o
+  // painel está aberto (não são salvos com o orçamento), servem pra montar
+  // o Excel de exportação (ver handleBaixarExcel/baixarExcelRelatorioTecnico).
+  const [itensEstruturados, setItensEstruturados] = useState<ItemEstruturadoIA[]>([]);
+  const [baixandoExcel, setBaixandoExcel] = useState(false);
 
   async function handleGerar() {
     if (!arquivo) return;
     setGerando(true);
     setErro(null);
     onRelatorioChange(null);
+    setItensEstruturados([]);
     try {
-      const texto = await gerarRelatorioTecnico(arquivo);
-      onRelatorioChange(texto);
+      const { relatorioMarkdown, itensEstruturados: itens } = await gerarRelatorioTecnico(arquivo);
+      onRelatorioChange(relatorioMarkdown);
+      setItensEstruturados(itens);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao gerar o relatório.");
     } finally {
       setGerando(false);
+    }
+  }
+
+  async function handleBaixarExcel() {
+    setBaixandoExcel(true);
+    setErro(null);
+    try {
+      await baixarExcelRelatorioTecnico(itensEstruturados);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao gerar o Excel.");
+    } finally {
+      setBaixandoExcel(false);
     }
   }
 
@@ -76,6 +95,16 @@ export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChan
               className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
             >
               PDF
+            </button>
+          )}
+          {itensEstruturados.length > 0 && (
+            <button
+              type="button"
+              onClick={handleBaixarExcel}
+              disabled={baixandoExcel}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {baixandoExcel ? "Gerando…" : "Excel (BOM editável)"}
             </button>
           )}
         </div>

@@ -31,6 +31,13 @@ function nomeSugerido(
   return partes.length ? partes.join(" — ") : fallback;
 }
 
+// Pedido explícito do usuário: se ele não digitou um nome, salvar como
+// "Orçamento" + a data em vez de "Orçamento sem nome".
+function nomeOrcamentoPadrao(): string {
+  const hoje = new Date().toLocaleDateString("pt-BR");
+  return `Orçamento ${hoje}`;
+}
+
 export default function Home() {
   const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
@@ -156,19 +163,25 @@ export default function Home() {
     setModo("arquivo");
   }
 
-  async function handleSalvarOrcamento() {
+  // `relatorioOverride` existe só pra salvar automaticamente assim que o
+  // relatório técnico termina de gerar (pedido explícito do usuário — ele
+  // perdeu um relatório de ~3min por não ter clicado "Salvar orçamento"
+  // antes de sair da tela). Não dá pra confiar no estado `relatorioTecnico`
+  // nesse momento porque o setState que acabou de rodar pode não ter sido
+  // aplicado ainda quando este handler é chamado logo em seguida.
+  async function handleSalvarOrcamento(relatorioOverride?: string) {
     if (!resultado || !origemAtual) return;
     setSalvando(true);
     setErro(null);
     try {
-      const nome = nomeOrcamento.trim() || "Orçamento sem nome";
+      const nome = nomeOrcamento.trim() || nomeOrcamentoPadrao();
       const r = await salvarOrcamento({
         id: orcamentoSalvoId ?? undefined,
         nome,
         origem: origemAtual,
         resultado: { ...resultado, identificacao_cliente: identificacaoCliente },
         estado_manual: origemAtual === "manual" ? estadoManual : null,
-        relatorio_tecnico: relatorioTecnico,
+        relatorio_tecnico: relatorioOverride ?? relatorioTecnico,
       });
       setOrcamentoSalvoId(r.id);
       setNomeOrcamento(nome);
@@ -176,6 +189,18 @@ export default function Home() {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao salvar o orçamento.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  // Chamado pelo painel do relatório técnico assim que a IA termina —
+  // salva na hora (cria o orçamento se ainda não existir), pra não perder
+  // uma geração de ~1-3min se o usuário sair da tela antes de salvar à mão.
+  // `texto` também vem como null no início de cada geração (limpando o
+  // anterior) — nesse caso só limpa o estado, não salva nada.
+  async function handleRelatorioTecnicoGerado(texto: string | null) {
+    setRelatorioTecnico(texto);
+    if (texto && resultado && origemAtual) {
+      await handleSalvarOrcamento(texto);
     }
   }
 
@@ -203,7 +228,7 @@ export default function Home() {
     // antes. Cria o registro se ainda não existir, atualiza se já existir.
     if (origemAtual) {
       try {
-        const nome = nomeOrcamento.trim() || "Orçamento sem nome";
+        const nome = nomeOrcamento.trim() || nomeOrcamentoPadrao();
         const r = await salvarOrcamento({
           id: orcamentoSalvoId ?? undefined,
           nome,
@@ -287,16 +312,18 @@ export default function Home() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {resultado && (
-                <button
-                  type="button"
-                  onClick={handleSalvarOrcamento}
-                  disabled={salvando}
-                  className="rounded-lg bg-cyan-500 px-6 py-3 text-base font-bold text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {salvando ? "Salvando…" : "Salvar orçamento"}
-                </button>
-              )}
+              {/* Pedido explícito do usuário: sempre visível em qualquer aba,
+                  pra poder salvar a qualquer momento durante a edição — antes
+                  só aparecia depois de um resultado calculado. Fica desabilitado
+                  até existir algo pra salvar (ver handleSalvarOrcamento). */}
+              <button
+                type="button"
+                onClick={() => handleSalvarOrcamento()}
+                disabled={salvando || !resultado || !origemAtual}
+                className="rounded-lg bg-cyan-500 px-6 py-3 text-base font-bold text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {salvando ? "Salvando…" : "Salvar orçamento"}
+              </button>
               <button
                 type="button"
                 onClick={handleSair}
@@ -306,39 +333,41 @@ export default function Home() {
               </button>
             </div>
           </div>
-          {resultado && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={nomeOrcamento}
-                onChange={(e) => setNomeOrcamento(e.target.value)}
-                placeholder="nome do orçamento"
-                className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 sm:flex-none sm:w-56"
-              />
-              <button
-                type="button"
-                onClick={handleNovoOrcamento}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
-              >
-                Novo orçamento
-              </button>
-              <button
-                type="button"
-                onClick={() => setAlvoImpressao("orcamento")}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
-              >
-                Relatório (PDF)
-              </button>
-              <button
-                type="button"
-                onClick={handleBaixarExcel}
-                disabled={baixandoExcel}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {baixandoExcel ? "Gerando…" : "Excel (editável)"}
-              </button>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={nomeOrcamento}
+              onChange={(e) => setNomeOrcamento(e.target.value)}
+              placeholder="nome do orçamento"
+              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 sm:flex-none sm:w-56"
+            />
+            <button
+              type="button"
+              onClick={handleNovoOrcamento}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+            >
+              Novo orçamento
+            </button>
+            {resultado && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAlvoImpressao("orcamento")}
+                  className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+                >
+                  Relatório (PDF)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBaixarExcel}
+                  disabled={baixandoExcel}
+                  className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {baixandoExcel ? "Gerando…" : "Excel (editável)"}
+                </button>
+              </>
+            )}
+          </div>
         </header>
 
         {/* Pedido explícito do usuário: sempre visível, antes do
@@ -363,7 +392,7 @@ export default function Home() {
           onAbrirSalvo={handleAbrirSalvo}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
           relatorioTecnico={relatorioTecnico}
-          onRelatorioTecnicoChange={setRelatorioTecnico}
+          onRelatorioTecnicoChange={handleRelatorioTecnicoGerado}
           onImprimirRelatorioTecnico={() => setAlvoImpressao("relatorio-ia")}
         />
 

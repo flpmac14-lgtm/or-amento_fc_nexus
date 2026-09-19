@@ -63,11 +63,32 @@ export async function analisarPdf(
   return resposta.json();
 }
 
+// Item bruto da BOM que a IA extraiu do relatório técnico — mesmos campos
+// da ferramenta reportar_bom_estruturada (ver relatorio_tecnico.py), tipo
+// de geometria já validado contra o enum de TIPOS_GEOMETRIA (ou null =
+// não reconhecido/precisa revisão manual). Só alimenta o Excel de
+// exportação — nunca o cálculo (peso/custo sempre recalculado a partir
+// das medidas, ver /relatorio-tecnico/importar-excel).
+export interface ItemEstruturadoIA {
+  posicao: string;
+  descricao: string;
+  quantidade: number;
+  norma: string | null;
+  tipo_geometria: string | null;
+  confianca: number;
+  [medida: string]: unknown;
+}
+
+export interface RelatorioTecnicoResultado {
+  relatorioMarkdown: string;
+  itensEstruturados: ItemEstruturadoIA[];
+}
+
 /** Estudo técnico completo por IA (geometria, BOM, peso estimado,
  * fabricação, solda, usinagem, pintura, análise crítica) — só informativo,
  * não alimenta o orçamento real. Demora (1-3 min é normal, é uma análise
  * grande) — sem timeout próprio no fetch, deixa a chamada terminar. */
-export async function gerarRelatorioTecnico(arquivo: File): Promise<string> {
+export async function gerarRelatorioTecnico(arquivo: File): Promise<RelatorioTecnicoResultado> {
   const formData = new FormData();
   formData.set("file", arquivo);
 
@@ -84,7 +105,61 @@ export async function gerarRelatorioTecnico(arquivo: File): Promise<string> {
   }
 
   const dados = await resposta.json();
-  return dados.relatorio_markdown as string;
+  return {
+    relatorioMarkdown: dados.relatorio_markdown as string,
+    itensEstruturados: (dados.itens_estruturados ?? []) as ItemEstruturadoIA[],
+  };
+}
+
+/** Excel parametrizado dos itens que a IA extraiu — editável e
+ * reimportável em importarExcelRelatorioTecnico. */
+export async function baixarExcelRelatorioTecnico(itens: ItemEstruturadoIA[]): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/relatorio-tecnico/excel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itens }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao gerar o Excel da lista de materiais (${resposta.status}). ${corpo}`);
+  }
+
+  const blob = await resposta.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "lista-materiais-ia.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Lê a planilha (gerada acima, editada ou não) e devolve os itens já
+ * recalculados pelo motor determinístico — peso nunca vem da planilha,
+ * só as medidas (ver services/calc_engine/app/relatorio_excel.py). */
+export async function importarExcelRelatorioTecnico(
+  arquivo: File,
+): Promise<{ itens: ItemCalculado[]; itensIgnorados: { posicao: string; descricao: string; motivo: string }[] }> {
+  const formData = new FormData();
+  formData.set("file", arquivo);
+
+  const resposta = await fetch(`${CALC_ENGINE_URL}/relatorio-tecnico/importar-excel`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao importar a planilha (${resposta.status}). ${corpo}`);
+  }
+
+  const dados = await resposta.json();
+  return {
+    itens: dados.itens as ItemCalculado[],
+    itensIgnorados: dados.itens_ignorados ?? [],
+  };
 }
 
 export async function recalcularOrcamento(entrada: Record<string, unknown>): Promise<ResultadoOrcamentoDTO> {
