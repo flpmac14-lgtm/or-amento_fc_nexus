@@ -456,21 +456,18 @@ async def orcamento_de_pdf(
 
 @app.post("/relatorio-tecnico")
 async def relatorio_tecnico(file: UploadFile) -> dict:
-    """Repassa pro extractor (POST /relatorio-tecnico) — estudo técnico
-    completo por IA (geometria, BOM, peso estimado, fabricação, solda,
-    usinagem, pintura, análise crítica), só informativo. O peso/custo que
-    aparece nesse relatório é estimativa da IA, NUNCA o valor oficial do
-    orçamento — esse continua vindo só do motor de cálculo determinístico
-    a partir dos itens confirmados nos cartões de cálculo manual.
-
-    Timeout bem mais alto que os outros proxies (10 min): é uma geração
-    longa (streaming no extractor, ver app/ai_fallback/relatorio_tecnico.py)."""
+    """Repassa pro extractor (POST /relatorio-tecnico) — extração da lista
+    de materiais (BOM) por IA, só isso (sem relatório narrativo, removido a
+    pedido do usuário por custo — ver app/ai_fallback/lista_materiais.py no
+    extractor). O peso que vem aqui é só o valor inicial do cartão "Peso
+    direto" no cálculo manual — o orçamentista confirma antes de fechar o
+    orçamento, que continua vindo 100% do motor de cálculo determinístico."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
 
     conteudo = await file.read()
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             resp = await client.post(
                 f"{EXTRACTOR_URL}/relatorio-tecnico",
                 files=[("file", (file.filename, conteudo, "application/pdf"))],
@@ -518,6 +515,19 @@ async def relatorio_tecnico_importar_excel(file: UploadFile) -> dict:
         raise HTTPException(status_code=400, detail=f"Não consegui ler a planilha: {e}") from e
 
     calculados, ignorados = calcular_itens_da_planilha(itens_planilha)
+    return {"itens": calculados, "itens_ignorados": ignorados}
+
+
+@app.post("/relatorio-tecnico/calcular")
+def relatorio_tecnico_calcular(pedido: dict) -> dict:
+    """Mesmo cálculo de /relatorio-tecnico/importar-excel, mas direto a
+    partir dos itens_estruturados que o relatório técnico devolveu — sem
+    passar pelo Excel. Usado pra popular o Cálculo manual automaticamente
+    assim que o relatório termina (pedido explícito do usuário), mantendo o
+    Excel como caminho alternativo pra revisar/editar em lote antes de trazer
+    pro sistema."""
+    itens = pedido.get("itens") or []
+    calculados, ignorados = calcular_itens_da_planilha(itens)
     return {"itens": calculados, "itens_ignorados": ignorados}
 
 

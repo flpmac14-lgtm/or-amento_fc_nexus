@@ -5,6 +5,7 @@ import CalculoManual from "@/components/CalculoManual";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
 import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
+import type { ItemEstruturadoIA } from "@/lib/api";
 import type {
   EstadoCalculoManual,
   EstimativasOrcamento,
@@ -30,11 +31,7 @@ interface Props {
   // item (bug relatado pelo usuário: aplicar o líquido e o resumo voltar
   // pro bruto depois de qualquer interação em Cálculo manual).
   pesoLiquidoManualAtivo: number | null;
-  // Estudo técnico completo por IA (Markdown) — mora no componente pai
-  // (page.tsx) pra sobreviver a "Salvar orçamento"/reabrir um salvo.
-  relatorioTecnico: string | null;
-  onRelatorioTecnicoChange: (relatorio: string | null) => void;
-  onImprimirRelatorioTecnico: () => void;
+  onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
 }
 
 export default function FormularioUpload({
@@ -48,9 +45,7 @@ export default function FormularioUpload({
   onEstadoManualChange,
   onAbrirSalvo,
   pesoLiquidoManualAtivo,
-  relatorioTecnico,
-  onRelatorioTecnicoChange,
-  onImprimirRelatorioTecnico,
+  onItensEstruturadosChange,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -180,9 +175,7 @@ export default function FormularioUpload({
       {modo === "arquivo" && (
         <RelatorioTecnicoIA
           arquivo={arquivo}
-          relatorio={relatorioTecnico}
-          onRelatorioChange={onRelatorioTecnicoChange}
-          onImprimir={onImprimirRelatorioTecnico}
+          onItensEstruturadosChange={onItensEstruturadosChange}
         />
       )}
 

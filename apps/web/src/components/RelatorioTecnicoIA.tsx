@@ -1,50 +1,44 @@
 "use client";
 
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import { baixarExcelRelatorioTecnico, gerarRelatorioTecnico, type ItemEstruturadoIA } from "@/lib/api";
+import { baixarExcelRelatorioTecnico, extrairListaMateriais, type ItemEstruturadoIA } from "@/lib/api";
 
 interface Props {
   arquivo: File | null;
-  // Controlado pelo pai (page.tsx) — sobrevive a "Salvar orçamento" e a
-  // reabrir um orçamento salvo (onde não tem mais o File original, só o
-  // texto que ficou salvo).
-  relatorio: string | null;
-  onRelatorioChange: (relatorio: string | null) => void;
-  // Imprimir mora em page.tsx (window.print() de um único documento de
-  // impressão por vez, pra não imprimir o orçamento e este relatório juntos).
-  onImprimir: () => void;
+  // Repassa a BOM estruturada assim que a IA termina, pro pai (page.tsx)
+  // inserir automaticamente no Cálculo manual — pedido explícito do
+  // usuário. `[]` no início de cada extração limpa a inserção anterior.
+  onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
 }
 
-// Estudo técnico completo por IA (geometria, BOM, peso estimado, solda,
-// usinagem, pintura, análise crítica) — pedido explícito do usuário.
-// SÓ INFORMATIVO: o peso/custo aqui é estimativa da IA, nunca o valor do
-// orçamento (esse continua vindo do motor de cálculo determinístico a
-// partir dos itens confirmados no cálculo manual). Por isso fica separado
-// do fluxo de "Analisar desenho", num painel à parte.
-export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChange, onImprimir }: Props) {
-  const [gerando, setGerando] = useState(false);
+// Extração da lista de materiais (BOM) por IA — pedido explícito do
+// usuário: só isso, nenhum relatório narrativo (removido por custo de API
+// — era a parte mais cara de cada chamada e não era usado). Uma chamada
+// rápida, forçando a IA a devolver só o formato estruturado. Os itens
+// entram automaticamente no Cálculo manual como cartões "Peso direto",
+// usando o peso extraído do desenho/estimado pela IA como valor inicial
+// editável — o orçamentista confere/ajusta antes de fechar (custo/hora/
+// preço continuam sempre vindo do motor determinístico).
+export default function RelatorioTecnicoIA({ arquivo, onItensEstruturadosChange }: Props) {
+  const [extraindo, setExtraindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  // Itens da BOM extraídos pela IA junto do relatório — só vivem enquanto o
-  // painel está aberto (não são salvos com o orçamento), servem pra montar
-  // o Excel de exportação (ver handleBaixarExcel/baixarExcelRelatorioTecnico).
   const [itensEstruturados, setItensEstruturados] = useState<ItemEstruturadoIA[]>([]);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
 
-  async function handleGerar() {
+  async function handleExtrair() {
     if (!arquivo) return;
-    setGerando(true);
+    setExtraindo(true);
     setErro(null);
-    onRelatorioChange(null);
     setItensEstruturados([]);
+    onItensEstruturadosChange([]);
     try {
-      const { relatorioMarkdown, itensEstruturados: itens } = await gerarRelatorioTecnico(arquivo);
-      onRelatorioChange(relatorioMarkdown);
+      const itens = await extrairListaMateriais(arquivo);
       setItensEstruturados(itens);
+      onItensEstruturadosChange(itens);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro desconhecido ao gerar o relatório.");
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao extrair a lista de materiais.");
     } finally {
-      setGerando(false);
+      setExtraindo(false);
     }
   }
 
@@ -60,41 +54,32 @@ export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChan
     }
   }
 
-  if (!arquivo && !relatorio) return null;
+  if (!arquivo && itensEstruturados.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-slate-200">Relatório técnico completo (IA)</p>
+          <p className="text-sm font-medium text-slate-200">Lista de materiais (IA)</p>
           <p className="text-xs text-slate-500">
-            Estudo detalhado de geometria, materiais, fabricação, solda e pintura — só leitura de
-            apoio. Peso/custo aqui é estimativa da IA, o orçamento oficial continua vindo do
-            cálculo determinístico. Pode levar 1–3 minutos.
+            Extrai posição, material, quantidade e peso de cada peça e insere automaticamente no
+            Cálculo manual como &quot;Peso direto&quot; (editável) — confira antes de fechar o
+            orçamento.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {arquivo && (
             <button
               type="button"
-              onClick={handleGerar}
-              disabled={gerando}
+              onClick={handleExtrair}
+              disabled={extraindo}
               className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {gerando
-                ? "Gerando… (1–3 min)"
-                : relatorio
-                  ? "Gerar de novo"
-                  : "Gerar relatório técnico"}
-            </button>
-          )}
-          {relatorio && (
-            <button
-              type="button"
-              onClick={onImprimir}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
-            >
-              PDF
+              {extraindo
+                ? "Extraindo…"
+                : itensEstruturados.length > 0
+                  ? "Extrair de novo"
+                  : "Extrair lista de materiais"}
             </button>
           )}
           {itensEstruturados.length > 0 && (
@@ -116,10 +101,19 @@ export default function RelatorioTecnicoIA({ arquivo, relatorio, onRelatorioChan
         </div>
       )}
 
-      {relatorio && (
-        <div className="prose prose-invert prose-sm mt-4 max-w-none rounded-lg border border-slate-800 bg-slate-950 p-4 prose-headings:text-cyan-300 prose-table:text-slate-200 prose-th:border prose-th:border-slate-700 prose-td:border prose-td:border-slate-700">
-          <ReactMarkdown>{relatorio}</ReactMarkdown>
-        </div>
+      {itensEstruturados.length > 0 && (
+        <ul className="mt-4 space-y-1.5 text-sm text-slate-300">
+          {itensEstruturados.map((item, i) => (
+            <li key={i} className="border-b border-slate-800 pb-1.5 last:border-0">
+              <span className="font-medium text-cyan-300">POS {item.posicao}</span> — {item.descricao}
+              {item.norma ? ` · ${item.norma}` : ""} · Qtd: {item.quantidade}
+              {item.peso_unitario_estimado_kg != null
+                ? ` · ${item.peso_unitario_estimado_kg} kg/un`
+                : " · peso não estimado"}
+              {item.observacao ? ` · ${item.observacao}` : ""}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

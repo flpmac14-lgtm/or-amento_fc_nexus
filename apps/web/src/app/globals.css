@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
 /* Paleta fixa (não depende de prefers-color-scheme): navy escuro + ciano,
    pedida explicitamente pelo usuário a partir de uma referência visual. */

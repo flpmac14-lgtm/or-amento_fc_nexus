@@ -63,32 +63,34 @@ export async function analisarPdf(
   return resposta.json();
 }
 
-// Item bruto da BOM que a IA extraiu do relatório técnico — mesmos campos
-// da ferramenta reportar_bom_estruturada (ver relatorio_tecnico.py), tipo
-// de geometria já validado contra o enum de TIPOS_GEOMETRIA (ou null =
-// não reconhecido/precisa revisão manual). Só alimenta o Excel de
-// exportação — nunca o cálculo (peso/custo sempre recalculado a partir
-// das medidas, ver /relatorio-tecnico/importar-excel).
+// Item bruto da BOM que a IA extraiu do desenho — mesmos campos da
+// ferramenta reportar_bom_estruturada (ver
+// services/extractor/app/ai_fallback/lista_materiais.py), tipo de
+// geometria já validado contra o enum de TIPOS_GEOMETRIA (ou null = não
+// reconhecido/precisa revisão manual).
+// `peso_unitario_estimado_kg` alimenta a inserção automática como cartão
+// "Peso direto" no Cálculo manual (pedido explícito do usuário — inserção
+// rápida com o peso extraído do desenho/estimado pela IA, sem recalcular
+// pela geometria — é só isso que a IA devolve agora, sem relatório
+// narrativo, por custo). `tipo_geometria`+medidas continuam disponíveis
+// pra quem quiser conferir/recalcular depois via Excel
+// (/relatorio-tecnico/excel e /importar-excel).
 export interface ItemEstruturadoIA {
   posicao: string;
   descricao: string;
   quantidade: number;
   norma: string | null;
   tipo_geometria: string | null;
+  peso_unitario_estimado_kg: number | null;
+  observacao: string | null;
   confianca: number;
   [medida: string]: unknown;
 }
 
-export interface RelatorioTecnicoResultado {
-  relatorioMarkdown: string;
-  itensEstruturados: ItemEstruturadoIA[];
-}
-
-/** Estudo técnico completo por IA (geometria, BOM, peso estimado,
- * fabricação, solda, usinagem, pintura, análise crítica) — só informativo,
- * não alimenta o orçamento real. Demora (1-3 min é normal, é uma análise
- * grande) — sem timeout próprio no fetch, deixa a chamada terminar. */
-export async function gerarRelatorioTecnico(arquivo: File): Promise<RelatorioTecnicoResultado> {
+/** Extração da lista de materiais (BOM) por IA a partir do desenho — só
+ * isso, sem relatório narrativo (removido a pedido explícito do usuário
+ * por custo de API). Uma chamada rápida (segundos, não minutos). */
+export async function extrairListaMateriais(arquivo: File): Promise<ItemEstruturadoIA[]> {
   const formData = new FormData();
   formData.set("file", arquivo);
 
@@ -100,15 +102,12 @@ export async function gerarRelatorioTecnico(arquivo: File): Promise<RelatorioTec
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     throw new Error(
-      `Falha ao gerar o relatório técnico (${resposta.status}). ${corpo || "Tente de novo."}`,
+      `Falha ao extrair a lista de materiais (${resposta.status}). ${corpo || "Tente de novo."}`,
     );
   }
 
   const dados = await resposta.json();
-  return {
-    relatorioMarkdown: dados.relatorio_markdown as string,
-    itensEstruturados: (dados.itens_estruturados ?? []) as ItemEstruturadoIA[],
-  };
+  return (dados.itens_estruturados ?? []) as ItemEstruturadoIA[];
 }
 
 /** Excel parametrizado dos itens que a IA extraiu — editável e
@@ -134,6 +133,30 @@ export async function baixarExcelRelatorioTecnico(itens: ItemEstruturadoIA[]): P
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Mesmo cálculo do Excel, mas direto a partir dos itens_estruturados que o
+ * relatório técnico devolveu — sem passar pelo Excel. Usado pra popular o
+ * Cálculo manual automaticamente assim que o relatório termina. */
+export async function calcularItensRelatorioTecnico(
+  itens: ItemEstruturadoIA[],
+): Promise<{ itens: ItemCalculado[]; itensIgnorados: { posicao: string; descricao: string; motivo: string }[] }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/relatorio-tecnico/calcular`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itens }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao calcular os itens da lista de materiais (${resposta.status}). ${corpo}`);
+  }
+
+  const dados = await resposta.json();
+  return {
+    itens: dados.itens as ItemCalculado[],
+    itensIgnorados: dados.itens_ignorados ?? [],
+  };
 }
 
 /** Lê a planilha (gerada acima, editada ou não) e devolve os itens já

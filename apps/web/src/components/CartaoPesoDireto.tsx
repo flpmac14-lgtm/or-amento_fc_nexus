@@ -72,7 +72,10 @@ export default function CartaoPesoDireto({
     setPesoUnitario(d.quantidade ? String(d.peso_kg / d.quantidade) : String(d.peso_kg));
     const indiceMaterial = materiais.findIndex((m) => m.norma === d.norma);
     setMaterialIndice(indiceMaterial >= 0 ? String(indiceMaterial) : "");
-    setEspessuraRef("");
+    // Só existe quando o item veio da inserção automática da BOM por IA
+    // (ver lib/itensCalculados.ts::converterParaPesoDireto) — itens
+    // adicionados por este cartão nunca preenchem formSnapshot.
+    setEspessuraRef(d.formSnapshot?.espessura_mm ?? "");
     setPrecoEditado(true);
     setPrecoManual(d.preco_kg !== undefined ? String(d.preco_kg) : "");
     setErro("");

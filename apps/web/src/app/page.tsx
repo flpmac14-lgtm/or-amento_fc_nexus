@@ -6,9 +6,16 @@ import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
-import RelatorioTecnicoImpressao from "@/components/RelatorioTecnicoImpressao";
 import PainelIdentificacaoCliente from "@/components/PainelIdentificacaoCliente";
-import { analisarPdf, baixarExcel, recalcularOrcamento, salvarOrcamento } from "@/lib/api";
+import {
+  analisarBom,
+  analisarPdf,
+  baixarExcel,
+  recalcularOrcamento,
+  salvarOrcamento,
+  type ItemEstruturadoIA,
+} from "@/lib/api";
+import { converterParaPesoDireto, renumerarItensPorPosicao } from "@/lib/itensCalculados";
 import {
   ESTADO_CALCULO_MANUAL_INICIAL,
   IDENTIFICACAO_CLIENTE_INICIAL,
@@ -45,6 +52,10 @@ export default function Home() {
   const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Aviso da inserção automática da BOM da IA no Cálculo manual (ver
+  // handleItensEstruturadosGerados) — separado de `erro` pra não parecer
+  // uma falha quando é só um resumo do que foi inserido/ignorado.
+  const [avisoBom, setAvisoBom] = useState<string | null>(null);
   const [resultado, setResultado] = useState<RespostaOrcamentoDePdf | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
 
@@ -64,13 +75,7 @@ export default function Home() {
   const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
   const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
-  // Estudo técnico completo por IA (Markdown) — gerado à parte (ver
-  // RelatorioTecnicoIA.tsx), mas salvo junto do orçamento quando existe
-  // (pedido explícito do usuário, pra não perder o relatório ao reabrir).
-  const [relatorioTecnico, setRelatorioTecnico] = useState<string | null>(null);
-  // Qual documento imprimir — só um "hidden print:block" pode estar ativo
-  // de cada vez, senão window.print() imprimiria os dois juntos.
-  const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | "relatorio-ia" | null>(null);
+  const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | null>(null);
 
   useEffect(() => {
     if (!alvoImpressao) return;
@@ -129,7 +134,6 @@ export default function Home() {
     setNomeOrcamento(salvo.nome);
     setOrcamentoSalvoId(salvo.id);
     setOrigemAtual(salvo.origem);
-    setRelatorioTecnico(salvo.relatorio_tecnico ?? null);
     // Mesma lógica de mesclar com o inicial (orçamentos salvos antes desse
     // campo existir não têm `identificacao_cliente`).
     setIdentificacaoCliente({
@@ -159,17 +163,10 @@ export default function Home() {
     setOrigemAtual(null);
     setEstadoManual(ESTADO_CALCULO_MANUAL_INICIAL);
     setIdentificacaoCliente(IDENTIFICACAO_CLIENTE_INICIAL);
-    setRelatorioTecnico(null);
     setModo("arquivo");
   }
 
-  // `relatorioOverride` existe só pra salvar automaticamente assim que o
-  // relatório técnico termina de gerar (pedido explícito do usuário — ele
-  // perdeu um relatório de ~3min por não ter clicado "Salvar orçamento"
-  // antes de sair da tela). Não dá pra confiar no estado `relatorioTecnico`
-  // nesse momento porque o setState que acabou de rodar pode não ter sido
-  // aplicado ainda quando este handler é chamado logo em seguida.
-  async function handleSalvarOrcamento(relatorioOverride?: string) {
+  async function handleSalvarOrcamento() {
     if (!resultado || !origemAtual) return;
     setSalvando(true);
     setErro(null);
@@ -181,7 +178,6 @@ export default function Home() {
         origem: origemAtual,
         resultado: { ...resultado, identificacao_cliente: identificacaoCliente },
         estado_manual: origemAtual === "manual" ? estadoManual : null,
-        relatorio_tecnico: relatorioOverride ?? relatorioTecnico,
       });
       setOrcamentoSalvoId(r.id);
       setNomeOrcamento(nome);
@@ -192,15 +188,66 @@ export default function Home() {
     }
   }
 
-  // Chamado pelo painel do relatório técnico assim que a IA termina —
-  // salva na hora (cria o orçamento se ainda não existir), pra não perder
-  // uma geração de ~1-3min se o usuário sair da tela antes de salvar à mão.
-  // `texto` também vem como null no início de cada geração (limpando o
-  // anterior) — nesse caso só limpa o estado, não salva nada.
-  async function handleRelatorioTecnicoGerado(texto: string | null) {
-    setRelatorioTecnico(texto);
-    if (texto && resultado && origemAtual) {
-      await handleSalvarOrcamento(texto);
+  // Chamado pelo painel de extração da lista de materiais assim que a IA
+  // termina — pega a BOM
+  // que a IA extraiu e já insere tudo no Cálculo manual como cartões "Peso
+  // direto" (pedido explícito do usuário: usa o peso extraído do
+  // desenho/estimado pela IA direto, sem recalcular pela geometria — isso
+  // continua disponível à parte via Excel pra quem quiser conferir depois),
+  // ordenado pela POS do desenho e com "Item" sequencial. `itens` vem como
+  // `[]` no início de cada geração, o que só limpa o aviso.
+  async function handleItensEstruturadosGerados(itens: ItemEstruturadoIA[]) {
+    if (itens.length === 0) {
+      setAvisoBom(null);
+      return;
+    }
+    const { itens: calculados, ignorados } = converterParaPesoDireto(itens);
+    if (calculados.length === 0) {
+      setAvisoBom(
+        `Lista de materiais da IA: nenhum item pôde ser inserido (${ignorados.length} sem peso estimado) — adicione manualmente no Cálculo manual.`,
+      );
+      return;
+    }
+    const { itens: renumerados, proximoItemNum } = renumerarItensPorPosicao(calculados, estadoManual.itemNum);
+    const novosItens = [...estadoManual.itens, ...renumerados];
+    handleEstadoManualChange({ itens: novosItens, itemNum: proximoItemNum });
+
+    const partes = [
+      `${calculados.length} item(ns) inserido(s) no Cálculo manual como "Peso direto"`,
+      ignorados.length > 0 && `${ignorados.length} sem peso estimado — adicione manualmente`,
+    ].filter(Boolean);
+    setAvisoBom(`Lista de materiais da IA: ${partes.join(", ")}.`);
+
+    // Calcula o orçamento na hora com a lista já atualizada — sem isso o
+    // botão "Salvar orçamento" ficava bloqueado até o usuário abrir a aba
+    // "Cálculo manual" (só lá o auto-cálculo de CalculoManual.tsx dispara,
+    // porque o componente só existe montado nessa aba — bug relatado pelo
+    // usuário: "o botão de salvar está com bloqueio").
+    try {
+      const r = await analisarBom(
+        novosItens,
+        estadoManual.itensComerciais,
+        estadoManual.insumosPintura,
+        estadoManual.operacoesUsinagem,
+        estadoManual.servicosTerceiros,
+        estadoManual.tratamentoTermico,
+        estadoManual.contingenciamento,
+        estadoManual.ndtItens,
+        estadoManual.engenhariaItens,
+        {
+          cenario_comercial: estadoManual.cenarioComercial,
+          usar_historico_horas: false,
+          corte_valor_kg: Number(estadoManual.corteValorKg.replace(",", ".")) || undefined,
+          peso_liquido_kg: pesoLiquidoManualAtivo ?? undefined,
+        },
+      );
+      handleResultadoManual(r, `cálculo manual (${novosItens.length} ${novosItens.length === 1 ? "item" : "itens"})`);
+    } catch (e) {
+      setErro(
+        e instanceof Error
+          ? `Itens inseridos, mas falhou ao calcular o orçamento: ${e.message}`
+          : "Itens inseridos, mas falhou ao calcular o orçamento.",
+      );
     }
   }
 
@@ -391,9 +438,7 @@ export default function Home() {
           onEstadoManualChange={handleEstadoManualChange}
           onAbrirSalvo={handleAbrirSalvo}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
-          relatorioTecnico={relatorioTecnico}
-          onRelatorioTecnicoChange={handleRelatorioTecnicoGerado}
-          onImprimirRelatorioTecnico={() => setAlvoImpressao("relatorio-ia")}
+          onItensEstruturadosChange={handleItensEstruturadosGerados}
         />
 
         {erro && (
@@ -402,14 +447,21 @@ export default function Home() {
           </div>
         )}
 
+        {avisoBom && (
+          <div className="rounded-lg border border-cyan-800 bg-cyan-950/30 p-4 text-sm text-cyan-300">
+            {avisoBom}
+          </div>
+        )}
+
         {resultado && (
           <ResultadoOrcamento resultado={resultado} onEditarLinhaCusto={handleEditarLinhaCusto} />
         )}
 
         <footer className="mt-8 text-xs text-slate-500">
-          A IA não calcula peso, custo, hora ou preço — só estrutura o que o desenho
-          contém. Todo cálculo é feito pelo motor determinístico
-          (<code>services/calc_engine</code>).
+          A IA não calcula custo, hora ou preço — todo cálculo comercial é feito pelo motor
+          determinístico (<code>services/calc_engine</code>). O peso da lista de materiais
+          inserida automaticamente como &quot;Peso direto&quot; vem extraído/estimado pela IA a
+          partir do desenho — confira e ajuste manualmente antes de fechar o orçamento.
         </footer>
       </main>
 
@@ -419,9 +471,6 @@ export default function Home() {
           nomeArquivo={nomeArquivo}
           identificacaoCliente={identificacaoCliente}
         />
-      )}
-      {alvoImpressao === "relatorio-ia" && relatorioTecnico && (
-        <RelatorioTecnicoImpressao relatorio={relatorioTecnico} />
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import {
   importarExcelRelatorioTecnico,
 } from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
+import { renumerarItensPorPosicao } from "@/lib/itensCalculados";
 import GeometriaIcone from "@/components/icones/GeometriaIcone";
 import CartaoPerfilLaminado from "@/components/CartaoPerfilLaminado";
 import CartaoCantoneira from "@/components/CartaoCantoneira";
@@ -151,20 +152,16 @@ export default function CalculoManual({
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
   }
 
-  // Cada item importado vira uma posição/item novo na sequência atual —
-  // mesma numeração de adicionarItem, só que em lote.
+  // Cada item importado entra ordenado pela POS do desenho (crescente),
+  // com "Item" sequencial — mesma regra da inserção automática do
+  // relatório técnico por IA (ver lib/itensCalculados.ts).
   async function handleImportarExcel(arquivo: File) {
     setImportandoExcel(true);
     setItensIgnoradosImportacao([]);
     try {
       const { itens: itensImportados, itensIgnorados } = await importarExcelRelatorioTecnico(arquivo);
-      let iNum = itemNum;
-      const novos = itensImportados.map((item) => {
-        const posicao = `Posição ${posicaoNum} - Item ${iNum}`;
-        iNum += 1;
-        return { ...item, posicao };
-      });
-      onEstadoChange({ itens: [...itens, ...novos], itemNum: iNum });
+      const { itens: novos, proximoItemNum } = renumerarItensPorPosicao(itensImportados, itemNum);
+      onEstadoChange({ itens: [...itens, ...novos], itemNum: proximoItemNum });
       setItensIgnoradosImportacao(itensIgnorados);
     } catch (e) {
       onErro(e instanceof Error ? e.message : "Erro desconhecido ao importar a planilha.");
