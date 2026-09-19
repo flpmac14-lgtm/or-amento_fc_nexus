@@ -89,7 +89,7 @@ export default function CalculoManual({
   const {
     itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
     contingenciamento, ndtItens, engenhariaItens,
-    cenarioComercial, corteValorKg, posicaoNum, itemNum,
+    cenarioComercial, corteValorKg, posicaoNum, itemNum, acrescimoPercentualPadrao,
   } = estado;
 
   const [catalogo, setCatalogo] = useState<CatalogoGeometria | null>(null);
@@ -150,6 +150,28 @@ export default function CalculoManual({
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+  }
+
+  // Aplica o % de acréscimo em TODOS os itens que têm preço de referência
+  // (precoKgReferencia) — pedido explícito do usuário, costume da empresa
+  // é 160%. Recalcula sempre a partir da referência original (nunca do
+  // preço já com acréscimo), pra não compor o aumento a cada clique.
+  // Itens com preço 100% manual (sem referência) não são tocados — não há
+  // "referência" pra somar percentual em cima.
+  function aplicarAcrescimoATodos() {
+    const percentual = Number(acrescimoPercentualPadrao.replace(",", ".")) || 0;
+    const itensAtualizados = itens.map((item) => {
+      if (item.precoKgReferencia == null) return item;
+      const novoPrecoKg = item.precoKgReferencia * (1 + percentual / 100);
+      const pesoBase = item.pesoParaCompraKg ?? item.peso_kg;
+      return {
+        ...item,
+        preco_kg: novoPrecoKg,
+        acrescimoPercentual: percentual,
+        custoTotal: pesoBase * novoPrecoKg,
+      };
+    });
+    onEstadoChange({ itens: itensAtualizados });
   }
 
   // Cada item importado entra ordenado pela POS do desenho (crescente),
@@ -505,6 +527,37 @@ export default function CalculoManual({
             Escolha o tipo de peça, informe as medidas e adicione à posição/item do orçamento — um
             orçamento pode ter várias posições, cada uma com várias peças.
           </p>
+
+          {/* Pedido explícito do usuário: acréscimo percentual sobre o
+              preço/kg de referência (costume da empresa é 160%) — editável
+              por item nos cartões abaixo, ou aplicado de uma vez em todos
+              os itens já adicionados que têm preço de referência. */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-cyan-500/30 bg-slate-900/40 p-3 text-xs">
+            <span className="text-slate-400">
+              Acréscimo padrão sobre preço de referência (ex.: R$ 5,97/kg + 160% = R$ 15,52/kg) —
+              vale pros próximos itens de matéria-prima; ajuste em cada cartão se precisar de um
+              valor diferente.
+            </span>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={acrescimoPercentualPadrao}
+                onChange={(e) => onEstadoChange({ acrescimoPercentualPadrao: e.target.value })}
+                className="w-16 rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+              />
+              <span className="text-slate-400">%</span>
+              <button
+                type="button"
+                onClick={aplicarAcrescimoATodos}
+                title="Recalcula o preço/kg de todos os itens que têm preço de referência, a partir do valor original"
+                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:bg-slate-800"
+              >
+                Aplicar a todos
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
             {Object.entries(catalogoComPesoDireto).map(([tipo, def]) => (
               <button
@@ -592,6 +645,7 @@ export default function CalculoManual({
             materiais={materiais}
             onAdicionar={adicionarItem}
             valorInicial={edicao?.tipo === TIPO_PESO_DIRETO ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            acrescimoPadrao={acrescimoPercentualPadrao}
             {...posicaoProps}
           />
         )}
@@ -604,6 +658,7 @@ export default function CalculoManual({
             materiais={materiais}
             onAdicionar={adicionarItem}
             valorInicial={edicao?.tipo === tipoAberto ? { id: edicao.id, dados: edicao.dados as ItemCalculado } : null}
+            acrescimoPadrao={acrescimoPercentualPadrao}
             {...posicaoProps}
           />
         )}

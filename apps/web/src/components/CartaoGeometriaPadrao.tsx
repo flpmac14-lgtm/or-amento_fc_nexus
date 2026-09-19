@@ -18,6 +18,9 @@ interface Props {
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
   valorInicial?: EdicaoPendente<ItemCalculado> | null;
+  // % padrão somado sobre o preço/kg de referência (ver CalculoManual.tsx)
+  // — só a semente do campo desta instância, editável livremente aqui.
+  acrescimoPadrao: string;
 }
 
 const PI = Math.PI;
@@ -141,6 +144,7 @@ export default function CartaoGeometriaPadrao({
   setItemNum,
   onAdicionar,
   valorInicial,
+  acrescimoPadrao,
 }: Props) {
   const campos = useMemo(() => def.campos.filter((c) => c.chave !== "densidade_kg_m3"), [def]);
 
@@ -155,6 +159,10 @@ export default function CartaoGeometriaPadrao({
   const [precoManual, setPrecoManual] = useState("");
   const [precoEditado, setPrecoEditado] = useState(false);
   const [precoReferenciaBruta, setPrecoReferenciaBruta] = useState<PrecoMercadoResposta | null>(null);
+  // % somado sobre o preço de referência (ex.: R$5,97 + 160% = R$15,52/kg)
+  // — pedido explícito do usuário, costume da empresa. Semente vem do
+  // padrão configurado em "Cálculo manual", livremente editável aqui.
+  const [percentualAcrescimo, setPercentualAcrescimo] = useState(acrescimoPadrao);
   const [perdaPct, setPerdaPct] = useState("10");
   const [arredondamento, setArredondamento] = useState("");
   const [calculando, setCalculando] = useState(false);
@@ -179,6 +187,7 @@ export default function CartaoGeometriaPadrao({
     setQuantidade(snap.quantidade ?? "1");
     setPrecoEditado(snap.precoEditado === "1");
     setPrecoManual(snap.precoManual ?? "");
+    setPercentualAcrescimo(snap.percentualAcrescimo ?? acrescimoPadrao);
     setPerdaPct(snap.perdaPct ?? "10");
     setArredondamento(snap.arredondamento ?? "");
     setResultadoPeso(null);
@@ -217,8 +226,17 @@ export default function CartaoGeometriaPadrao({
   // mesmo que a última resposta da API ainda esteja em memória.
   const precoReferencia = temEspessura && materialAtual && espessuraAtual ? precoReferenciaBruta : null;
 
+  // Preço de referência + acréscimo percentual (ex.: R$5,97 + 160% =
+  // R$15,52/kg) — nunca o preço editado manualmente, que já é o valor
+  // final digitado pelo orçamentista.
+  const percentualNum = Number(percentualAcrescimo.replace(",", ".")) || 0;
+  const precoReferenciaComAcrescimo =
+    precoReferencia?.encontrado ? (precoReferencia.preco_kg ?? 0) * (1 + percentualNum / 100) : null;
+
   const precoKg =
-    precoReferencia?.encontrado && !precoEditado ? String(precoReferencia.preco_kg) : precoManual;
+    precoReferenciaComAcrescimo !== null && !precoEditado
+      ? String(precoReferenciaComAcrescimo)
+      : precoManual;
 
   function selecionarMaterial(indice: string) {
     setMaterialIndice(indice);
@@ -289,6 +307,10 @@ export default function CartaoGeometriaPadrao({
       peso_kg: calculo.pesoLiquido,
       memoria_calculo: memoria,
       preco_kg: calculo.precoKgNum ?? undefined,
+      precoKgReferencia:
+        precoReferencia?.encontrado && !precoEditado ? precoReferencia.preco_kg : undefined,
+      acrescimoPercentual:
+        precoReferencia?.encontrado && !precoEditado ? percentualNum : undefined,
       perdaPct: calculo.perdaNum || undefined,
       pesoParaCompraKg: calculo.pesoBruto,
       custoTotal: calculo.custoMp ?? undefined,
@@ -300,6 +322,7 @@ export default function CartaoGeometriaPadrao({
         quantidade,
         precoManual,
         precoEditado: precoEditado ? "1" : "",
+        percentualAcrescimo,
         perdaPct,
         arredondamento,
       },
@@ -309,6 +332,7 @@ export default function CartaoGeometriaPadrao({
     setQuantidade("1");
     setPrecoManual("");
     setPrecoEditado(false);
+    setPercentualAcrescimo(acrescimoPadrao);
     setPerdaPct("10");
     setArredondamento("");
     setResultadoPeso(null);
@@ -441,12 +465,26 @@ export default function CartaoGeometriaPadrao({
           </div>
           {precoReferencia?.encontrado && (
             <span className="text-slate-500">
-              Ref.: {precoReferencia.fornecedor || "fornecedor não informado"}
+              Ref.: R$ {formatarNumero(precoReferencia.preco_kg, 2)}/kg ·{" "}
+              {precoReferencia.fornecedor || "fornecedor não informado"}
               {precoReferencia.data_compra ? ` · ${formatarDataBr(precoReferencia.data_compra)}` : ""}
               {!precoReferencia.exato ? ` (espessura mais próxima: ${formatarNumero(precoReferencia.espessura_referencia_mm, 2)} mm)` : ""}
             </span>
           )}
         </label>
+
+        {precoReferencia?.encontrado && !precoEditado && (
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-slate-400">Acréscimo sobre referência (%)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={percentualAcrescimo}
+              onChange={(e) => setPercentualAcrescimo(e.target.value)}
+              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            />
+          </label>
+        )}
 
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-slate-400">Arredondar peso bruto p/ cima em (kg)</span>

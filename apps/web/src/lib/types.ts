@@ -186,6 +186,14 @@ export interface ItemCalculado {
   // norma (ver services/calc_engine/app/adapter.py). custoTotal é só pra
   // exibição na lista de itens; quem recalcula pra valer é o backend.
   preco_kg?: number;
+  // Preço/kg de referência ORIGINAL (antes do acréscimo percentual) — só
+  // preenchido quando o preço veio de busca automática (não de digitação
+  // manual). Guardado separado de `preco_kg` (que é o preço EFETIVO, já
+  // com o acréscimo aplicado) pra "aplicar a todos" recalcular sempre a
+  // partir da referência real, sem compor o acréscimo em cima de si mesmo
+  // a cada aplicação — pedido explícito do usuário.
+  precoKgReferencia?: number;
+  acrescimoPercentual?: number;
   perdaPct?: number;
   pesoParaCompraKg?: number;
   custoTotal?: number;
@@ -267,6 +275,11 @@ export interface EstadoCalculoManual {
   corteValorKg: string;
   posicaoNum: number;
   itemNum: number;
+  // % somado sobre o preço/kg de referência dos cartões de matéria-prima
+  // (chapa/circular/etc. e peso direto) — pedido explícito do usuário,
+  // costume da empresa é 160%. Novos itens já nascem com esse valor
+  // (editável por item); "Aplicar a todos" recalcula os já adicionados.
+  acrescimoPercentualPadrao: string;
 }
 
 export const ESTADO_CALCULO_MANUAL_INICIAL: EstadoCalculoManual = {
@@ -281,6 +294,7 @@ export const ESTADO_CALCULO_MANUAL_INICIAL: EstadoCalculoManual = {
   engenhariaItens: [],
   cenarioComercial: "venda_fabricacao",
   corteValorKg: "1,50",
+  acrescimoPercentualPadrao: "160",
   posicaoNum: 1,
   itemNum: 1,
 };

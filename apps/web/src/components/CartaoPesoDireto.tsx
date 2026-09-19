@@ -16,6 +16,9 @@ interface Props {
   setItemNum: (n: number) => void;
   onAdicionar: (item: Omit<ItemCalculado, "posicao">) => void;
   valorInicial?: EdicaoPendente<ItemCalculado> | null;
+  // % padrão somado sobre o preço/kg de referência (ver CalculoManual.tsx)
+  // — só a semente do campo desta instância, editável livremente aqui.
+  acrescimoPadrao: string;
 }
 
 export default function CartaoPesoDireto({
@@ -26,6 +29,7 @@ export default function CartaoPesoDireto({
   setItemNum,
   onAdicionar,
   valorInicial,
+  acrescimoPadrao,
 }: Props) {
   const [descricao, setDescricao] = useState("");
   const [pesoUnitario, setPesoUnitario] = useState("");
@@ -35,6 +39,10 @@ export default function CartaoPesoDireto({
   const [precoManual, setPrecoManual] = useState("");
   const [precoEditado, setPrecoEditado] = useState(false);
   const [precoReferenciaBruta, setPrecoReferenciaBruta] = useState<PrecoMercadoResposta | null>(null);
+  // % somado sobre o preço de referência (ex.: R$5,97 + 160% = R$15,52/kg)
+  // — pedido explícito do usuário, costume da empresa. Semente vem do
+  // padrão configurado em "Cálculo manual", livremente editável aqui.
+  const [percentualAcrescimo, setPercentualAcrescimo] = useState(acrescimoPadrao);
   const [erro, setErro] = useState("");
 
   const materialAtual = materialIndice !== "" ? materiais[Number(materialIndice)] : null;
@@ -83,7 +91,13 @@ export default function CartaoPesoDireto({
   }, [valorInicial?.id]);
 
   const precoReferencia = materialAtual && espessuraRefNum ? precoReferenciaBruta : null;
-  const precoKg = precoReferencia?.encontrado && !precoEditado ? String(precoReferencia.preco_kg) : precoManual;
+  const percentualNum = Number(percentualAcrescimo.replace(",", ".")) || 0;
+  const precoReferenciaComAcrescimo =
+    precoReferencia?.encontrado ? (precoReferencia.preco_kg ?? 0) * (1 + percentualNum / 100) : null;
+  const precoKg =
+    precoReferenciaComAcrescimo !== null && !precoEditado
+      ? String(precoReferenciaComAcrescimo)
+      : precoManual;
 
   function selecionarMaterial(indice: string) {
     setMaterialIndice(indice);
@@ -131,6 +145,10 @@ export default function CartaoPesoDireto({
       peso_kg: calculo.pesoLiquido,
       memoria_calculo: calculo.memoria,
       preco_kg: calculo.precoKgNum ?? undefined,
+      precoKgReferencia:
+        precoReferencia?.encontrado && !precoEditado ? precoReferencia.preco_kg : undefined,
+      acrescimoPercentual:
+        precoReferencia?.encontrado && !precoEditado ? percentualNum : undefined,
       pesoParaCompraKg: calculo.pesoBruto,
       custoTotal: calculo.custoMp,
     });
@@ -140,6 +158,7 @@ export default function CartaoPesoDireto({
     setQuantidade("1");
     setPrecoManual("");
     setPrecoEditado(false);
+    setPercentualAcrescimo(acrescimoPadrao);
   }
 
   return (
@@ -242,12 +261,26 @@ export default function CartaoPesoDireto({
           </div>
           {precoReferencia?.encontrado && (
             <span className="text-slate-500">
-              Ref.: {precoReferencia.fornecedor || "fornecedor não informado"}
+              Ref.: R$ {formatarNumero(precoReferencia.preco_kg, 2)}/kg ·{" "}
+              {precoReferencia.fornecedor || "fornecedor não informado"}
               {precoReferencia.data_compra ? ` · ${formatarDataBr(precoReferencia.data_compra)}` : ""}
               {!precoReferencia.exato ? ` (espessura mais próxima: ${formatarNumero(precoReferencia.espessura_referencia_mm, 2)} mm)` : ""}
             </span>
           )}
         </label>
+
+        {precoReferencia?.encontrado && !precoEditado && (
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-slate-400">Acréscimo sobre referência (%)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={percentualAcrescimo}
+              onChange={(e) => setPercentualAcrescimo(e.target.value)}
+              className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            />
+          </label>
+        )}
       </div>
 
       {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
