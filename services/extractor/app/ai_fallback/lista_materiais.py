@@ -35,9 +35,13 @@ MODEL_ID = "gemini-3.5-flash-lite"
 # desenhos normais.
 MAX_PAGINAS_LISTA = 5
 
-# Sem texto longo pra gerar (só o JSON estruturado) — 4000 já é folgado
-# pra uma BOM de várias dezenas de itens.
-MAX_TOKENS_LISTA = 4000
+# Sem texto longo pra gerar (só o JSON estruturado), mas cada item no
+# schema tem ~20 campos de medida (a maioria null pra qualquer peça) —
+# um desenho com bastante peças (ex.: uma plataforma modular completa)
+# passa fácil de 20-30 itens e estourava o teto antigo (4000) no meio do
+# JSON, invalidando o parse inteiro e devolvendo lista vazia sem erro
+# nenhum (bug real visto em produção com um desenho de 30+ posições).
+MAX_TOKENS_LISTA = 24000
 
 PROMPT_LISTA_MATERIAIS = """Você é um engenheiro mecânico industrial. Analise as imagens do desenho \
 técnico e extraia SÓ a lista de materiais (BOM) — nada de relatório, \
@@ -195,6 +199,13 @@ def extrair_lista_materiais(paginas_png: list[bytes]) -> list[dict] | None:
         )
         dados: _ListaMateriais | None = resposta.parsed
         if dados is None:
+            candidatos = getattr(resposta, "candidates", None) or []
+            motivo = candidatos[0].finish_reason if candidatos else "desconhecido"
+            print(
+                f"[ai_fallback] extrair_lista_materiais: resposta não veio no schema esperado "
+                f"(finish_reason={motivo}) — devolvendo lista vazia. Se finish_reason for "
+                f"MAX_TOKENS, o desenho tem mais itens do que MAX_TOKENS_LISTA comporta."
+            )
             return []
         return [_validar_item_estruturado(item.model_dump()) for item in dados.itens]
     except Exception as exc:
