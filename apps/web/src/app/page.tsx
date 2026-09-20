@@ -49,6 +49,14 @@ function nomeOrcamentoPadrao(): string {
 export default function Home() {
   const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
+  // Botão "editar" de um item na aba "Itens do orçamento" — troca pra
+  // "Cálculo manual" e avisa qual item abrir (ver CalculoManual.tsx e
+  // PainelItensOrcamento.tsx).
+  const [itemParaEditarIndice, setItemParaEditarIndice] = useState<number | null>(null);
+  function editarItemNaTelaCheia(indice: number) {
+    setItemParaEditarIndice(indice);
+    setModo("manual");
+  }
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -335,7 +343,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
-      <main className="print:hidden mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
+      {/* max-w maior na aba "Itens do orçamento" — pedido explícito do
+          usuário pra ter mais espaço revisando muitos itens de uma vez;
+          nas outras abas continua no mesmo max-w-6xl de sempre. */}
+      <main
+        className={`print:hidden mx-auto flex flex-col gap-8 px-6 py-12 ${
+          modo === "itens" ? "max-w-[100rem]" : "max-w-6xl"
+        }`}
+      >
         {/* Sticky: fica visível no canto superior mesmo rolando a página —
             pedido explícito do usuário pra não precisar voltar ao topo toda
             vez que salvar depois de editar uma linha de custo. */}
@@ -445,6 +460,9 @@ export default function Home() {
           onAbrirSalvo={handleAbrirSalvo}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
           onItensEstruturadosChange={handleItensEstruturadosGerados}
+          itemParaEditarIndice={itemParaEditarIndice}
+          onItemParaEditarConsumido={() => setItemParaEditarIndice(null)}
+          onEditarItemNaTelaCheia={editarItemNaTelaCheia}
         />
 
         {erro && (

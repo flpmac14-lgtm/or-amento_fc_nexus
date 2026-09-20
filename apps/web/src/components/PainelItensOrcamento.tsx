@@ -14,6 +14,10 @@ interface Props {
   onResultado: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
   onErro: (mensagem: string) => void;
   pesoLiquidoManualAtivo: number | null;
+  // Abre o item de volta no cartão de "Cálculo manual" pra editar
+  // dimensões/material — essa tela só cuida de preço/revisão, não tem o
+  // formulário de geometria (ver page.tsx::editarItemNaTelaCheia).
+  onEditar: (indice: number) => void;
 }
 
 const MAX_RESULTADOS_BUSCA = 8;
@@ -25,14 +29,17 @@ const MAX_RESULTADOS_BUSCA = 8;
 // de preços") direto em cada item — sem precisar reabrir o cartão de
 // geometria original só pra digitar um preço/kg.
 export default function PainelItensOrcamento({
-  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
+  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo, onEditar,
 }: Props) {
   const { itens, acrescimoPercentualPadrao } = estado;
+  const percentualPadraoNum = Number(acrescimoPercentualPadrao.replace(",", ".")) || 0;
 
   const { analisando } = useAutoCalculoOrcamento({ estado, onResultado, onErro, pesoLiquidoManualAtivo });
 
   const [precos, setPrecos] = useState<PrecosMercadoLista | null>(null);
   const [buscas, setBuscas] = useState<Record<number, string>>({});
+  const [percentuaisTexto, setPercentuaisTexto] = useState<Record<number, string>>({});
+  const [calculoAberto, setCalculoAberto] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     buscarPrecosMercado()
@@ -64,24 +71,40 @@ export default function PainelItensOrcamento({
   // Mesma mecânica do acréscimo padrão já usada nos cartões de geometria
   // (ver CartaoGeometriaPadrao.tsx/CartaoPesoDireto.tsx e
   // CalculoManual.tsx::aplicarAcrescimoATodos) — guarda a referência crua
-  // separada do preço efetivo, pra "Aplicar a todos" continuar recalculando
-  // a partir do valor real, nunca compondo o acréscimo em cima de si mesmo.
+  // separada do preço efetivo, pra recalcular sempre a partir do valor
+  // real, nunca compondo o acréscimo em cima de si mesmo.
   function aplicarPreco(indice: number, linha: CompraMercadoLinha) {
-    const percentual = Number(acrescimoPercentualPadrao.replace(",", ".")) || 0;
     const itensAtualizados = itens.map((item, i) => {
       if (i !== indice) return item;
-      const novoPrecoKg = linha.preco_unitario * (1 + percentual / 100);
+      const novoPrecoKg = linha.preco_unitario * (1 + percentualPadraoNum / 100);
       const pesoBase = item.pesoParaCompraKg ?? item.peso_kg;
       return {
         ...item,
         precoKgReferencia: linha.preco_unitario,
-        acrescimoPercentual: percentual,
+        acrescimoPercentual: percentualPadraoNum,
         preco_kg: novoPrecoKg,
         custoTotal: pesoBase * novoPrecoKg,
       };
     });
     onEstadoChange({ itens: itensAtualizados });
     setBuscas((atual) => ({ ...atual, [indice]: "" }));
+    setPercentuaisTexto((atual) => ({ ...atual, [indice]: String(percentualPadraoNum) }));
+  }
+
+  // Pedido explícito do usuário: poder mudar o % de acréscimo item por
+  // item nessa tela (sem precisar reabrir o cartão) — só faz sentido
+  // quando o item já tem uma referência crua (precoKgReferencia) pra
+  // recalcular a partir dela; sem isso não há base pra aplicar %.
+  function aplicarPercentual(indice: number, texto: string) {
+    setPercentuaisTexto((atual) => ({ ...atual, [indice]: texto }));
+    const percentual = Number(texto.replace(",", ".")) || 0;
+    const itensAtualizados = itens.map((item, i) => {
+      if (i !== indice || item.precoKgReferencia == null) return item;
+      const novoPrecoKg = item.precoKgReferencia * (1 + percentual / 100);
+      const pesoBase = item.pesoParaCompraKg ?? item.peso_kg;
+      return { ...item, acrescimoPercentual: percentual, preco_kg: novoPrecoKg, custoTotal: pesoBase * novoPrecoKg };
+    });
+    onEstadoChange({ itens: itensAtualizados });
   }
 
   const grupos = agruparItensPorPosicao(itens);
@@ -119,9 +142,17 @@ export default function PainelItensOrcamento({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-cyan-400">
                 {grupo.posicao}
               </p>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {grupo.itens.map(({ item, indice }) => {
                   const resultados = resultadosBusca(indice);
+                  const temReferencia = item.precoKgReferencia != null;
+                  const percentualAtual = percentuaisTexto[indice] ?? (
+                    item.acrescimoPercentual != null ? String(item.acrescimoPercentual) : acrescimoPercentualPadrao
+                  );
+                  const usaPadrao =
+                    item.acrescimoPercentual != null &&
+                    Number(percentualAtual.toString().replace(",", ".")) === percentualPadraoNum;
+
                   return (
                     <div
                       key={indice}
@@ -131,6 +162,16 @@ export default function PainelItensOrcamento({
                           : "border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40"
                       }`}
                     >
+                      {/* Indicação no topo do card, pedido explícito do
+                          usuário: se o acréscimo é o padrão ou foi
+                          customizado nesse item específico. */}
+                      {item.acrescimoPercentual != null && (
+                        <p className="text-[11px] text-stone-500 dark:text-slate-500">
+                          Acréscimo: {formatarNumero(item.acrescimoPercentual, 0)}%{" "}
+                          {usaPadrao ? "(padrão)" : "(customizado)"}
+                        </p>
+                      )}
+
                       <p className="text-stone-800 dark:text-slate-200">{item.descricao || item.tipoRotulo}</p>
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-mono text-stone-600 dark:text-slate-400">
@@ -151,6 +192,25 @@ export default function PainelItensOrcamento({
                           )}
                         </span>
                       </div>
+
+                      {/* Editável por item, pedido explícito do usuário:
+                          liberdade de mudar o % de cada um ou deixar todos
+                          no padrão — só aparece quando já existe uma
+                          referência crua pra recalcular a partir dela. */}
+                      {temReferencia && (
+                        <label className="flex items-center gap-1 text-[11px]">
+                          <span className="text-stone-600 dark:text-slate-400">
+                            Acréscimo sobre R$ {formatarNumero(item.precoKgReferencia, 2)}/kg de referência (%)
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={percentualAtual}
+                            onChange={(e) => aplicarPercentual(indice, e.target.value)}
+                            className="w-14 shrink-0 rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-right text-xs text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
+                          />
+                        </label>
+                      )}
 
                       <div className="relative">
                         <input
@@ -183,13 +243,39 @@ export default function PainelItensOrcamento({
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removerItem(indice)}
-                        className="self-end text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                      >
-                        remover
-                      </button>
+                      {item.memoria_calculo && (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setCalculoAberto((atual) => ({ ...atual, [indice]: !atual[indice] }))}
+                            className="text-xs text-green-600 dark:text-cyan-400 hover:text-green-700 dark:hover:text-cyan-300"
+                          >
+                            {calculoAberto[indice] ? "▲" : "▼"} Ver cálculo
+                          </button>
+                          {calculoAberto[indice] && (
+                            <p className="mt-1 rounded-md border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-2 font-mono text-[11px] text-stone-600 dark:text-slate-400">
+                              {item.memoria_calculo}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onEditar(indice)}
+                          className="text-xs text-green-600 dark:text-cyan-400 hover:text-green-700 dark:hover:text-cyan-300"
+                        >
+                          editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removerItem(indice)}
+                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        >
+                          remover
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

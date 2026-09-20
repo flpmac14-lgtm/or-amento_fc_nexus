@@ -50,6 +50,13 @@ interface Props {
   // perde o override, voltando pro peso bruto sem o usuário pedir (bug
   // relatado pelo usuário).
   pesoLiquidoManualAtivo: number | null;
+  // Gatilho externo pro botão "editar" de PainelItensOrcamento (aba "Itens
+  // do orçamento") — de lá não dá pra abrir o cartão de edição diretamente
+  // (ele mora aqui dentro, só existe enquanto Cálculo manual está montada),
+  // então o pai (page.tsx) troca de aba PRA CÁ e passa o índice; o efeito
+  // abaixo consome (chama editarItem) assim que essa tela monta.
+  itemParaEditarIndice?: number | null;
+  onItemParaEditarConsumido?: () => void;
 }
 
 // Cartões com fluxo próprio (catálogo pesquisável, unidades, etc.) — os
@@ -85,6 +92,7 @@ function restaurarPosicaoItem(posicao: string): { posicaoNum: number; itemNum: n
 
 export default function CalculoManual({
   estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
+  itemParaEditarIndice, onItemParaEditarConsumido,
 }: Props) {
   const {
     itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
@@ -197,6 +205,13 @@ export default function CalculoManual({
     setTipoAberto(item.tipo);
     iniciarEdicao(item.tipo, item);
   }
+
+  useEffect(() => {
+    if (itemParaEditarIndice == null) return;
+    if (itens[itemParaEditarIndice]) editarItem(itemParaEditarIndice);
+    onItemParaEditarConsumido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemParaEditarIndice]);
 
   function adicionarItemComercial(item: Omit<ItemComercial, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;

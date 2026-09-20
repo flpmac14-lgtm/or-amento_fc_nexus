@@ -32,6 +32,12 @@ interface Props {
   // pro bruto depois de qualquer interação em Cálculo manual).
   pesoLiquidoManualAtivo: number | null;
   onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
+  // Botão "editar" de um item na aba "Itens do orçamento" — abre o cartão
+  // de edição em "Cálculo manual" (troca de aba + avisa qual item). Ver
+  // CalculoManual.tsx::itemParaEditarIndice.
+  itemParaEditarIndice: number | null;
+  onItemParaEditarConsumido: () => void;
+  onEditarItemNaTelaCheia: (indice: number) => void;
 }
 
 export default function FormularioUpload({
@@ -45,6 +51,9 @@ export default function FormularioUpload({
   onAbrirSalvo,
   pesoLiquidoManualAtivo,
   onItensEstruturadosChange,
+  itemParaEditarIndice,
+  onItemParaEditarConsumido,
+  onEditarItemNaTelaCheia,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -87,6 +96,8 @@ export default function FormularioUpload({
           onResultado={onResultadoManual}
           onErro={onErroManual}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+          itemParaEditarIndice={itemParaEditarIndice}
+          onItemParaEditarConsumido={onItemParaEditarConsumido}
         />
       )}
 
@@ -97,6 +108,7 @@ export default function FormularioUpload({
           onResultado={onResultadoManual}
           onErro={onErroManual}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+          onEditar={onEditarItemNaTelaCheia}
         />
       )}
 
