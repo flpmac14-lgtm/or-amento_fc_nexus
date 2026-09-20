@@ -15,6 +15,7 @@ import type {
   PerfilCatalogo,
   PrecoMercadoResposta,
   PrecosMercadoLista,
+  PropostaConfig,
   RespostaOrcamentoDePdf,
   ResultadoOrcamentoDTO,
   ServicoPorPeso,
@@ -493,6 +494,7 @@ export async function salvarOrcamento(payload: {
   estado_manual?: EstadoCalculoManual | null;
   estado_texto?: { texto: string; estimativas: EstimativasOrcamento } | null;
   relatorio_tecnico?: string | null;
+  proposta?: PropostaConfig | null;
 }): Promise<{ id: string; created_at: string; updated_at: string }> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos`, {
     method: "POST",

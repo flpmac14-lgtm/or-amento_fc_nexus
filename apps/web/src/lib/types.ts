@@ -299,6 +299,52 @@ export const ESTADO_CALCULO_MANUAL_INICIAL: EstadoCalculoManual = {
   itemNum: 1,
 };
 
+// Aba "PROPOSTA" — pedido explícito do usuário: reproduzir o modelo
+// oficial de proposta comercial da Macfab (PDF de referência). Só guarda
+// aqui o que é ESPECÍFICO da proposta; dados que já existem no orçamento
+// (MAC/nome, cliente, revisão, condição de pagamento, peso, preço de
+// venda) continuam vindo de `IdentificacaoCliente`/`ResultadoOrcamentoDTO`
+// — nunca duplicados neste objeto (ver supabase/migrations/0010).
+export interface ItemPrecoProposta {
+  item: string; // "2.1"
+  quantidade: string; // "01" — texto, não número: o modelo usa formato "01", "02"...
+  discriminacao: string;
+  valorTotal: number;
+}
+
+// Cada linha de escopo/exclusão — pode ter subitens (só "Acabamento /
+// Proteção" usa isso no modelo, mas a estrutura é genérica). `padraoId`
+// identifica de qual item do template essa linha veio (pra "restaurar
+// padrão" individual); ausente em itens 100% personalizados pelo usuário.
+export interface ItemChecklistProposta {
+  id: string;
+  texto: string;
+  marcado: boolean;
+  padraoId?: string;
+  subitens?: ItemChecklistProposta[];
+}
+
+export interface PropostaConfig {
+  // Sem correspondente hoje no orçamento (é o "objeto" descritivo, não o
+  // código MAC) — só existe dentro da proposta.
+  tituloServico: string;
+  contatoCliente: string;
+  itensPreco: ItemPrecoProposta[];
+  ipi: string;
+  icmsPisCofins: string;
+  ncm: string;
+  prazoEntrega: string;
+  localEntrega: string;
+  escopoMacfab: ItemChecklistProposta[];
+  exclusoesCliente: ItemChecklistProposta[];
+  validade: string;
+  garantia: string;
+  qualidade: string;
+  notasConsideracoes: string;
+  // ISO (YYYY-MM-DD) — null usa a data de hoje na hora de gerar/visualizar.
+  dataEmissao: string | null;
+}
+
 export type OrigemOrcamentoSalvo = "manual" | "pdf" | "texto";
 
 export interface ResumoOrcamentoSalvo {
@@ -327,6 +373,10 @@ export interface OrcamentoSalvoCompleto {
   // Estudo técnico completo por IA (Markdown), quando gerado — só leitura de
   // apoio, ver components/RelatorioTecnicoIA.tsx.
   relatorio_tecnico: string | null;
+  // Configuração da aba "PROPOSTA" — null quando o orçamento foi salvo
+  // antes dessa aba existir, ou nunca foi aberta (ver
+  // lib/propostaPadrao.ts::criarPropostaInicial).
+  proposta: PropostaConfig | null;
   created_at: string;
   updated_at: string;
 }

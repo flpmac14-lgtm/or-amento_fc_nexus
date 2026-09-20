@@ -3,6 +3,7 @@
 import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
 import PainelItensOrcamento from "@/components/PainelItensOrcamento";
+import PainelProposta from "@/components/PainelProposta";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
 import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
@@ -10,11 +11,13 @@ import type { ItemEstruturadoIA } from "@/lib/api";
 import type {
   EstadoCalculoManual,
   EstimativasOrcamento,
+  IdentificacaoCliente,
   OrcamentoSalvoCompleto,
+  PropostaConfig,
   RespostaOrcamentoDePdf,
 } from "@/lib/types";
 
-export type ModoFormulario = "arquivo" | "manual" | "itens" | "referencia" | "salvos";
+export type ModoFormulario = "arquivo" | "manual" | "itens" | "proposta" | "referencia" | "salvos";
 
 interface Props {
   modo: ModoFormulario;
@@ -32,12 +35,16 @@ interface Props {
   // pro bruto depois de qualquer interação em Cálculo manual).
   pesoLiquidoManualAtivo: number | null;
   onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
-  // Botão "editar" de um item na aba "Itens do orçamento" — abre o cartão
-  // de edição em "Cálculo manual" (troca de aba + avisa qual item). Ver
-  // CalculoManual.tsx::itemParaEditarIndice.
-  itemParaEditarIndice: number | null;
-  onItemParaEditarConsumido: () => void;
-  onEditarItemNaTelaCheia: (indice: number) => void;
+  // Aba "PROPOSTA" — precisa do resultado calculado (preço/peso), do MAC
+  // (nome do orçamento salvo) e da identificação do cliente pra
+  // auto-preencher; a config em si vive em page.tsx (persiste junto do
+  // orçamento salvo, ver PropostaConfig).
+  mac: string;
+  resultado: RespostaOrcamentoDePdf | null;
+  identificacaoCliente: IdentificacaoCliente;
+  propostaConfig: PropostaConfig | null;
+  onPropostaConfigChange: (proposta: PropostaConfig) => void;
+  onGerarPdfProposta: () => void;
 }
 
 export default function FormularioUpload({
@@ -51,9 +58,12 @@ export default function FormularioUpload({
   onAbrirSalvo,
   pesoLiquidoManualAtivo,
   onItensEstruturadosChange,
-  itemParaEditarIndice,
-  onItemParaEditarConsumido,
-  onEditarItemNaTelaCheia,
+  mac,
+  resultado,
+  identificacaoCliente,
+  propostaConfig,
+  onPropostaConfigChange,
+  onGerarPdfProposta,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -96,8 +106,6 @@ export default function FormularioUpload({
           onResultado={onResultadoManual}
           onErro={onErroManual}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
-          itemParaEditarIndice={itemParaEditarIndice}
-          onItemParaEditarConsumido={onItemParaEditarConsumido}
         />
       )}
 
@@ -108,7 +116,17 @@ export default function FormularioUpload({
           onResultado={onResultadoManual}
           onErro={onErroManual}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
-          onEditar={onEditarItemNaTelaCheia}
+        />
+      )}
+
+      {modo === "proposta" && (
+        <PainelProposta
+          mac={mac}
+          resultado={resultado}
+          identificacaoCliente={identificacaoCliente}
+          proposta={propostaConfig}
+          onPropostaChange={onPropostaConfigChange}
+          onGerarPdf={onGerarPdfProposta}
         />
       )}
 

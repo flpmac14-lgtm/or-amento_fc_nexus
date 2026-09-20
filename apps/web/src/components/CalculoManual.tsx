@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  buscarCatalogoGeometria,
-  buscarCatalogoProcessosTerceirizados,
-  buscarMateriais,
-  importarExcelRelatorioTecnico,
-} from "@/lib/api";
+import { buscarCatalogoProcessosTerceirizados, importarExcelRelatorioTecnico } from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import { renumerarItensPorPosicao } from "@/lib/itensCalculados";
 import { useAutoCalculoOrcamento } from "@/lib/useAutoCalculoOrcamento";
+import { useCatalogoGeometria } from "@/lib/useCatalogoGeometria";
 import GeometriaIcone from "@/components/icones/GeometriaIcone";
 import CartaoPerfilLaminado from "@/components/CartaoPerfilLaminado";
 import CartaoCantoneira from "@/components/CartaoCantoneira";
@@ -30,7 +26,6 @@ import type {
   ItemCalculado,
   ItemComercial,
   ItemContingenciamento,
-  MaterialCatalogo,
   OperacaoUsinagem,
   RespostaOrcamentoDePdf,
   ServicoPorPeso,
@@ -50,13 +45,6 @@ interface Props {
   // perde o override, voltando pro peso bruto sem o usuário pedir (bug
   // relatado pelo usuário).
   pesoLiquidoManualAtivo: number | null;
-  // Gatilho externo pro botão "editar" de PainelItensOrcamento (aba "Itens
-  // do orçamento") — de lá não dá pra abrir o cartão de edição diretamente
-  // (ele mora aqui dentro, só existe enquanto Cálculo manual está montada),
-  // então o pai (page.tsx) troca de aba PRA CÁ e passa o índice; o efeito
-  // abaixo consome (chama editarItem) assim que essa tela monta.
-  itemParaEditarIndice?: number | null;
-  onItemParaEditarConsumido?: () => void;
 }
 
 // Cartões com fluxo próprio (catálogo pesquisável, unidades, etc.) — os
@@ -92,7 +80,6 @@ function restaurarPosicaoItem(posicao: string): { posicaoNum: number; itemNum: n
 
 export default function CalculoManual({
   estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
-  itemParaEditarIndice, onItemParaEditarConsumido,
 }: Props) {
   const {
     itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
@@ -100,8 +87,7 @@ export default function CalculoManual({
     cenarioComercial, corteValorKg, posicaoNum, itemNum, acrescimoPercentualPadrao,
   } = estado;
 
-  const [catalogo, setCatalogo] = useState<CatalogoGeometria | null>(null);
-  const [materiais, setMateriais] = useState<MaterialCatalogo[]>([]);
+  const { catalogo, materiais } = useCatalogoGeometria(onErro);
   const [catalogoProcessos, setCatalogoProcessos] = useState<CatalogoProcessosTerceirizados>(CATALOGO_PROCESSOS_VAZIO);
   const [tipoAberto, setTipoAberto] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<EdicaoAtual | null>(null);
@@ -117,16 +103,9 @@ export default function CalculoManual({
   const inputExcelRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    buscarCatalogoGeometria()
-      .then(setCatalogo)
-      .catch((e) => onErro(e instanceof Error ? e.message : "Erro ao carregar os tipos de geometria."));
-    buscarMateriais()
-      .then(setMateriais)
-      .catch((e) => onErro(e instanceof Error ? e.message : "Erro ao carregar a biblioteca de materiais."));
     buscarCatalogoProcessosTerceirizados()
       .then(setCatalogoProcessos)
       .catch(() => setCatalogoProcessos(CATALOGO_PROCESSOS_VAZIO));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function abrirCartao(tipo: string) {
@@ -205,13 +184,6 @@ export default function CalculoManual({
     setTipoAberto(item.tipo);
     iniciarEdicao(item.tipo, item);
   }
-
-  useEffect(() => {
-    if (itemParaEditarIndice == null) return;
-    if (itens[itemParaEditarIndice]) editarItem(itemParaEditarIndice);
-    onItemParaEditarConsumido?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemParaEditarIndice]);
 
   function adicionarItemComercial(item: Omit<ItemComercial, "posicao">) {
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;

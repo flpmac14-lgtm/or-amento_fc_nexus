@@ -6,7 +6,19 @@ import { normalizarBusca } from "@/lib/busca";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import { agruparItensPorPosicao } from "@/lib/itensCalculados";
 import { useAutoCalculoOrcamento } from "@/lib/useAutoCalculoOrcamento";
-import type { CompraMercadoLinha, EstadoCalculoManual, PrecosMercadoLista, RespostaOrcamentoDePdf } from "@/lib/types";
+import { useCatalogoGeometria } from "@/lib/useCatalogoGeometria";
+import CartaoPerfilLaminado from "@/components/CartaoPerfilLaminado";
+import CartaoCantoneira from "@/components/CartaoCantoneira";
+import CartaoTuboRedondo from "@/components/CartaoTuboRedondo";
+import CartaoGeometriaPadrao from "@/components/CartaoGeometriaPadrao";
+import CartaoPesoDireto from "@/components/CartaoPesoDireto";
+import type {
+  CompraMercadoLinha,
+  EstadoCalculoManual,
+  ItemCalculado,
+  PrecosMercadoLista,
+  RespostaOrcamentoDePdf,
+} from "@/lib/types";
 
 interface Props {
   estado: EstadoCalculoManual;
@@ -14,32 +26,39 @@ interface Props {
   onResultado: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
   onErro: (mensagem: string) => void;
   pesoLiquidoManualAtivo: number | null;
-  // Abre o item de volta no cartão de "Cálculo manual" pra editar
-  // dimensões/material — essa tela só cuida de preço/revisão, não tem o
-  // formulário de geometria (ver page.tsx::editarItemNaTelaCheia).
-  onEditar: (indice: number) => void;
 }
 
 const MAX_RESULTADOS_BUSCA = 8;
+
+// Mesmos tipos com cartão próprio de CalculoManual.tsx (catálogo
+// pesquisável, unidades etc.) — os demais caem no cartão genérico
+// (CartaoGeometriaPadrao), igual lá.
+const TIPOS_COM_CARTAO_PROPRIO = new Set(["perfil", "cantoneira", "tubo_redondo", "peso_direto"]);
 
 // Aba "Itens do orçamento" em tela cheia — pedido explícito do usuário:
 // além do resumo no canto direito da Cálculo manual (que continua igual),
 // uma tela maior/mais confortável pra revisar item por item DEPOIS de
 // inserir tudo, com uma busca de preço de referência (igual a "Referência
 // de preços") direto em cada item — sem precisar reabrir o cartão de
-// geometria original só pra digitar um preço/kg.
+// geometria original só pra digitar um preço/kg — e, pedido explícito do
+// usuário, editar dimensões/material AQUI MESMO (sem trocar de aba), no
+// mesmo cartão que "Cálculo manual" usaria.
 export default function PainelItensOrcamento({
-  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo, onEditar,
+  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
 }: Props) {
   const { itens, acrescimoPercentualPadrao } = estado;
   const percentualPadraoNum = Number(acrescimoPercentualPadrao.replace(",", ".")) || 0;
 
   const { analisando } = useAutoCalculoOrcamento({ estado, onResultado, onErro, pesoLiquidoManualAtivo });
+  const { catalogo, materiais } = useCatalogoGeometria(onErro);
 
   const [precos, setPrecos] = useState<PrecosMercadoLista | null>(null);
   const [buscas, setBuscas] = useState<Record<number, string>>({});
   const [percentuaisTexto, setPercentuaisTexto] = useState<Record<number, string>>({});
   const [calculoAberto, setCalculoAberto] = useState<Record<number, boolean>>({});
+  const [editandoIndice, setEditandoIndice] = useState<number | null>(null);
+  const [posicaoNumEdicao, setPosicaoNumEdicao] = useState(1);
+  const [itemNumEdicao, setItemNumEdicao] = useState(1);
 
   useEffect(() => {
     buscarPrecosMercado()
@@ -66,6 +85,67 @@ export default function PainelItensOrcamento({
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+    if (editandoIndice === indice) setEditandoIndice(null);
+  }
+
+  // Edição inline — pedido explícito do usuário: editar dimensões/material
+  // aqui mesmo, sem trocar pra "Cálculo manual". Reaproveita o mesmo
+  // cartão de geometria que o item usaria lá (ver TIPOS_COM_CARTAO_PROPRIO
+  // acima), mas troca a peça NO MESMO ÍNDICE do array em vez do padrão
+  // "remove e adiciona no fim" — sem isso o item saltava de posição visual
+  // na lista agrupada por posição.
+  function iniciarEdicaoInline(indice: number) {
+    const item = itens[indice];
+    const m = /Posição (\d+) - Item (\d+)/.exec(item.posicao);
+    if (m) {
+      setPosicaoNumEdicao(Number(m[1]));
+      setItemNumEdicao(Number(m[2]));
+    }
+    setEditandoIndice(indice);
+  }
+
+  function salvarEdicaoInline(indice: number, itemEditado: Omit<ItemCalculado, "posicao">) {
+    const posicaoOriginal = itens[indice].posicao;
+    const itensAtualizados = itens.map((it, i) => (i === indice ? { ...itemEditado, posicao: posicaoOriginal } : it));
+    onEstadoChange({ itens: itensAtualizados });
+    setEditandoIndice(null);
+  }
+
+  function cartaoEdicaoInline(item: ItemCalculado, indice: number) {
+    if (!catalogo) return <p className="text-xs text-stone-500 dark:text-slate-500">Carregando…</p>;
+    const onAdicionar = (itemEditado: Omit<ItemCalculado, "posicao">) => salvarEdicaoInline(indice, itemEditado);
+    const valorInicial = { id: indice, dados: item };
+    const posicaoProps = {
+      posicaoNum: posicaoNumEdicao, itemNum: itemNumEdicao,
+      setPosicaoNum: setPosicaoNumEdicao, setItemNum: setItemNumEdicao,
+    };
+
+    if (item.tipo === "perfil") {
+      return <CartaoPerfilLaminado materiais={materiais} onAdicionar={onAdicionar} valorInicial={valorInicial} {...posicaoProps} />;
+    }
+    if (item.tipo === "cantoneira") {
+      return <CartaoCantoneira materiais={materiais} onAdicionar={onAdicionar} valorInicial={valorInicial} {...posicaoProps} />;
+    }
+    if (item.tipo === "tubo_redondo") {
+      return <CartaoTuboRedondo materiais={materiais} onAdicionar={onAdicionar} valorInicial={valorInicial} {...posicaoProps} />;
+    }
+    if (item.tipo === "peso_direto") {
+      return (
+        <CartaoPesoDireto
+          materiais={materiais} onAdicionar={onAdicionar} valorInicial={valorInicial}
+          acrescimoPadrao={acrescimoPercentualPadrao} {...posicaoProps}
+        />
+      );
+    }
+    if (!TIPOS_COM_CARTAO_PROPRIO.has(item.tipo) && catalogo[item.tipo]) {
+      return (
+        <CartaoGeometriaPadrao
+          key={item.tipo} tipo={item.tipo} def={catalogo[item.tipo]} materiais={materiais}
+          onAdicionar={onAdicionar} valorInicial={valorInicial} acrescimoPadrao={acrescimoPercentualPadrao} {...posicaoProps}
+        />
+      );
+    }
+    return <p className="text-xs text-red-600 dark:text-red-400">Tipo de peça desconhecido ({item.tipo}).</p>;
   }
 
   // Mesma mecânica do acréscimo padrão já usada nos cartões de geometria
@@ -156,6 +236,10 @@ export default function PainelItensOrcamento({
                   return (
                     <div
                       key={indice}
+                      // Ocupa a linha inteira da grade enquanto edita — o
+                      // cartão de geometria tem vários campos lado a lado,
+                      // fica apertado demais numa célula só.
+                      style={editandoIndice === indice ? { gridColumn: "1 / -1" } : undefined}
                       className={`flex flex-col gap-2 rounded-lg border p-3 text-sm ${
                         item.preco_kg == null
                           ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"
@@ -263,10 +347,10 @@ export default function PainelItensOrcamento({
                       <div className="flex items-center justify-end gap-3">
                         <button
                           type="button"
-                          onClick={() => onEditar(indice)}
+                          onClick={() => (editandoIndice === indice ? setEditandoIndice(null) : iniciarEdicaoInline(indice))}
                           className="text-xs text-green-600 dark:text-cyan-400 hover:text-green-700 dark:hover:text-cyan-300"
                         >
-                          editar
+                          {editandoIndice === indice ? "fechar edição" : "editar"}
                         </button>
                         <button
                           type="button"
@@ -276,6 +360,12 @@ export default function PainelItensOrcamento({
                           remover
                         </button>
                       </div>
+
+                      {editandoIndice === indice && (
+                        <div className="mt-1 border-t border-stone-200 dark:border-slate-800 pt-2">
+                          {cartaoEdicaoInline(item, indice)}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

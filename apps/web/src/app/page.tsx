@@ -7,6 +7,7 @@ import AbasFormulario from "@/components/AbasFormulario";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
+import PropostaImpressao from "@/components/PropostaImpressao";
 import PainelIdentificacaoCliente from "@/components/PainelIdentificacaoCliente";
 import {
   analisarBom,
@@ -25,6 +26,7 @@ import {
   type IdentificacaoCliente,
   type OrcamentoSalvoCompleto,
   type OrigemOrcamentoSalvo,
+  type PropostaConfig,
   type RespostaOrcamentoDePdf,
 } from "@/lib/types";
 
@@ -49,14 +51,6 @@ function nomeOrcamentoPadrao(): string {
 export default function Home() {
   const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
-  // Botão "editar" de um item na aba "Itens do orçamento" — troca pra
-  // "Cálculo manual" e avisa qual item abrir (ver CalculoManual.tsx e
-  // PainelItensOrcamento.tsx).
-  const [itemParaEditarIndice, setItemParaEditarIndice] = useState<number | null>(null);
-  function editarItemNaTelaCheia(indice: number) {
-    setItemParaEditarIndice(indice);
-    setModo("manual");
-  }
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -81,10 +75,14 @@ export default function Home() {
   const [identificacaoCliente, setIdentificacaoCliente] = useState<IdentificacaoCliente>(
     IDENTIFICACAO_CLIENTE_INICIAL,
   );
+  // Aba "PROPOSTA" — null até o usuário abrir essa aba pela primeira vez
+  // (ver FormularioUpload.tsx, que chama criarPropostaInicial nesse
+  // momento) ou até restaurar um orçamento salvo que já tem uma.
+  const [propostaConfig, setPropostaConfig] = useState<PropostaConfig | null>(null);
   const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
   const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
-  const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | null>(null);
+  const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | "proposta" | null>(null);
 
   useEffect(() => {
     if (!alvoImpressao) return;
@@ -149,6 +147,7 @@ export default function Home() {
       ...IDENTIFICACAO_CLIENTE_INICIAL,
       ...salvo.resultado.identificacao_cliente,
     });
+    setPropostaConfig(salvo.proposta ?? null);
     if (salvo.origem === "manual" && salvo.estado_manual) {
       // Mescla com o estado inicial em vez de usar salvo.estado_manual puro:
       // orçamentos salvos antes de um campo novo ser adicionado (ex:
@@ -172,6 +171,7 @@ export default function Home() {
     setOrigemAtual(null);
     setEstadoManual(ESTADO_CALCULO_MANUAL_INICIAL);
     setIdentificacaoCliente(IDENTIFICACAO_CLIENTE_INICIAL);
+    setPropostaConfig(null);
     setModo("arquivo");
   }
 
@@ -187,6 +187,7 @@ export default function Home() {
         origem: origemAtual,
         resultado: { ...resultado, identificacao_cliente: identificacaoCliente },
         estado_manual: origemAtual === "manual" ? estadoManual : null,
+        proposta: propostaConfig,
       });
       setOrcamentoSalvoId(r.id);
       setNomeOrcamento(nome);
@@ -291,6 +292,7 @@ export default function Home() {
           origem: origemAtual,
           resultado: { ...resultadoAtualizado, identificacao_cliente: identificacaoCliente },
           estado_manual: origemAtual === "manual" ? estadoManual : null,
+          proposta: propostaConfig,
         });
         setOrcamentoSalvoId(r.id);
         setNomeOrcamento(nome);
@@ -460,9 +462,12 @@ export default function Home() {
           onAbrirSalvo={handleAbrirSalvo}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
           onItensEstruturadosChange={handleItensEstruturadosGerados}
-          itemParaEditarIndice={itemParaEditarIndice}
-          onItemParaEditarConsumido={() => setItemParaEditarIndice(null)}
-          onEditarItemNaTelaCheia={editarItemNaTelaCheia}
+          mac={nomeOrcamento}
+          resultado={resultado}
+          identificacaoCliente={identificacaoCliente}
+          propostaConfig={propostaConfig}
+          onPropostaConfigChange={setPropostaConfig}
+          onGerarPdfProposta={() => setAlvoImpressao("proposta")}
         />
 
         {erro && (
@@ -494,6 +499,14 @@ export default function Home() {
           resultado={resultado}
           nomeArquivo={nomeArquivo}
           identificacaoCliente={identificacaoCliente}
+        />
+      )}
+
+      {alvoImpressao === "proposta" && resultado && propostaConfig && (
+        <PropostaImpressao
+          mac={nomeOrcamento}
+          identificacaoCliente={identificacaoCliente}
+          proposta={propostaConfig}
         />
       )}
     </div>

@@ -11,6 +11,7 @@ const ABAS: { valor: ModoFormulario; rotulo: string }[] = [
   { valor: "arquivo", rotulo: "Enviar desenho (PDF)" },
   { valor: "manual", rotulo: "Cálculo manual" },
   { valor: "itens", rotulo: "Itens do orçamento" },
+  { valor: "proposta", rotulo: "Proposta" },
   { valor: "referencia", rotulo: "Referência de preços" },
   { valor: "salvos", rotulo: "Orçamentos salvos" },
 ];
