@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import AbasFormulario from "@/components/AbasFormulario";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
@@ -415,6 +416,12 @@ export default function Home() {
               </>
             )}
           </div>
+
+          {/* Pedido explícito do usuário: a barra de abas sobe pro
+              cabeçalho fixo, logo abaixo de "nome do orçamento"/"Novo
+              orçamento" — fica visível mesmo rolando a página, em vez de
+              rolar junto com "Identificação do cliente" e o conteúdo. */}
+          <AbasFormulario modo={modo} setModo={setModo} />
         </header>
 
         {/* Pedido explícito do usuário: sempre visível, antes do
@@ -429,7 +436,6 @@ export default function Home() {
 
         <FormularioUpload
           modo={modo}
-          setModo={setModo}
           carregando={carregando}
           onAnalisar={handleAnalisar}
           onResultadoManual={handleResultadoManual}

@@ -18,7 +18,6 @@ export type ModoFormulario = "arquivo" | "manual" | "itens" | "referencia" | "sa
 
 interface Props {
   modo: ModoFormulario;
-  setModo: (modo: ModoFormulario) => void;
   carregando: boolean;
   onAnalisar: (arquivo: File, estimativas: EstimativasOrcamento) => void;
   onResultadoManual: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
@@ -37,7 +36,6 @@ interface Props {
 
 export default function FormularioUpload({
   modo,
-  setModo,
   carregando,
   onAnalisar,
   onResultadoManual,
@@ -82,54 +80,6 @@ export default function FormularioUpload({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div className="flex gap-1 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
-        <button
-          type="button"
-          onClick={() => setModo("arquivo")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "arquivo" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Enviar desenho (PDF)
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo("manual")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "manual" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Cálculo manual
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo("itens")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "itens" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Itens do orçamento
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo("referencia")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "referencia" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Referência de preços
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo("salvos")}
-          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
-            modo === "salvos" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Orçamentos salvos
-        </button>
-      </div>
-
       {modo === "manual" && (
         <CalculoManual
           estado={estadoManual}
