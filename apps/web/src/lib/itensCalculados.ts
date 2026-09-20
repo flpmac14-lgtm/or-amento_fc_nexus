@@ -21,6 +21,31 @@ export function renumerarItensPorPosicao(
   return { itens: renumerados, proximoItemNum: itemNum };
 }
 
+export interface ItemComIndice {
+  item: ItemCalculado;
+  indice: number; // posição no array original de `itens` — pra aplicar edição/remoção sem perder referência ao agrupar
+}
+
+export interface GrupoPorPosicao {
+  posicao: string;
+  itens: ItemComIndice[];
+}
+
+// Mesmo agrupamento visual da lista "Itens do orçamento" (ver
+// CalculoManual.tsx) — reaproveitado pela aba em tela cheia
+// (PainelItensOrcamento.tsx) pra manter a mesma organização por posição.
+export function agruparItensPorPosicao(itens: ItemCalculado[]): GrupoPorPosicao[] {
+  const grupos = new Map<string, ItemComIndice[]>();
+  itens.forEach((item, indice) => {
+    const lista = grupos.get(item.posicao) ?? [];
+    lista.push({ item, indice });
+    grupos.set(item.posicao, lista);
+  });
+  return Array.from(grupos.entries())
+    .map(([posicao, itensDoGrupo]) => ({ posicao, itens: itensDoGrupo }))
+    .sort((a, b) => a.posicao.localeCompare(b.posicao, "pt-BR", { numeric: true }));
+}
+
 const CAMPOS_DIMENSAO: Array<[string, string]> = [
   ["comprimento_mm", "Compr."],
   ["largura_mm", "Larg."],
@@ -60,15 +85,29 @@ function formatarDimensoes(item: ItemEstruturadoIA): string {
 // CalculoManual.tsx::linhasExibicao) — sem isso essa informação ficaria
 // invisível até abrir o item pra editar.
 //
-// Busca o preço/kg de referência por norma+espessura (mesma fonte que o
-// cartão "Peso direto" manual usa) ANTES de montar o item — sem isso o
-// backend não consegue calcular o custo desse item (CATEGORIA_PRECO_POR_TIPO
-// não conhece "peso_direto", então ele não sabe em qual tabela de preço
-// procurar) e o item inteiro cai em "itens para revisão" em vez de entrar
-// no orçamento (bug real encontrado testando em produção: 7/7 itens
-// inseridos, mas orçamento saía zerado). Item sem norma reconhecida ou sem
-// referência de preço continua sem preço — vai pra revisão mesmo, que é o
-// comportamento certo (não inventar preço).
+// tipo_geometria (classificado pela IA, ver services/extractor/app/
+// ai_fallback/lista_materiais.py) -> tipo de material usado na busca de
+// preço/kg de referência (perfil/barra casam só por norma; ver
+// buscarPrecoMercado). Chapas/cilindro/cone continuam pela busca por
+// espessura, abaixo. "tubo_redondo" fica de fora de propósito: o ERP ainda
+// não tem compra de tubo classificada como matéria-prima (só chapa/barra/
+// perfil), então não existe referência real pra usar.
+const TIPO_GEOMETRIA_PARA_MATERIAL_PERFIL_BARRA: Record<string, "perfil" | "barra"> = {
+  perfil: "perfil",
+  cantoneira: "perfil",
+  barra_redonda: "barra",
+};
+
+// Busca o preço/kg de referência por norma+espessura (chapa) ou norma só
+// (perfil/barra) — mesma fonte que os cartões de cálculo manual usam —
+// ANTES de montar o item — sem isso o backend não consegue calcular o
+// custo desse item (CATEGORIA_PRECO_POR_TIPO não conhece "peso_direto",
+// então ele não sabe em qual tabela de preço procurar) e o item inteiro
+// cai em "itens para revisão" em vez de entrar no orçamento (bug real
+// encontrado testando em produção: 7/7 itens inseridos, mas orçamento saía
+// zerado). Item sem norma reconhecida ou sem referência de preço continua
+// sem preço — vai pra revisão mesmo, que é o comportamento certo (não
+// inventar preço).
 export async function converterParaPesoDireto(
   itens: ItemEstruturadoIA[],
 ): Promise<{ itens: ItemCalculado[]; ignorados: { posicao: string; descricao: string; motivo: string }[] }> {
@@ -94,7 +133,19 @@ export async function converterParaPesoDireto(
     const espessura = typeof item.espessura_mm === "number" ? item.espessura_mm : null;
 
     let precoKg: number | undefined;
-    if (item.norma && espessura !== null) {
+    const tipoPerfilBarra = item.tipo_geometria
+      ? TIPO_GEOMETRIA_PARA_MATERIAL_PERFIL_BARRA[item.tipo_geometria]
+      : undefined;
+    if (item.norma && tipoPerfilBarra) {
+      try {
+        const preco = await buscarPrecoMercado(item.norma, undefined, tipoPerfilBarra);
+        if (preco.encontrado) precoKg = preco.preco_kg;
+      } catch {
+        // Sem referência de preço pra essa norma/tipo — item ainda entra
+        // no Cálculo manual, só não terá custo calculado até o
+        // orçamentista informar o preço/kg manualmente.
+      }
+    } else if (item.norma && espessura !== null) {
       try {
         const preco = await buscarPrecoMercado(item.norma, espessura);
         if (preco.encontrado) precoKg = preco.preco_kg;

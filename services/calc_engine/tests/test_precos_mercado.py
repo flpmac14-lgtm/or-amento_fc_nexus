@@ -56,6 +56,10 @@ def _mockar_historico_geral(monkeypatch, linhas: list[precos_mercado.LinhaCompra
     monkeypatch.setattr(precos_mercado, "_consultar_historico_geral", lambda _cur: linhas)
 
 
+def _mockar_precos_perfil_barra(monkeypatch, precos: list[precos_mercado.PrecoPerfilBarra]) -> None:
+    monkeypatch.setattr(precos_mercado, "_consultar_precos_perfil_barra", lambda _cur: precos)
+
+
 def _preco(norma, espessura_mm, preco_kg, data_compra, fornecedor="GERDAU"):
     return precos_mercado.PrecoChapa(
         norma=norma, norma_original=norma, espessura_mm=espessura_mm,
@@ -136,6 +140,58 @@ def test_erro_de_conexao_nao_quebra_e_mantem_cache_anterior(monkeypatch):
 
     # Não levanta exceção — mantém o último resultado bom conhecido.
     assert precos_mercado.buscar_preco_chapa("ASTM A36", 6.35)[0].preco_kg == 5.98
+
+
+def test_busca_perfil_por_norma_sem_espessura(monkeypatch):
+    _mockar_precos_chapa(monkeypatch, [])
+    _mockar_historico_geral(monkeypatch, [])
+    _mockar_precos_perfil_barra(monkeypatch, [
+        precos_mercado.PrecoPerfilBarra(
+            norma="ASTM A36", tipo="perfil", preco_kg=8.43,
+            fornecedor="GERDAU", data_compra="2026-09-16",
+        ),
+    ])
+
+    resultado = precos_mercado.buscar_preco_perfil_barra("ASTM A36", "perfil")
+
+    assert resultado is not None
+    assert resultado.preco_kg == 8.43
+    assert resultado.tipo == "perfil"
+
+
+def test_busca_barra_por_norma(monkeypatch):
+    _mockar_precos_chapa(monkeypatch, [])
+    _mockar_historico_geral(monkeypatch, [])
+    _mockar_precos_perfil_barra(monkeypatch, [
+        precos_mercado.PrecoPerfilBarra(
+            norma="ASTM A36", tipo="barra", preco_kg=6.96,
+            fornecedor="GERDAU", data_compra="2026-09-15",
+        ),
+    ])
+
+    resultado = precos_mercado.buscar_preco_perfil_barra("ASTM A36", "barra")
+
+    assert resultado is not None
+    assert resultado.preco_kg == 6.96
+
+
+def test_busca_perfil_barra_nao_confunde_tipo_ou_norma(monkeypatch):
+    _mockar_precos_chapa(monkeypatch, [])
+    _mockar_historico_geral(monkeypatch, [])
+    _mockar_precos_perfil_barra(monkeypatch, [
+        precos_mercado.PrecoPerfilBarra(
+            norma="ASTM A36", tipo="perfil", preco_kg=8.43,
+            fornecedor="GERDAU", data_compra="2026-09-16",
+        ),
+    ])
+
+    # tipo diferente do cadastrado pra essa norma
+    assert precos_mercado.buscar_preco_perfil_barra("ASTM A36", "barra") is None
+    # norma não cadastrada
+    assert precos_mercado.buscar_preco_perfil_barra("SAE 1020", "perfil") is None
+    # tipo inválido (só "perfil"/"barra" são aceitos — chapa usa buscar_preco_chapa)
+    assert precos_mercado.buscar_preco_perfil_barra("ASTM A36", "chapa") is None
+    assert precos_mercado.buscar_preco_perfil_barra(None, "perfil") is None
 
 
 def test_listar_todas_compras_inclui_qualquer_item(monkeypatch):

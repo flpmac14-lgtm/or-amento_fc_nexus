@@ -89,7 +89,12 @@ from app.orcamentos_salvos import excluir as excluir_orcamento_salvo
 from app.orcamentos_salvos import listar as listar_orcamentos_salvos
 from app.orcamentos_salvos import salvar as salvar_orcamento_salvo
 from app.perfis_catalogo import buscar_perfis, listar_tipos as listar_tipos_perfil
-from app.precos_mercado import buscar_preco_chapa, listar_todas_compras, status_sincronizacao
+from app.precos_mercado import (
+    buscar_preco_chapa,
+    buscar_preco_perfil_barra,
+    listar_todas_compras,
+    status_sincronizacao,
+)
 from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar_excel_bom, ler_excel
 from app.tubos_catalogo import buscar_tubos
 
@@ -266,12 +271,27 @@ def materiais_precos_mercado() -> dict:
 
 
 @app.get("/materiais/preco-mercado")
-def materiais_preco_mercado(norma: str, espessura_mm: float) -> dict:
-    """Preço/kg de referência pra um material+espessura específicos —
-    usado pelo cartão de cálculo pra pré-preencher "Preço por kg" (igual
-    já faz com densidade). `exato=False` quando casou pela espessura mais
-    próxima cadastrada (dentro de app.precos_mercado.TOLERANCIA_ESPESSURA_MM),
-    não pela espessura exata pedida."""
+def materiais_preco_mercado(norma: str, espessura_mm: float | None = None, tipo: str | None = None) -> dict:
+    """Preço/kg de referência — pra chapa, por norma+espessura (igual já
+    faz com densidade; `exato=False` quando casou pela espessura mais
+    próxima cadastrada, dentro de app.precos_mercado.TOLERANCIA_ESPESSURA_MM,
+    não pela espessura exata pedida). Pra perfil/barra (`tipo="perfil"` ou
+    `"barra"`), por norma só — sem espessura, dimensão que não existe pra
+    esses materiais (bug real corrigido em 2026-09-19: 24 itens "VIGA U" de
+    um desenho ficavam sem preço porque essa rota só olhava pra chapa,
+    mesmo já existindo compras reais de perfil no histórico)."""
+    if tipo in ("perfil", "barra"):
+        preco = buscar_preco_perfil_barra(norma, tipo)
+        if not preco:
+            return {"encontrado": False}
+        return {
+            "encontrado": True,
+            "preco_kg": preco.preco_kg,
+            "fornecedor": preco.fornecedor,
+            "data_compra": preco.data_compra,
+            "exato": True,
+        }
+
     resultado = buscar_preco_chapa(norma, espessura_mm)
     if not resultado:
         return {"encontrado": False}

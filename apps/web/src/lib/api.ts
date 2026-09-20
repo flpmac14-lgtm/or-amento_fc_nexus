@@ -331,8 +331,18 @@ export async function buscarTubosCatalogo(termo: string): Promise<TuboCatalogo[]
   return dados.tubos;
 }
 
-export async function buscarPrecoMercado(norma: string, espessuraMm: number): Promise<PrecoMercadoResposta> {
-  const params = new URLSearchParams({ norma, espessura_mm: String(espessuraMm) });
+// `tipo` só é usado pra perfil/barra (VIGA, CANTONEIRA, PERFIL, BARRA
+// REDONDA) — casam por norma só, sem espessura (dimensão que não existe
+// pra esses materiais). Sem `tipo`, busca chapa por norma+espessura (uso
+// original, continua exigindo espessuraMm).
+export async function buscarPrecoMercado(
+  norma: string,
+  espessuraMm?: number,
+  tipo?: "perfil" | "barra",
+): Promise<PrecoMercadoResposta> {
+  const params = new URLSearchParams({ norma });
+  if (espessuraMm != null) params.set("espessura_mm", String(espessuraMm));
+  if (tipo) params.set("tipo", tipo);
   const resposta = await fetch(`${CALC_ENGINE_URL}/materiais/preco-mercado?${params.toString()}`);
   if (!resposta.ok) {
     throw new Error(`Falha ao buscar preço de referência (${resposta.status}).`);

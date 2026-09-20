@@ -57,6 +57,21 @@ class PrecoChapa:
 
 
 @dataclass
+class PrecoPerfilBarra:
+    """Preço/kg de referência pra perfil/barra (VIGA, CANTONEIRA, PERFIL,
+    BARRA REDONDA) — mesma fonte que PrecoChapa (`historico_compras`), mas
+    sem espessura: esses materiais são comprados/precificados por norma+tipo
+    só, não variam de preço por bitola (diferente de chapa, onde #3,00mm e
+    #25mm da mesma norma têm preço/kg bem diferente)."""
+
+    norma: str
+    tipo: str  # "perfil" ou "barra" (materiais.tipo)
+    preco_kg: float
+    fornecedor: str
+    data_compra: str | None
+
+
+@dataclass
 class LinhaCompra:
     """Último preço de `historico_compras_geral` — qualquer item de compra
     do ERP (tinta, parafuso, porca, matéria-prima etc.), sem exigir
@@ -113,6 +128,40 @@ def _consultar_precos_chapa(cur) -> list[PrecoChapa]:
     return list(melhores.values())
 
 
+def _consultar_precos_perfil_barra(cur) -> list[PrecoPerfilBarra]:
+    """Perfil/barra (VIGA, CANTONEIRA, PERFIL, BARRA REDONDA) — já vêm
+    sendo importados do ERP em `historico_compras` (ver
+    scripts/importar_precos_erp.py::classifica) junto com chapa, mas até
+    2026-09-19 ficavam sem uso porque só `_consultar_precos_chapa` lia essa
+    tabela, filtrando `tipo = 'chapa'` (bug real: 24 itens "VIGA U" de um
+    desenho ficaram sem preço de referência apesar de ter 61 compras reais
+    de perfil ASTM A36 já no banco)."""
+    melhores: dict[tuple[str, str], PrecoPerfilBarra] = {}
+
+    cur.execute(
+        """
+        select m.norma, m.tipo, hc.preco_kg, hc.data_compra, f.nome
+        from historico_compras hc
+        join materiais m on m.id = hc.material_id
+        left join fornecedores f on f.id = hc.fornecedor_id
+        where m.tipo in ('perfil', 'barra')
+        order by hc.data_compra desc
+        """
+    )
+    for norma, tipo, preco_kg, data_compra, fornecedor in cur.fetchall():
+        data_iso = data_compra.isoformat() if data_compra else None
+        chave = (norma, tipo)
+        candidato = PrecoPerfilBarra(
+            norma=norma, tipo=tipo, preco_kg=float(preco_kg),
+            fornecedor=(fornecedor or "").strip(), data_compra=data_iso,
+        )
+        atual = melhores.get(chave)
+        if atual is None or (data_iso or "") > (atual.data_compra or ""):
+            melhores[chave] = candidato
+
+    return list(melhores.values())
+
+
 def _consultar_historico_geral(cur) -> list[LinhaCompra]:
     """Último preço conhecido por (material, unidade) — qualquer item
     (tinta, parafuso, porca, matéria-prima etc.), sem exigir catálogo de
@@ -136,19 +185,21 @@ def _consultar_historico_geral(cur) -> list[LinhaCompra]:
     ]
 
 
-def _consultar_historico() -> tuple[list[PrecoChapa], list[LinhaCompra]]:
+def _consultar_historico() -> tuple[list[PrecoChapa], list[PrecoPerfilBarra], list[LinhaCompra]]:
     import psycopg
 
     with psycopg.connect(_db_url(), connect_timeout=10, prepare_threshold=None) as conn, conn.cursor() as cur:
         precos = _consultar_precos_chapa(cur)
+        precos_perfil_barra = _consultar_precos_perfil_barra(cur)
         todas = _consultar_historico_geral(cur)
 
-    return precos, todas
+    return precos, precos_perfil_barra, todas
 
 
 class _Cache:
     def __init__(self) -> None:
         self.precos: list[PrecoChapa] = []
+        self.precos_perfil_barra: list[PrecoPerfilBarra] = []
         self.todas: list[LinhaCompra] = []
         self.lido_em_monotonic: float | None = None
         self.lido_em: float = 0.0  # epoch, só pra exibir "sincronizado em"
@@ -168,7 +219,7 @@ class _Cache:
             return
 
         try:
-            self.precos, self.todas = _consultar_historico()
+            self.precos, self.precos_perfil_barra, self.todas = _consultar_historico()
             self.disponivel = True
         except Exception:
             # Banco fora do ar/instável não pode derrubar a tela — mantém o
@@ -224,4 +275,18 @@ def buscar_preco_chapa(norma: str | None, espessura_mm: float | None) -> tuple[P
     mais_proximo = min(candidatos, key=lambda p: abs(p.espessura_mm - espessura_mm))
     if abs(mais_proximo.espessura_mm - espessura_mm) <= TOLERANCIA_ESPESSURA_MM:
         return mais_proximo, False
+    return None
+
+
+def buscar_preco_perfil_barra(norma: str | None, tipo: str | None) -> PrecoPerfilBarra | None:
+    """Preço/kg de referência pra perfil/barra (VIGA, CANTONEIRA, PERFIL,
+    BARRA REDONDA) — casa só por norma+tipo, sem tolerância de espessura
+    (não existe essa dimensão pra esses materiais)."""
+    if not norma or tipo not in ("perfil", "barra"):
+        return None
+    _cache.garantir_atualizado()
+
+    for p in _cache.precos_perfil_barra:
+        if p.tipo == tipo and p.norma.strip().upper() == norma.strip().upper():
+            return p
     return None
