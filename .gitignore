@@ -8,6 +8,7 @@ __pycache__/
 node_modules/
 .next/
 out/
+.vercel/
 
 # Env
 .env
