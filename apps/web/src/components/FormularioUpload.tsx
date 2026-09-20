@@ -2,6 +2,7 @@
 
 import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
+import PainelItensOrcamento from "@/components/PainelItensOrcamento";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
 import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
@@ -13,7 +14,7 @@ import type {
   RespostaOrcamentoDePdf,
 } from "@/lib/types";
 
-export type ModoFormulario = "arquivo" | "manual" | "referencia" | "salvos";
+export type ModoFormulario = "arquivo" | "manual" | "itens" | "referencia" | "salvos";
 
 interface Props {
   modo: ModoFormulario;
@@ -102,6 +103,15 @@ export default function FormularioUpload({
         </button>
         <button
           type="button"
+          onClick={() => setModo("itens")}
+          className={`flex-1 rounded-md py-2 font-medium transition-colors ${
+            modo === "itens" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
+          }`}
+        >
+          Itens do orçamento
+        </button>
+        <button
+          type="button"
           onClick={() => setModo("referencia")}
           className={`flex-1 rounded-md py-2 font-medium transition-colors ${
             modo === "referencia" ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950" : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
@@ -122,6 +132,16 @@ export default function FormularioUpload({
 
       {modo === "manual" && (
         <CalculoManual
+          estado={estadoManual}
+          onEstadoChange={onEstadoManualChange}
+          onResultado={onResultadoManual}
+          onErro={onErroManual}
+          pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+        />
+      )}
+
+      {modo === "itens" && (
+        <PainelItensOrcamento
           estado={estadoManual}
           onEstadoChange={onEstadoManualChange}
           onResultado={onResultadoManual}

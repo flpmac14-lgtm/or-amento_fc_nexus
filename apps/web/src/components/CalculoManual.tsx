@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  analisarBom,
   buscarCatalogoGeometria,
   buscarCatalogoProcessosTerceirizados,
   buscarMateriais,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import { renumerarItensPorPosicao } from "@/lib/itensCalculados";
+import { useAutoCalculoOrcamento } from "@/lib/useAutoCalculoOrcamento";
 import GeometriaIcone from "@/components/icones/GeometriaIcone";
 import CartaoPerfilLaminado from "@/components/CartaoPerfilLaminado";
 import CartaoCantoneira from "@/components/CartaoCantoneira";
@@ -96,7 +96,6 @@ export default function CalculoManual({
   const [materiais, setMateriais] = useState<MaterialCatalogo[]>([]);
   const [catalogoProcessos, setCatalogoProcessos] = useState<CatalogoProcessosTerceirizados>(CATALOGO_PROCESSOS_VAZIO);
   const [tipoAberto, setTipoAberto] = useState<string | null>(null);
-  const [analisando, setAnalisando] = useState(false);
   const [edicao, setEdicao] = useState<EdicaoAtual | null>(null);
   const proximoIdEdicao = useRef(1);
   // Importação da planilha do relatório técnico por IA (ver
@@ -319,62 +318,11 @@ export default function CalculoManual({
     iniciarEdicao("engenharia_itens", item);
   }
 
-  const totalItens =
-    itens.length + itensComerciais.length + insumosPintura.length + operacoesUsinagem.length +
-    servicosTerceiros.length + tratamentoTermico.length + contingenciamento.length + ndtItens.length +
-    engenhariaItens.length;
-
-  // Token da última chamada disparada — evita que a resposta de um cálculo
-  // mais antigo (rede lenta) sobrescreva o resultado de um mais novo,
-  // já que o auto-cálculo abaixo pode disparar mais de uma chamada em
-  // sequência conforme o usuário vai adicionando itens.
-  const tokenCalculoRef = useRef(0);
-
-  async function calcularOrcamento() {
-    if (totalItens === 0) return;
-    const token = ++tokenCalculoRef.current;
-    setAnalisando(true);
-    try {
-      const r = await analisarBom(
-        itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
-        contingenciamento, ndtItens, engenhariaItens,
-        {
-          cenario_comercial: cenarioComercial,
-          usar_historico_horas: false,
-          corte_valor_kg: Number(corteValorKg.replace(",", ".")) || undefined,
-          // Preserva o peso líquido manual (aplicado via PainelPesoBase)
-          // em cima do peso recém-calculado do BOM — sem isso, qualquer
-          // interação aqui (adicionar item etc.) recalculava do zero e
-          // perdia o override, voltando pro peso bruto sozinho.
-          peso_liquido_kg: pesoLiquidoManualAtivo ?? undefined,
-        },
-      );
-      if (token !== tokenCalculoRef.current) return;
-      onResultado(r, `cálculo manual (${totalItens} ${totalItens === 1 ? "item" : "itens"})`);
-    } catch (e) {
-      if (token !== tokenCalculoRef.current) return;
-      onErro(e instanceof Error ? e.message : "Erro ao calcular o orçamento.");
-    } finally {
-      if (token === tokenCalculoRef.current) setAnalisando(false);
-    }
-  }
-
-  // Pedido explícito do usuário: recalcular sozinho conforme ele vai
-  // adicionando itens/adicionais, sem precisar apertar "Calcular
-  // orçamento" toda vez. Debounce de 600ms pra não disparar uma chamada
-  // por tecla digitada (ex: no campo "Insumos de corte") nem uma por item
-  // quando várias adições acontecem em sequência rápida.
-  useEffect(() => {
-    if (totalItens === 0) return;
-    const timer = setTimeout(() => {
-      calcularOrcamento();
-    }, 600);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    itens, itensComerciais, insumosPintura, operacoesUsinagem, servicosTerceiros, tratamentoTermico,
-    contingenciamento, ndtItens, engenhariaItens, cenarioComercial, corteValorKg, pesoLiquidoManualAtivo,
-  ]);
+  // Auto-recálculo compartilhado com PainelItensOrcamento (aba "Itens do
+  // orçamento" em tela cheia) — ver lib/useAutoCalculoOrcamento.ts.
+  const { calcularOrcamento, analisando, totalItens } = useAutoCalculoOrcamento({
+    estado, onResultado, onErro, pesoLiquidoManualAtivo,
+  });
 
   const pesoTotal = itens.reduce((soma, i) => soma + i.peso_kg, 0);
   const custoComercialTotal = itensComerciais.reduce((soma, i) => soma + i.custoTotal, 0);
