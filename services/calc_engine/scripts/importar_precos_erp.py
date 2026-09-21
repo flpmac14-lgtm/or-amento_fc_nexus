@@ -53,6 +53,21 @@ load_dotenv()
 
 CFOP_COMPRA = ("1101", "1101A", "1101B")
 
+# CFOPs de compra usados só pela referência GERAL (buscar_compras_geral_erp)
+# — lista bem mais ampla que CFOP_COMPRA porque cobre qualquer tipo de
+# compra (industrialização, revenda, imobilizado, combustível, importação
+# etc.), não só matéria-prima pra fabricação. Lista fornecida pelo usuário
+# (mesma referência que a Macfab já usa no relatório "Sectra").
+CFOP_COMPRA_GERAL = (
+    "1101", "1101A", "1101B", "1101C", "1101D", "1101J", "1101V",
+    "1116", "1122", "1252",
+    "1401", "1401E", "1401F", "1406", "1407",
+    "1551", "1551A", "1551B", "1551C", "1556",
+    "1651", "1653",
+    "2101", "2101C", "2101D", "2101X", "2406", "2551", "2556A",
+    "3127", "3551",
+)
+
 # Preço de matéria-prima bruta (chapa/barra/perfil de aço) acima disso é
 # quase certamente erro de unidade na origem (ver docstring do módulo),
 # não um preço real de R$/kg.
@@ -174,10 +189,17 @@ class LinhaErpGeral:
 
 
 def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
-    """Mesma lógica do relatório "Sectra" que a Macfab já usa (recebido do
-    usuário) — ROW_NUMBER() particionado por (MATERIAL, UNIDADE), pegando só
-    o mais recente (DTLANCAMENTO desc, NFE desc como desempate). Isto é uma
-    referência de PREÇO ATUAL por item, não um log de toda transação."""
+    """Mesma lógica do relatório "Sectra" que a Macfab já usa (versão
+    atualizada pelo usuário: CFOP_COMPRA_GERAL bem mais amplo, cobrindo
+    qualquer tipo de compra, não só industrialização) — ROW_NUMBER()
+    particionado por (MATERIAL, UNIDADE), pegando só o mais recente
+    (DTLANCAMENTO desc, CODIGO da nota desc como desempate). Isto é uma
+    referência de PREÇO ATUAL por item, não um log de toda transação.
+
+    A consulta do usuário não filtra mais DESCRICAO/VLRUNITARIO nulos (ao
+    contrário da versão anterior) — como `historico_compras_geral` exige
+    os dois (NOT NULL), essas linhas são só puladas aqui no Python em vez
+    de tentar inserir e quebrar o lote inteiro."""
     conn = _conectar_erp()
     cur = conn.cursor()
     cur.execute(
@@ -188,21 +210,20 @@ def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
                 NI.UNIDADE, NI.OBRA, N.DTLANCAMENTO, F.FANTASIA AS FORNECEDOR,
                 ROW_NUMBER() OVER (
                     PARTITION BY NI.MATERIAL, NI.UNIDADE
-                    ORDER BY N.DTLANCAMENTO DESC, NI.NFE DESC
+                    ORDER BY N.DTLANCAMENTO DESC, N.CODIGO DESC
                 ) AS ORDEM
             FROM FN_NFEITENS AS NI
             INNER JOIN FN_NFE AS N ON N.CODIGO = NI.NFE
             LEFT JOIN FN_FORNECEDORES AS F ON F.CODIGO = N.FORNECEDOR
             WHERE N.DTLANCAMENTO >= ?
-              AND NI.CFOP IN ({",".join("?" for _ in CFOP_COMPRA)})
-              AND NI.DESCRICAO IS NOT NULL
-              AND NI.VLRUNITARIO IS NOT NULL
+              AND NI.CFOP IN ({",".join("?" for _ in CFOP_COMPRA_GERAL)})
         )
         SELECT NFE, CODIGO, MATERIAL, DESCRICAO, VLRUNITARIO, UNIDADE, OBRA, DTLANCAMENTO, FORNECEDOR
         FROM ULTIMO_VALOR
         WHERE ORDEM = 1
+        ORDER BY MATERIAL
         """,
-        (desde, *CFOP_COMPRA),
+        (desde, *CFOP_COMPRA_GERAL),
     )
     linhas = [
         LinhaErpGeral(
@@ -216,6 +237,7 @@ def buscar_compras_geral_erp(desde: str) -> list[LinhaErpGeral]:
             fornecedor=(row.FORNECEDOR or "").strip() or None,
         )
         for row in cur.fetchall()
+        if row.DESCRICAO is not None and row.VLRUNITARIO is not None
     ]
     conn.close()
     return linhas
