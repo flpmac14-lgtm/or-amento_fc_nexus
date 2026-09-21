@@ -63,13 +63,31 @@ const CATALOGO_PROCESSOS_VAZIO: CatalogoProcessosTerceirizados = {
   ensaios_nao_destrutivos: [],
 };
 
+// Categoria de origem de uma edição — qual array substituir quando o
+// cartão reaberto salvar (ver adicionarX abaixo). Separado de `tipo`
+// porque só "itens" tem tipo variável (perfil/cantoneira/chapa_.../
+// peso_direto); as outras categorias sempre abrem o mesmo cartão.
+type CategoriaEdicao =
+  | "itens" | "itensComerciais" | "insumosPintura" | "operacoesUsinagem"
+  | "servicosTerceiros" | "tratamentoTermico" | "contingenciamento"
+  | "ndtItens" | "engenhariaItens";
+
 // Item "puxado de volta" pro formulário pelo botão "editar" — `tipo` roteia
 // pro cartão certo (ver cada `valorInicial={...}` abaixo); `id` muda a cada
 // clique em "editar" pra disparar o efeito de restauração em cada cartão
-// mesmo editando o mesmo item duas vezes seguidas.
+// mesmo editando o mesmo item duas vezes seguidas. `indice` é a posição no
+// array ORIGINAL: ao salvar, substitui ali em vez de acrescentar no fim —
+// e, crucial, o item NUNCA é removido do array antes de o cartão salvar
+// (ver adicionarX), então abandonar a edição (trocar de aba, clicar em
+// outro tipo de peça etc.) não perde o item. Bug real corrigido em
+// 2026-09-21: o comportamento antigo removia o item na hora de clicar
+// "editar" e só devolvia se o usuário completasse "Adicionar ao
+// orçamento" — abandonar a edição no meio apagava a peça sem aviso.
 interface EdicaoAtual {
   id: number;
+  categoria: CategoriaEdicao;
   tipo: string;
+  indice: number;
   dados: unknown;
 }
 
@@ -120,22 +138,44 @@ export default function CalculoManual({
     onEstadoChange({ itemNum: n });
   }
 
-  // Puxa o item de volta pro formulário certo pra editar: tira ele da
-  // lista (a edição "completa" quando o usuário adicionar de novo),
-  // reabre o cartão de origem já preenchido e restaura a posição/item.
-  function iniciarEdicao(tipo: string, dados: { posicao: string }) {
+  // Reabre o cartão de origem já preenchido, SEM tirar o item da lista —
+  // só sai de lá quando o cartão salvar (ver adicionarX). Também restaura
+  // a posição/item nos campos do formulário (cosmético: refletido de
+  // volta no `dados.posicao` original na hora de salvar, nunca reconstruído
+  // a partir desses contadores).
+  function iniciarEdicao(categoria: CategoriaEdicao, tipo: string, dados: { posicao: string }, indice: number) {
     const posicaoRestaurada = restaurarPosicaoItem(dados.posicao);
     if (posicaoRestaurada) onEstadoChange(posicaoRestaurada);
-    setEdicao({ id: proximoIdEdicao.current++, tipo, dados });
+    setEdicao({ id: proximoIdEdicao.current++, categoria, tipo, indice, dados });
+  }
+
+  // A lista de itens (coluna da direita) fica visível junto do cartão de
+  // edição aberto — dá pra remover OUTRO item da mesma categoria enquanto
+  // uma edição está pendente. Sem isso, `edicao.indice` ficaria apontando
+  // pro item errado (ou inexistente) depois do array encolher.
+  function ajustarEdicaoAposRemocao(categoria: CategoriaEdicao, indiceRemovido: number) {
+    setEdicao((atual) => {
+      if (!atual || atual.categoria !== categoria) return atual;
+      if (indiceRemovido === atual.indice) return null; // o item em edição foi removido — cancela
+      if (indiceRemovido < atual.indice) return { ...atual, indice: atual.indice - 1 };
+      return atual;
+    });
   }
 
   function adicionarItem(item: Omit<ItemCalculado, "posicao">) {
+    if (edicao?.categoria === "itens") {
+      const posicao = itens[edicao.indice].posicao;
+      onEstadoChange({ itens: itens.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)) });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ itens: [...itens, { ...item, posicao }] });
   }
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("itens", indice);
   }
 
   // Aplica o % de acréscimo em TODOS os itens que têm preço de referência
@@ -180,129 +220,190 @@ export default function CalculoManual({
 
   function editarItem(indice: number) {
     const item = itens[indice];
-    onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
     setTipoAberto(item.tipo);
-    iniciarEdicao(item.tipo, item);
+    iniciarEdicao("itens", item.tipo, item, indice);
   }
 
   function adicionarItemComercial(item: Omit<ItemComercial, "posicao">) {
+    if (edicao?.categoria === "itensComerciais") {
+      const posicao = itensComerciais[edicao.indice].posicao;
+      onEstadoChange({
+        itensComerciais: itensComerciais.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ itensComerciais: [...itensComerciais, { ...item, posicao }] });
   }
 
   function removerItemComercial(indice: number) {
     onEstadoChange({ itensComerciais: itensComerciais.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("itensComerciais", indice);
   }
 
   function editarItemComercial(indice: number) {
     const item = itensComerciais[indice];
-    onEstadoChange({ itensComerciais: itensComerciais.filter((_, i) => i !== indice) });
-    iniciarEdicao("item_comercial", item);
+    iniciarEdicao("itensComerciais", "item_comercial", item, indice);
   }
 
   function adicionarInsumoPintura(item: Omit<ItemComercial, "posicao">) {
+    if (edicao?.categoria === "insumosPintura") {
+      const posicao = insumosPintura[edicao.indice].posicao;
+      onEstadoChange({
+        insumosPintura: insumosPintura.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ insumosPintura: [...insumosPintura, { ...item, posicao }] });
   }
 
   function removerInsumoPintura(indice: number) {
     onEstadoChange({ insumosPintura: insumosPintura.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("insumosPintura", indice);
   }
 
   function editarInsumoPintura(indice: number) {
     const item = insumosPintura[indice];
-    onEstadoChange({ insumosPintura: insumosPintura.filter((_, i) => i !== indice) });
-    iniciarEdicao("insumo_pintura", item);
+    iniciarEdicao("insumosPintura", "insumo_pintura", item, indice);
   }
 
   function adicionarOperacaoUsinagem(item: Omit<OperacaoUsinagem, "posicao">) {
+    if (edicao?.categoria === "operacoesUsinagem") {
+      const posicao = operacoesUsinagem[edicao.indice].posicao;
+      onEstadoChange({
+        operacoesUsinagem: operacoesUsinagem.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ operacoesUsinagem: [...operacoesUsinagem, { ...item, posicao }] });
   }
 
   function removerOperacaoUsinagem(indice: number) {
     onEstadoChange({ operacoesUsinagem: operacoesUsinagem.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("operacoesUsinagem", indice);
   }
 
   function editarOperacaoUsinagem(indice: number) {
     const item = operacoesUsinagem[indice];
-    onEstadoChange({ operacoesUsinagem: operacoesUsinagem.filter((_, i) => i !== indice) });
-    iniciarEdicao("usinagem", item);
+    iniciarEdicao("operacoesUsinagem", "usinagem", item, indice);
   }
 
   function adicionarServicoTerceiro(item: Omit<ServicoPorPeso, "posicao">) {
+    if (edicao?.categoria === "servicosTerceiros") {
+      const posicao = servicosTerceiros[edicao.indice].posicao;
+      onEstadoChange({
+        servicosTerceiros: servicosTerceiros.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ servicosTerceiros: [...servicosTerceiros, { ...item, posicao }] });
   }
 
   function removerServicoTerceiro(indice: number) {
     onEstadoChange({ servicosTerceiros: servicosTerceiros.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("servicosTerceiros", indice);
   }
 
   function editarServicoTerceiro(indice: number) {
     const item = servicosTerceiros[indice];
-    onEstadoChange({ servicosTerceiros: servicosTerceiros.filter((_, i) => i !== indice) });
-    iniciarEdicao("servicos_terceiros", item);
+    iniciarEdicao("servicosTerceiros", "servicos_terceiros", item, indice);
   }
 
   function adicionarTratamentoTermico(item: Omit<ServicoPorPeso, "posicao">) {
+    if (edicao?.categoria === "tratamentoTermico") {
+      const posicao = tratamentoTermico[edicao.indice].posicao;
+      onEstadoChange({
+        tratamentoTermico: tratamentoTermico.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ tratamentoTermico: [...tratamentoTermico, { ...item, posicao }] });
   }
 
   function removerTratamentoTermico(indice: number) {
     onEstadoChange({ tratamentoTermico: tratamentoTermico.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("tratamentoTermico", indice);
   }
 
   function editarTratamentoTermico(indice: number) {
     const item = tratamentoTermico[indice];
-    onEstadoChange({ tratamentoTermico: tratamentoTermico.filter((_, i) => i !== indice) });
-    iniciarEdicao("tratamento_termico", item);
+    iniciarEdicao("tratamentoTermico", "tratamento_termico", item, indice);
   }
 
   function adicionarContingenciamento(item: Omit<ItemContingenciamento, "posicao">) {
+    if (edicao?.categoria === "contingenciamento") {
+      const posicao = contingenciamento[edicao.indice].posicao;
+      onEstadoChange({
+        contingenciamento: contingenciamento.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ contingenciamento: [...contingenciamento, { ...item, posicao }] });
   }
 
   function removerContingenciamento(indice: number) {
     onEstadoChange({ contingenciamento: contingenciamento.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("contingenciamento", indice);
   }
 
   function editarContingenciamento(indice: number) {
     const item = contingenciamento[indice];
-    onEstadoChange({ contingenciamento: contingenciamento.filter((_, i) => i !== indice) });
-    iniciarEdicao("contingenciamento", item);
+    iniciarEdicao("contingenciamento", "contingenciamento", item, indice);
   }
 
   function adicionarNdtItem(item: Omit<ServicoPorPeso, "posicao">) {
+    if (edicao?.categoria === "ndtItens") {
+      const posicao = ndtItens[edicao.indice].posicao;
+      onEstadoChange({ ndtItens: ndtItens.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)) });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ ndtItens: [...ndtItens, { ...item, posicao }] });
   }
 
   function removerNdtItem(indice: number) {
     onEstadoChange({ ndtItens: ndtItens.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("ndtItens", indice);
   }
 
   function editarNdtItem(indice: number) {
     const item = ndtItens[indice];
-    onEstadoChange({ ndtItens: ndtItens.filter((_, i) => i !== indice) });
-    iniciarEdicao("ndt_itens", item);
+    iniciarEdicao("ndtItens", "ndt_itens", item, indice);
   }
 
   function adicionarEngenhariaItem(item: Omit<ItemContingenciamento, "posicao">) {
+    if (edicao?.categoria === "engenhariaItens") {
+      const posicao = engenhariaItens[edicao.indice].posicao;
+      onEstadoChange({
+        engenhariaItens: engenhariaItens.map((it, i) => (i === edicao.indice ? { ...item, posicao } : it)),
+      });
+      setEdicao(null);
+      return;
+    }
     const posicao = `Posição ${posicaoNum} - Item ${itemNum}`;
     onEstadoChange({ engenhariaItens: [...engenhariaItens, { ...item, posicao }] });
   }
 
   function removerEngenhariaItem(indice: number) {
     onEstadoChange({ engenhariaItens: engenhariaItens.filter((_, i) => i !== indice) });
+    ajustarEdicaoAposRemocao("engenhariaItens", indice);
   }
 
   function editarEngenhariaItem(indice: number) {
     const item = engenhariaItens[indice];
-    onEstadoChange({ engenhariaItens: engenhariaItens.filter((_, i) => i !== indice) });
-    iniciarEdicao("engenharia_itens", item);
+    iniciarEdicao("engenhariaItens", "engenharia_itens", item, indice);
   }
 
   // Auto-recálculo compartilhado com PainelItensOrcamento (aba "Itens do

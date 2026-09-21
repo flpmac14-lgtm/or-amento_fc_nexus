@@ -85,7 +85,15 @@ export default function PainelItensOrcamento({
 
   function removerItem(indice: number) {
     onEstadoChange({ itens: itens.filter((_, i) => i !== indice) });
-    if (editandoIndice === indice) setEditandoIndice(null);
+    // Mesmo cuidado de CalculoManual.tsx::ajustarEdicaoAposRemocao — remover
+    // OUTRO item enquanto um cartão de edição inline está aberto não pode
+    // deixar editandoIndice apontando pro item errado depois do array encolher.
+    setEditandoIndice((atual) => {
+      if (atual == null) return null;
+      if (indice === atual) return null;
+      if (indice < atual) return atual - 1;
+      return atual;
+    });
   }
 
   // Edição inline — pedido explícito do usuário: editar dimensões/material
