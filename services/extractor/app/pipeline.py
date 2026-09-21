@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from app.ai_fallback.client import analisar_paginas, fallback_habilitado
 from app.extraction import bom_parser
+from app.extraction.andritz_oc import extrair_pedido_andritz
 from app.extraction.bom_sap_export import extrair_bom_sap_export
 from app.extraction.bom_table import _campo, extrair_bom_de_tabelas
 from app.extraction.bom_texto_manual import extrair_bom_de_texto_manual
@@ -225,6 +226,7 @@ def _mesclar_identificacao(textos_por_arquivo: list[str]):
     from app.schemas import CampoExtraido, Identificacao
 
     melhores: dict[str, CampoExtraido] = {nome: CampoExtraido() for nome in CAMPOS_IDENTIFICACAO}
+    melhor_candidatos_mac = CampoExtraido(valor=[])
 
     for texto in textos_por_arquivo:
         candidatos = {
@@ -237,6 +239,10 @@ def _mesclar_identificacao(textos_por_arquivo: list[str]):
             if melhores[nome].confianca == 0 and campo.confianca > 0:
                 melhores[nome] = campo
 
+        candidatos_mac = bom_parser.extrair_codigos_equipamento_candidatos(texto)
+        if melhor_candidatos_mac.confianca == 0 and candidatos_mac.confianca > 0:
+            melhor_candidatos_mac = candidatos_mac
+
     # .model_dump() em vez de passar as instâncias direto: Identificacao
     # espera CampoExtraido[str] (genérico parametrizado) e `melhores` tem
     # CampoExtraido "cru" (sem parâmetro) — algumas versões do Pydantic
@@ -244,11 +250,24 @@ def _mesclar_identificacao(textos_por_arquivo: list[str]):
     # (ValidationError "Input should be a valid dictionary or instance of
     # CampoExtraido[str]"), mesmo sendo, na prática, os mesmos dados. Dict
     # sempre revalida limpo, independente da versão do Pydantic instalada.
-    return Identificacao(**{nome: campo.model_dump() for nome, campo in melhores.items()})
+    return Identificacao(
+        **{nome: campo.model_dump() for nome, campo in melhores.items()},
+        codigo_equipamento_candidatos=melhor_candidatos_mac.model_dump(),
+    )
 
 
 def _campo_len(numero_folhas: int) -> dict:
     return {"valor": numero_folhas, "confianca": 1.0, "origem": "regra_local"}
+
+
+def processar_ordem_compra_andritz(pdf_path: str) -> dict:
+    """Extração determinística (texto + regex, sem IA) da Ordem de Compra
+    ANDRITZ — ver app/extraction/andritz_oc.py. Documento diferente do
+    desenho técnico: devolve `{}` se o PDF não bater com o formato
+    reconhecido (nunca tenta adivinhar formato de pedido de outro
+    cliente)."""
+    texto_completo, _, _ = _extrair_texto_completo(pdf_path)
+    return extrair_pedido_andritz(texto_completo)
 
 
 def status_dependencias() -> dict:

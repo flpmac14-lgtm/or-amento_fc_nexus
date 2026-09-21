@@ -17,6 +17,7 @@ import type {
   PrecoMercadoResposta,
   PrecosMercadoLista,
   PropostaConfig,
+  RespostaPedidoAndritz,
   RespostaOrcamentoDePdf,
   ResultadoOrcamentoDTO,
   ServicoPorPeso,
@@ -131,6 +132,57 @@ export async function baixarExcelRelatorioTecnico(itens: ItemEstruturadoIA[]): P
   const link = document.createElement("a");
   link.href = url;
   link.download = "lista-materiais-ia.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Extração determinística (texto + regex, sem IA) de uma Ordem de Compra
+ * ANDRITZ — pedido explícito do usuário: item/material/quantidade/valor/
+ * data de entrega + MAC, prontos no formato da planilha de controle de
+ * pedidos que ele já preenche à mão. */
+export async function extrairPedidoAndritz(arquivo: File): Promise<RespostaPedidoAndritz> {
+  const formData = new FormData();
+  formData.set("file", arquivo);
+
+  const resposta = await fetch(`${CALC_ENGINE_URL}/ordem-compra-andritz`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao extrair o pedido (${resposta.status}). ${corpo || "Confira se é uma Ordem de Compra da ANDRITZ."}`,
+    );
+  }
+
+  return resposta.json();
+}
+
+/** Planilha do pedido extraído, no formato da planilha de controle que o
+ * usuário já usa. */
+export async function baixarExcelPedidoAndritz(
+  numeroOc: string | null,
+  itens: RespostaPedidoAndritz["itens"],
+): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/ordem-compra-andritz/excel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numero_oc: numeroOc, itens }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao gerar o Excel do pedido (${resposta.status}). ${corpo}`);
+  }
+
+  const blob = await resposta.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `pedido-${numeroOc ?? "andritz"}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

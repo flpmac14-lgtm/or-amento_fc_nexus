@@ -390,6 +390,32 @@ export interface OrcamentoSalvoCompleto {
   updated_at: string;
 }
 
+// Aba "Pedido ANDRITZ" — extração determinística (texto + regex, sem IA)
+// da Ordem de Compra: substitui a digitação manual numa planilha de
+// controle toda vez que chega um pedido (pedido explícito do usuário).
+// Ver services/extractor/app/extraction/andritz_oc.py.
+export interface ItemPedidoAndritz {
+  item: string; // "4505093989-010" (nº da OC + nº do item, com zero à esquerda)
+  valor_total: string; // "2.866,68" — texto, já formatado como veio do PDF
+  quantidade: number;
+  material: string;
+  material_antigo: string | null;
+  descricao: string | null;
+  mac: string | null; // "792.26" — sem prefixo "MAC_", sem zero à esquerda
+  data_entrega: string | null; // "24/08/26"
+}
+
+export interface RespostaPedidoAndritz {
+  numero_oc: string | null;
+  mac: string | null;
+  // true quando o PDF tem duas ou mais MACs DIFERENTES — nesse caso `mac`
+  // fica null (o sistema não escolhe sozinho) e `mac_candidatos` traz as
+  // opções encontradas pro usuário selecionar.
+  mac_ambigua: boolean;
+  mac_candidatos: string[];
+  itens: ItemPedidoAndritz[];
+}
+
 export interface PerfilCatalogo {
   designacao: string;
   peso_kg_m: number;

@@ -25,6 +25,11 @@ class Identificacao(BaseModel):
     numero_desenho: CampoExtraido[str] = CampoExtraido()
     revisao: CampoExtraido[str] = CampoExtraido()
     codigo_equipamento: CampoExtraido[str] = CampoExtraido()
+    # Só preenchido quando o PDF tem DUAS OU MAIS MACs diferentes (ver
+    # bom_parser.extrair_codigos_equipamento_candidatos) — nesse caso
+    # `codigo_equipamento` fica com confiança 0 (não escolhe sozinho) e o
+    # usuário escolhe uma destas opções na tela.
+    codigo_equipamento_candidatos: CampoExtraido[List[str]] = CampoExtraido(valor=[])
     pedido_po: CampoExtraido[str] = CampoExtraido()
     descricao: CampoExtraido[str] = CampoExtraido()
     quantidade: CampoExtraido[int] = CampoExtraido()

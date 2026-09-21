@@ -57,6 +57,14 @@ Endpoints:
   GET  /cnpj/{cnpj}        -> nome + endereço de um CNPJ (Receita Federal,
                                via BrasilAPI) pra pré-preencher a
                                "Identificação do cliente" — ver app/cnpj.py
+  POST /ordem-compra-andritz       -> extração determinística (sem IA) de
+                                       uma Ordem de Compra ANDRITZ — ver
+                                       app/extraction/andritz_oc.py no
+                                       extractor
+  POST /ordem-compra-andritz/excel -> planilha da OC extraída, no formato
+                                       da planilha de controle de pedidos
+                                       do usuário — ver
+                                       app/relatorio_pedido_andritz.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -96,6 +104,7 @@ from app.precos_mercado import (
     status_sincronizacao,
 )
 from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar_excel_bom, ler_excel
+from app.relatorio_pedido_andritz import gerar_excel_pedido_andritz
 from app.tubos_catalogo import buscar_tubos
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
@@ -475,6 +484,48 @@ async def orcamento_de_pdf(
         "usar_historico_horas": usar_historico_horas,
     }
     return _montar_resposta(resultado_extracao, estimativas)
+
+
+@app.post("/ordem-compra-andritz")
+async def ordem_compra_andritz(file: UploadFile) -> dict:
+    """Repassa pro extractor (POST /ordem-compra-andritz) — extração
+    determinística (texto + regex, sem IA) da Ordem de Compra ANDRITZ: nº
+    do pedido, MAC e itens (material/quantidade/valor/data de entrega),
+    prontos no formato da planilha de controle de pedidos do usuário."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
+
+    conteudo = await file.read()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{EXTRACTOR_URL}/ordem-compra-andritz",
+                files=[("file", (file.filename, conteudo, "application/pdf"))],
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Não consegui falar com o serviço de extração em {EXTRACTOR_URL}. Ele está rodando?",
+        ) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+
+
+@app.post("/ordem-compra-andritz/excel")
+def ordem_compra_andritz_excel(pedido: dict) -> Response:
+    """Planilha da OC ANDRITZ extraída (ver app/relatorio_pedido_andritz.py)
+    — mesmas colunas que o usuário já preenche à mão na planilha de
+    controle de pedidos."""
+    itens = pedido.get("itens") or []
+    conteudo = gerar_excel_pedido_andritz(pedido.get("numero_oc"), itens)
+    nome_arquivo = f"pedido-{pedido.get('numero_oc') or 'andritz'}.xlsx"
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"},
+    )
 
 
 @app.post("/relatorio-tecnico")

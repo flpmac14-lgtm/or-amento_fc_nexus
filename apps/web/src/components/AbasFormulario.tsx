@@ -9,6 +9,7 @@ interface Props {
 
 const ABAS: { valor: ModoFormulario; rotulo: string }[] = [
   { valor: "arquivo", rotulo: "Enviar desenho (PDF)" },
+  { valor: "pedidoAndritz", rotulo: "Pedido ANDRITZ" },
   { valor: "manual", rotulo: "Cálculo manual" },
   { valor: "itens", rotulo: "Itens do orçamento" },
   { valor: "proposta", rotulo: "Proposta" },

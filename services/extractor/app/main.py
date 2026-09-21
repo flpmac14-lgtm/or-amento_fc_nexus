@@ -10,7 +10,13 @@ from starlette.concurrency import run_in_threadpool
 from app.ai_fallback.lista_materiais import extrair_lista_materiais
 from app.ai_fallback.lista_materiais import fallback_habilitado as lista_materiais_habilitada
 from app.extraction.page_render import renderizar_paginas_png
-from app.pipeline import processar_pdf, processar_pdfs, processar_texto, status_dependencias
+from app.pipeline import (
+    processar_ordem_compra_andritz,
+    processar_pdf,
+    processar_pdfs,
+    processar_texto,
+    status_dependencias,
+)
 
 load_dotenv()  # antes de ler EXTRACTOR_AI_FALLBACK_ENABLED/ANTHROPIC_API_KEY do ambiente
 
@@ -72,6 +78,29 @@ def extract_de_texto(texto: str = Body(..., embed=True)) -> dict:
     if not texto or not texto.strip():
         raise HTTPException(status_code=400, detail="Texto vazio")
     return processar_texto(texto)
+
+
+@app.post("/ordem-compra-andritz")
+async def ordem_compra_andritz(file: UploadFile) -> dict:
+    """Extração determinística (texto + regex, sem IA) de uma Ordem de
+    Compra ANDRITZ — pedido explícito do usuário: item/material/
+    quantidade/valor/data de entrega + MAC, prontos no formato da planilha
+    de controle de pedidos que ele já usa. Ver app/extraction/andritz_oc.py."""
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo PDF")
+
+    conteudo = await file.read()
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf_path = Path(tmp) / file.filename
+        pdf_path.write_bytes(conteudo)
+        resultado = await run_in_threadpool(processar_ordem_compra_andritz, str(pdf_path))
+
+    if not resultado:
+        raise HTTPException(
+            status_code=422,
+            detail="Esse PDF não parece ser uma Ordem de Compra da ANDRITZ no formato reconhecido.",
+        )
+    return resultado
 
 
 @app.post("/relatorio-tecnico")

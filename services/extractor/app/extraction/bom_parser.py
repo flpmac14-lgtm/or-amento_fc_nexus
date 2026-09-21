@@ -17,7 +17,7 @@ from app.schemas import CampoExtraido
 
 _RE_NUMERO_DESENHO = re.compile(r"\b([A-Z]-?\d{5,7})\b")
 _RE_PEDIDO_PO = re.compile(r"\b(\d{10}-\d{2,3})\b")
-_RE_CODIGO_EQUIPAMENTO = re.compile(r"\bMAC[_\s]?(\d{3,4}\.\d{1,2}(?:\.\d{1,2})?)\b", re.IGNORECASE)
+_RE_CODIGO_EQUIPAMENTO = re.compile(r"\bMAC[_\s-]?(\d{3,4}\.\d{1,2}(?:\.\d{1,2})?)\b", re.IGNORECASE)
 _RE_REVISAO_SUFIXO = re.compile(r"\b([A-Z]\d{5,7})_(\d+)\b")
 _RE_REVISAO_EXPLICITA = re.compile(r"\bREV(?:IS[AÃ]O)?\.?\s*[:\-]?\s*(\d+)\b", re.IGNORECASE)
 _RE_NORMA_ASTM = re.compile(r"\bASTM\s?A\d{2,4}\b", re.IGNORECASE)
@@ -58,11 +58,64 @@ def extrair_pedido_po(texto: str) -> CampoExtraido:
     return _campo(", ".join(achados), 0.9)
 
 
-def extrair_codigo_equipamento(texto: str) -> CampoExtraido:
-    m = _RE_CODIGO_EQUIPAMENTO.search(texto)
+def _mac_base_normalizada(valor_numerico: str) -> str:
+    """"0792.26" -> "792.26": pro fim de comparar se duas MACs achadas no
+    mesmo PDF são a mesma (zero à esquerda não conta) ou realmente
+    diferentes. Um 3º grupo decimal (ex.: "573.26.01", ver teste com
+    A752193) fica de fora da base — é tratado como variante da mesma MAC,
+    não uma MAC diferente."""
+    m = re.match(r"(\d{3,4})\.(\d{1,2})", valor_numerico)
     if not m:
+        return valor_numerico
+    inteiro, decimal = m.groups()
+    return f"{int(inteiro)}.{decimal}"
+
+
+def _macs_encontradas(texto: str) -> dict[str, str]:
+    """Base normalizada -> primeiro valor bruto encontrado (com zero à
+    esquerda, do jeito que apareceu no PDF) — usada tanto pra achar a
+    única MAC do documento quanto pra detectar MACs realmente diferentes
+    no mesmo PDF (ver `extrair_codigo_equipamento`/`extrair_codigos_equipamento_candidatos`)."""
+    bases: dict[str, str] = {}
+    for valor in _RE_CODIGO_EQUIPAMENTO.findall(texto or ""):
+        base = _mac_base_normalizada(valor)
+        bases.setdefault(base, valor)
+    return bases
+
+
+def extrair_codigo_equipamento(texto: str) -> CampoExtraido:
+    bases = _macs_encontradas(texto)
+    if len(bases) != 1:
+        # Nada encontrado OU MACs diferentes no mesmo PDF — nos dois casos
+        # não escolhe sozinho (pedido explícito do usuário: nunca inventar
+        # uma MAC). O caso de ambiguidade fica disponível em
+        # `extrair_codigos_equipamento_candidatos`, pro usuário escolher.
         return _campo(None, 0.0)
-    return _campo(f"MAC_{m.group(1)}", 0.9)
+    (valor,) = bases.values()
+    return _campo(f"MAC_{valor}", 0.9)
+
+
+def extrair_codigos_equipamento_candidatos(texto: str) -> CampoExtraido:
+    """Só preenche quando há DUAS OU MAIS MACs diferentes no mesmo PDF —
+    pedido explícito do usuário: nesse caso o sistema não escolhe sozinho,
+    devolve as opções encontradas pro usuário selecionar na tela."""
+    bases = _macs_encontradas(texto)
+    if len(bases) <= 1:
+        return _campo([], 0.0)
+    candidatos = [f"MAC_{valor}" for valor in bases.values()]
+    return _campo(candidatos, 0.5)
+
+
+def mac_valor_curto(mac_completo: str) -> str:
+    """"MAC_0792.26" -> "792.26": remove o prefixo "MAC_" e o zero à
+    esquerda do número inteiro — formato que o usuário já usa na planilha
+    de controle de pedidos (pedido explícito do usuário)."""
+    numero = re.sub(r"(?i)^MAC[_\s-]?", "", mac_completo.strip())
+    m = re.match(r"(\d{3,4})\.(\d{1,2})", numero)
+    if not m:
+        return numero
+    inteiro, decimal = m.groups()
+    return f"{int(inteiro)}.{decimal}"
 
 
 def extrair_normas(texto: str) -> CampoExtraido:

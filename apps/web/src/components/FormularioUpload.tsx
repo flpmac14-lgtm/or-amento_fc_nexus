@@ -4,6 +4,7 @@ import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
 import PainelItensOrcamento from "@/components/PainelItensOrcamento";
 import PainelProposta from "@/components/PainelProposta";
+import PedidoAndritz from "@/components/PedidoAndritz";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
 import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
@@ -17,7 +18,14 @@ import type {
   RespostaOrcamentoDePdf,
 } from "@/lib/types";
 
-export type ModoFormulario = "arquivo" | "manual" | "itens" | "proposta" | "referencia" | "salvos";
+export type ModoFormulario =
+  | "arquivo"
+  | "pedidoAndritz"
+  | "manual"
+  | "itens"
+  | "proposta"
+  | "referencia"
+  | "salvos";
 
 interface Props {
   modo: ModoFormulario;
@@ -138,6 +146,8 @@ export default function FormularioUpload({
           onGerarPdf={onGerarPdfProposta}
         />
       )}
+
+      {modo === "pedidoAndritz" && <PedidoAndritz />}
 
       {modo === "referencia" && <ReferenciaPrecosMP />}
 
