@@ -26,7 +26,7 @@ def test_gerar_excel_pedido_weir_colunas_e_valores():
     ws = wb.active
 
     cabecalho = [c.value for c in ws[1]]
-    assert cabecalho == ["Item", "Código", "Valor", "Quantidade", "Descrição", "Referência", "Data de entrega"]
+    assert cabecalho == ["Item", "Código", "Valor", "Quantidade", "Descrição", "MAC", "Data de entrega"]
 
     linha = [c.value for c in ws[2]]
     assert linha == [

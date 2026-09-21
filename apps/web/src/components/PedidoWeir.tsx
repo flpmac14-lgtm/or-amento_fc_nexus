@@ -62,7 +62,7 @@ export default function PedidoWeir() {
         <p className="text-sm font-medium text-stone-800 dark:text-slate-200">Pedidos — WEIR</p>
         <p className="mt-1 text-xs text-stone-500 dark:text-slate-500">
           Envie um ou mais PDFs de pedido (cada um pode ser uma OC diferente) — item, código do desenho,
-          quantidade, valor (já ajustado) e data de entrega saem prontos. A coluna Referência fica em
+          quantidade, valor (já ajustado) e data de entrega saem prontos. A coluna MAC fica em
           branco pra você preencher item a item.
         </p>
 
@@ -130,7 +130,7 @@ export default function PedidoWeir() {
                   <th className="px-3 py-2">Valor</th>
                   <th className="px-3 py-2">Quantidade</th>
                   <th className="px-3 py-2">Descrição</th>
-                  <th className="px-3 py-2">Referência</th>
+                  <th className="px-3 py-2">MAC</th>
                   <th className="px-3 py-2">Data de entrega</th>
                 </tr>
               </thead>

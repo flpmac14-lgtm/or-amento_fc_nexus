@@ -20,7 +20,7 @@ COLUNAS: list[tuple[str, str]] = [
     ("valor_total", "Valor"),
     ("quantidade", "Quantidade"),
     ("descricao", "Descrição"),
-    ("referencia", "Referência"),
+    ("referencia", "MAC"),
     ("data_entrega", "Data de entrega"),
 ]
 
