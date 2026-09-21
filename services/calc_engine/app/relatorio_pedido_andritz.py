@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import io
 
+MOEDA = '"R$" #,##0.00'
+
 COLUNAS: list[tuple[str, str]] = [
     ("item", "Item"),
     ("material", "Material"),
@@ -36,8 +38,10 @@ def gerar_excel_pedido_andritz(numero_oc: str | None, itens: list[dict]) -> byte
     for celula in ws[1]:
         celula.font = celula.font.copy(bold=True)
 
-    for item in itens:
+    col_valor = _CHAVES.index("valor_total") + 1
+    for linha, item in enumerate(itens, start=2):
         ws.append([item.get(chave) for chave in _CHAVES])
+        ws.cell(row=linha, column=col_valor).number_format = MOEDA
 
     for idx, (_, rotulo) in enumerate(COLUNAS, start=1):
         ws.column_dimensions[get_column_letter(idx)].width = max(14, len(rotulo) + 4)

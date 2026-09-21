@@ -69,6 +69,12 @@ def _formatar_data_br_2_digitos(data_ddmmaaaa: str) -> str | None:
         return None
 
 
+def _valor_br_para_float(valor: str) -> float:
+    """"2.866,68" -> 2866.68 — número de verdade, não texto, pra planilha
+    poder formatar como moeda (pedido explícito do usuário) e somar."""
+    return float(valor.strip().replace(".", "").replace(",", "."))
+
+
 def extrair_pedido_andritz(texto: str) -> dict:
     """Devolve {} se o texto não parecer uma OC da ANDRITZ (ver
     `parece_ordem_compra_andritz`) — nunca tenta adivinhar formato de
@@ -100,7 +106,7 @@ def extrair_pedido_andritz(texto: str) -> dict:
         itens.append(
             {
                 "item": f"{numero_oc}-{item_numero}" if numero_oc else item_numero,
-                "valor_total": m.group("valor_total").strip(),
+                "valor_total": _valor_br_para_float(m.group("valor_total")),
                 "quantidade": int(m.group("qtd")),
                 "material": m.group("material"),
                 "material_antigo": material_antigo_match.group(1) if material_antigo_match else None,

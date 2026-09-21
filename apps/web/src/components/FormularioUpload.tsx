@@ -4,7 +4,7 @@ import { useState, type DragEvent } from "react";
 import CalculoManual from "@/components/CalculoManual";
 import PainelItensOrcamento from "@/components/PainelItensOrcamento";
 import PainelProposta from "@/components/PainelProposta";
-import PedidoAndritz from "@/components/PedidoAndritz";
+import ExtracaoPedidos from "@/components/ExtracaoPedidos";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import OrcamentosSalvos from "@/components/OrcamentosSalvos";
 import RelatorioTecnicoIA from "@/components/RelatorioTecnicoIA";
@@ -20,7 +20,7 @@ import type {
 
 export type ModoFormulario =
   | "arquivo"
-  | "pedidoAndritz"
+  | "extracaoPedidos"
   | "manual"
   | "itens"
   | "proposta"
@@ -147,7 +147,7 @@ export default function FormularioUpload({
         />
       )}
 
-      {modo === "pedidoAndritz" && <PedidoAndritz />}
+      {modo === "extracaoPedidos" && <ExtracaoPedidos />}
 
       {modo === "referencia" && <ReferenciaPrecosMP />}
 

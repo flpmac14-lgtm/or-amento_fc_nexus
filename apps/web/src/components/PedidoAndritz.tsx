@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { baixarExcelPedidoAndritz, extrairPedidoAndritz } from "@/lib/api";
+import { formatarMoeda } from "@/lib/format";
 import type { RespostaPedidoAndritz } from "@/lib/types";
 
 // Aba "Pedido ANDRITZ" — pedido explícito do usuário: hoje ele digita
@@ -158,7 +159,7 @@ export default function PedidoAndritz() {
                   <tr key={item.item} className="text-stone-800 dark:text-slate-200">
                     <td className="px-3 py-2 font-mono">{item.item}</td>
                     <td className="px-3 py-2 font-mono">{item.material}</td>
-                    <td className="px-3 py-2 font-mono">R$ {item.valor_total}</td>
+                    <td className="px-3 py-2 font-mono">{formatarMoeda(item.valor_total)}</td>
                     <td className="px-3 py-2">{item.quantidade}</td>
                     <td className="px-3 py-2">{item.material_antigo ?? "—"}</td>
                     <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{item.descricao ?? "—"}</td>

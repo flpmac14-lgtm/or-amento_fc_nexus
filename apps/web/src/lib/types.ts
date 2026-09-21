@@ -396,7 +396,7 @@ export interface OrcamentoSalvoCompleto {
 // Ver services/extractor/app/extraction/andritz_oc.py.
 export interface ItemPedidoAndritz {
   item: string; // "4505093989-010" (nº da OC + nº do item, com zero à esquerda)
-  valor_total: string; // "2.866,68" — texto, já formatado como veio do PDF
+  valor_total: number;
   quantidade: number;
   material: string;
   material_antigo: string | null;

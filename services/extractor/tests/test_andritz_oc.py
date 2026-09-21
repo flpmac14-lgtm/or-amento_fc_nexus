@@ -163,7 +163,7 @@ def test_extrai_itens_do_pedido():
 
     item10 = itens[0]
     assert item10["item"] == "4505093989-010"
-    assert item10["valor_total"] == "2.866,68"
+    assert item10["valor_total"] == 2866.68
     assert item10["quantidade"] == 4
     assert item10["material"] == "301947766"
     assert item10["material_antigo"] == "GPS-24A-TU-0613P319"
@@ -173,7 +173,7 @@ def test_extrai_itens_do_pedido():
 
     item20 = itens[1]
     assert item20["item"] == "4505093989-020"
-    assert item20["valor_total"] == "1.433,34"
+    assert item20["valor_total"] == 1433.34
     assert item20["quantidade"] == 2
 
 
