@@ -146,6 +146,8 @@ def orcamentos_salvos_criar(pedido: dict) -> dict:
             orcamento_id=pedido.get("id"),
             relatorio_tecnico=pedido.get("relatorio_tecnico"),
             proposta=pedido.get("proposta"),
+            desenho_storage_path=pedido.get("desenho_storage_path"),
+            desenho_nome_arquivo=pedido.get("desenho_nome_arquivo"),
         )
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))

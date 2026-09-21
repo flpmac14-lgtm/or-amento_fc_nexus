@@ -9,6 +9,12 @@ interface Props {
   // inserir automaticamente no Cálculo manual — pedido explícito do
   // usuário. `[]` no início de cada extração limpa a inserção anterior.
   onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
+  // "Anexar desenho" — pedido explícito do usuário: vincula esse PDF ao
+  // orçamento salvo só quando esse botão é clicado (nunca automático na
+  // extração acima). Precisa do orçamento já salvo (ver page.tsx).
+  onAnexarDesenho: (arquivo: File) => void;
+  anexandoDesenho: boolean;
+  desenhoAnexadoNome: string | null;
 }
 
 // Extração da lista de materiais (BOM) por IA — pedido explícito do
@@ -19,7 +25,9 @@ interface Props {
 // usando o peso extraído do desenho/estimado pela IA como valor inicial
 // editável — o orçamentista confere/ajusta antes de fechar (custo/hora/
 // preço continuam sempre vindo do motor determinístico).
-export default function RelatorioTecnicoIA({ arquivo, onItensEstruturadosChange }: Props) {
+export default function RelatorioTecnicoIA({
+  arquivo, onItensEstruturadosChange, onAnexarDesenho, anexandoDesenho, desenhoAnexadoNome,
+}: Props) {
   const [extraindo, setExtraindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [itensEstruturados, setItensEstruturados] = useState<ItemEstruturadoIA[]>([]);
@@ -54,7 +62,7 @@ export default function RelatorioTecnicoIA({ arquivo, onItensEstruturadosChange 
     }
   }
 
-  if (!arquivo && itensEstruturados.length === 0) return null;
+  if (!arquivo && itensEstruturados.length === 0 && !desenhoAnexadoNome) return null;
 
   return (
     <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
@@ -92,8 +100,26 @@ export default function RelatorioTecnicoIA({ arquivo, onItensEstruturadosChange 
               {baixandoExcel ? "Gerando…" : "Excel (BOM editável)"}
             </button>
           )}
+          {arquivo && (
+            <button
+              type="button"
+              onClick={() => onAnexarDesenho(arquivo)}
+              disabled={anexandoDesenho}
+              title="Vincula esse PDF ao orçamento salvo — aparece como ícone vermelho em Orçamentos salvos"
+              className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-800 dark:text-slate-200 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {anexandoDesenho ? "Anexando…" : "Anexar desenho ao orçamento"}
+            </button>
+          )}
         </div>
       </div>
+
+      {desenhoAnexadoNome && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-stone-600 dark:text-slate-400">
+          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />
+          Desenho anexado a este orçamento: {desenhoAnexadoNome}
+        </p>
+      )}
 
       {erro && (
         <div className="mt-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">

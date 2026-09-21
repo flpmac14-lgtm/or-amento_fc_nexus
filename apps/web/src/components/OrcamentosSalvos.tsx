@@ -15,6 +15,26 @@ const ORIGEM_ROTULO: Record<string, string> = {
   texto: "Itens digitados",
 };
 
+// Pedido explícito do usuário: ícone vermelho quando o orçamento tem um
+// PDF anexado (ver "Anexar desenho" em RelatorioTecnicoIA.tsx), cinza
+// quando não tem (ex.: orçamentos feitos só no Cálculo manual).
+function IconeDesenhoAnexado({ anexado }: { anexado: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`h-4 w-4 ${anexado ? "text-red-600 dark:text-red-500" : "text-stone-300 dark:text-slate-700"}`}
+    >
+      <title>{anexado ? "Desenho anexado" : "Sem desenho anexado"}</title>
+      <path
+        d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+        fill="currentColor"
+      />
+      <path d="M14 3v4h4" fill="none" stroke="white" strokeOpacity="0.6" strokeWidth="1" />
+    </svg>
+  );
+}
+
 export default function OrcamentosSalvos({ onAbrir }: Props) {
   const [lista, setLista] = useState<OrcamentoSalvoResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -85,6 +105,7 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-white dark:bg-slate-900/60 text-left text-xs uppercase tracking-wide text-stone-500 dark:text-slate-500">
             <tr>
+              <th className="px-3 py-2" title="Desenho anexado?" />
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">Origem</th>
               <th className="px-3 py-2">Cliente / desenho</th>
@@ -97,6 +118,9 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
           <tbody className="divide-y divide-slate-800">
             {lista.map((o) => (
               <tr key={o.id} className="text-stone-800 dark:text-slate-200">
+                <td className="px-3 py-2">
+                  <IconeDesenhoAnexado anexado={o.resumo.tem_desenho_anexado} />
+                </td>
                 <td className="px-3 py-2">{o.nome}</td>
                 <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{ORIGEM_ROTULO[o.origem] ?? o.origem}</td>
                 <td className="px-3 py-2 text-stone-600 dark:text-slate-400">
@@ -133,7 +157,7 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-stone-500 dark:text-slate-500">
+                <td colSpan={8} className="px-3 py-6 text-center text-stone-500 dark:text-slate-500">
                   {carregando ? "Carregando…" : "Nenhum orçamento salvo ainda."}
                 </td>
               </tr>

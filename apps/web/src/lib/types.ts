@@ -352,6 +352,10 @@ export interface ResumoOrcamentoSalvo {
   numero_desenho: string | null;
   peso_liquido_kg: number | null;
   preco_venda_com_impostos: number | null;
+  // Pedido explícito do usuário: ícone vermelho/cinza na lista de
+  // "Orçamentos salvos" indicando se tem o PDF original anexado (ver
+  // "Anexar desenho" na aba "Enviar desenho").
+  tem_desenho_anexado: boolean;
 }
 
 export interface OrcamentoSalvoResumo {
@@ -377,6 +381,11 @@ export interface OrcamentoSalvoCompleto {
   // antes dessa aba existir, ou nunca foi aberta (ver
   // lib/propostaPadrao.ts::criarPropostaInicial).
   proposta: PropostaConfig | null;
+  // "Anexar desenho" — PDF original guardado no Supabase Storage, só
+  // quando o usuário clica no botão (nunca automático). null = sem
+  // desenho anexado (ícone cinza na lista; vermelho quando preenchido).
+  desenho_storage_path: string | null;
+  desenho_nome_arquivo: string | null;
   created_at: string;
   updated_at: string;
 }

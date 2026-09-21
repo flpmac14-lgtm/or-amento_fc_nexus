@@ -1,3 +1,4 @@
+import { criarClienteSupabaseNavegador } from "./supabase/client";
 import type {
   CantoneiraCatalogo,
   CatalogoGeometria,
@@ -495,6 +496,8 @@ export async function salvarOrcamento(payload: {
   estado_texto?: { texto: string; estimativas: EstimativasOrcamento } | null;
   relatorio_tecnico?: string | null;
   proposta?: PropostaConfig | null;
+  desenho_storage_path?: string | null;
+  desenho_nome_arquivo?: string | null;
 }): Promise<{ id: string; created_at: string; updated_at: string }> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos`, {
     method: "POST",
@@ -508,6 +511,21 @@ export async function salvarOrcamento(payload: {
   }
 
   return resposta.json();
+}
+
+// "Anexar desenho" — pedido explícito do usuário: o PDF só fica vinculado
+// ao orçamento quando esse botão é clicado (nunca automático na
+// extração). Sobe direto pro Supabase Storage pelo cliente do navegador
+// (mesma sessão autenticada do login, ver lib/supabase/client.ts) — o
+// calc_engine só guarda o CAMINHO (desenho_storage_path), não o arquivo.
+export async function enviarDesenhoParaStorage(orcamentoId: string, arquivo: File): Promise<string> {
+  const supabase = criarClienteSupabaseNavegador();
+  const path = `${orcamentoId}/${Date.now()}-${arquivo.name}`;
+  const { error } = await supabase.storage.from("desenhos-anexados").upload(path, arquivo, { upsert: true });
+  if (error) {
+    throw new Error(`Falha ao enviar o desenho (${error.message}).`);
+  }
+  return path;
 }
 
 export async function listarOrcamentosSalvos(): Promise<OrcamentoSalvoResumo[]> {

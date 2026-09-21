@@ -45,6 +45,12 @@ interface Props {
   propostaConfig: PropostaConfig | null;
   onPropostaConfigChange: (proposta: PropostaConfig) => void;
   onGerarPdfProposta: () => void;
+  // "Anexar desenho" — pedido explícito do usuário: vincula o PDF ao
+  // orçamento salvo só quando esse botão é clicado (nunca automático na
+  // extração). Ver RelatorioTecnicoIA.tsx.
+  onAnexarDesenho: (arquivo: File) => void;
+  anexandoDesenho: boolean;
+  desenhoAnexadoNome: string | null;
 }
 
 export default function FormularioUpload({
@@ -64,6 +70,9 @@ export default function FormularioUpload({
   propostaConfig,
   onPropostaConfigChange,
   onGerarPdfProposta,
+  onAnexarDesenho,
+  anexandoDesenho,
+  desenhoAnexadoNome,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -176,6 +185,9 @@ export default function FormularioUpload({
         <RelatorioTecnicoIA
           arquivo={arquivo}
           onItensEstruturadosChange={onItensEstruturadosChange}
+          onAnexarDesenho={onAnexarDesenho}
+          anexandoDesenho={anexandoDesenho}
+          desenhoAnexadoNome={desenhoAnexadoNome}
         />
       )}
 

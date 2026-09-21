@@ -44,6 +44,8 @@ def salvar(
     orcamento_id: str | None = None,
     relatorio_tecnico: str | None = None,
     proposta: dict | None = None,
+    desenho_storage_path: str | None = None,
+    desenho_nome_arquivo: str | None = None,
 ) -> dict:
     from psycopg.types.json import Jsonb
 
@@ -54,25 +56,30 @@ def salvar(
                 update orcamentos_salvos
                 set nome = %s, origem = %s, resultado = %s, estado_manual = %s, estado_texto = %s,
                     relatorio_tecnico = coalesce(%s, relatorio_tecnico),
-                    proposta = coalesce(%s, proposta), updated_at = now()
+                    proposta = coalesce(%s, proposta),
+                    desenho_storage_path = coalesce(%s, desenho_storage_path),
+                    desenho_nome_arquivo = coalesce(%s, desenho_nome_arquivo),
+                    updated_at = now()
                 where id = %s
                 returning id, created_at, updated_at
                 """,
                 (nome, origem, Jsonb(resultado), Jsonb(estado_manual) if estado_manual else None,
                  Jsonb(estado_texto) if estado_texto else None, relatorio_tecnico,
-                 Jsonb(proposta) if proposta else None, orcamento_id),
+                 Jsonb(proposta) if proposta else None, desenho_storage_path, desenho_nome_arquivo,
+                 orcamento_id),
             )
         else:
             cur.execute(
                 """
                 insert into orcamentos_salvos
-                    (nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, proposta)
-                values (%s, %s, %s, %s, %s, %s, %s)
+                    (nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, proposta,
+                     desenho_storage_path, desenho_nome_arquivo)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning id, created_at, updated_at
                 """,
                 (nome, origem, Jsonb(resultado), Jsonb(estado_manual) if estado_manual else None,
                  Jsonb(estado_texto) if estado_texto else None, relatorio_tecnico,
-                 Jsonb(proposta) if proposta else None),
+                 Jsonb(proposta) if proposta else None, desenho_storage_path, desenho_nome_arquivo),
             )
         row = cur.fetchone()
         conn.commit()
@@ -101,15 +108,16 @@ def _resumo(resultado: dict) -> dict:
 def listar() -> list[dict]:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
-            "select id, nome, origem, resultado, created_at, updated_at "
+            "select id, nome, origem, resultado, desenho_storage_path, created_at, updated_at "
             "from orcamentos_salvos order by updated_at desc"
         )
         rows = cur.fetchall()
 
     return [
         {
-            "id": str(r[0]), "nome": r[1], "origem": r[2], "resumo": _resumo(r[3]),
-            "created_at": r[4].isoformat(), "updated_at": r[5].isoformat(),
+            "id": str(r[0]), "nome": r[1], "origem": r[2],
+            "resumo": {**_resumo(r[3]), "tem_desenho_anexado": r[4] is not None},
+            "created_at": r[5].isoformat(), "updated_at": r[6].isoformat(),
         }
         for r in rows
     ]
@@ -119,7 +127,7 @@ def buscar(orcamento_id: str) -> dict | None:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
             "select id, nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, "
-            "proposta, created_at, updated_at "
+            "proposta, desenho_storage_path, desenho_nome_arquivo, created_at, updated_at "
             "from orcamentos_salvos where id = %s",
             (orcamento_id,),
         )
@@ -131,7 +139,8 @@ def buscar(orcamento_id: str) -> dict | None:
         "id": str(row[0]), "nome": row[1], "origem": row[2],
         "resultado": row[3], "estado_manual": row[4], "estado_texto": row[5],
         "relatorio_tecnico": row[6], "proposta": row[7],
-        "created_at": row[8].isoformat(), "updated_at": row[9].isoformat(),
+        "desenho_storage_path": row[8], "desenho_nome_arquivo": row[9],
+        "created_at": row[10].isoformat(), "updated_at": row[11].isoformat(),
     }
 
 

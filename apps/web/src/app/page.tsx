@@ -13,6 +13,7 @@ import {
   analisarBom,
   analisarPdf,
   baixarExcel,
+  enviarDesenhoParaStorage,
   recalcularOrcamento,
   salvarOrcamento,
   type ItemEstruturadoIA,
@@ -82,6 +83,12 @@ export default function Home() {
   const [origemAtual, setOrigemAtual] = useState<OrigemOrcamentoSalvo | null>(null);
   const [orcamentoSalvoId, setOrcamentoSalvoId] = useState<string | null>(null);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
+  // "Anexar desenho" — pedido explícito do usuário: vincula o PDF ao
+  // orçamento SÓ quando esse botão é clicado (nunca automático na
+  // extração). `desenhoAnexadoNome` é só pra mostrar confirmação na tela;
+  // a fonte da verdade é `desenho_storage_path` salvo no banco.
+  const [anexandoDesenho, setAnexandoDesenho] = useState(false);
+  const [desenhoAnexadoNome, setDesenhoAnexadoNome] = useState<string | null>(null);
   const [alvoImpressao, setAlvoImpressao] = useState<"orcamento" | "proposta" | null>(null);
 
   useEffect(() => {
@@ -148,6 +155,7 @@ export default function Home() {
       ...salvo.resultado.identificacao_cliente,
     });
     setPropostaConfig(salvo.proposta ?? null);
+    setDesenhoAnexadoNome(salvo.desenho_nome_arquivo ?? null);
     if (salvo.origem === "manual" && salvo.estado_manual) {
       // Mescla com o estado inicial em vez de usar salvo.estado_manual puro:
       // orçamentos salvos antes de um campo novo ser adicionado (ex:
@@ -172,6 +180,7 @@ export default function Home() {
     setEstadoManual(ESTADO_CALCULO_MANUAL_INICIAL);
     setIdentificacaoCliente(IDENTIFICACAO_CLIENTE_INICIAL);
     setPropostaConfig(null);
+    setDesenhoAnexadoNome(null);
     setModo("arquivo");
   }
 
@@ -195,6 +204,37 @@ export default function Home() {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao salvar o orçamento.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  // "Anexar desenho" — pedido explícito do usuário: só vincula o PDF ao
+  // orçamento quando ele clica nesse botão (nunca automático ao extrair a
+  // lista de materiais). Exige o orçamento já salvo (precisa de um ID pra
+  // saber em qual registro o caminho do arquivo entra).
+  async function handleAnexarDesenho(arquivo: File) {
+    if (!orcamentoSalvoId || !resultado || !origemAtual) {
+      setErro('Salve o orçamento (botão "Salvar orçamento") antes de anexar o desenho.');
+      return;
+    }
+    setAnexandoDesenho(true);
+    setErro(null);
+    try {
+      const path = await enviarDesenhoParaStorage(orcamentoSalvoId, arquivo);
+      await salvarOrcamento({
+        id: orcamentoSalvoId,
+        nome: nomeOrcamento,
+        origem: origemAtual,
+        resultado: { ...resultado, identificacao_cliente: identificacaoCliente },
+        estado_manual: origemAtual === "manual" ? estadoManual : null,
+        proposta: propostaConfig,
+        desenho_storage_path: path,
+        desenho_nome_arquivo: arquivo.name,
+      });
+      setDesenhoAnexadoNome(arquivo.name);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao anexar o desenho.");
+    } finally {
+      setAnexandoDesenho(false);
     }
   }
 
@@ -468,6 +508,9 @@ export default function Home() {
           propostaConfig={propostaConfig}
           onPropostaConfigChange={setPropostaConfig}
           onGerarPdfProposta={() => setAlvoImpressao("proposta")}
+          onAnexarDesenho={handleAnexarDesenho}
+          anexandoDesenho={anexandoDesenho}
+          desenhoAnexadoNome={desenhoAnexadoNome}
         />
 
         {erro && (
