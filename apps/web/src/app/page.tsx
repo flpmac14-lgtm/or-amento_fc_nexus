@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import AbasFormulario from "@/components/AbasFormulario";
@@ -429,6 +430,12 @@ export default function Home() {
               >
                 {salvando ? "Salvando…" : "Salvar orçamento"}
               </button>
+              <Link
+                href="/orcamentistas"
+                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
+              >
+                Orçamentistas
+              </Link>
               <button
                 type="button"
                 onClick={handleSair}
