@@ -38,16 +38,18 @@ body {
     margin: 15mm;
   }
 
-  html,
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
+  /* Página nomeada — pedido explícito do usuário: a Proposta (aba
+     "PROPOSTA") imprime em A4 PAISAGEM, igual ao modelo de referência da
+     Macfab, enquanto o Relatório do orçamento continua em retrato (a
+     regra @page acima, sem nome, é a padrão). Ver
+     components/PropostaImpressao.tsx (className="folha-proposta"). */
+  @page proposta {
+    size: A4 landscape;
+    margin: 10mm;
   }
-}
 
-@media print {
-  @page {
-    margin: 15mm;
+  .folha-proposta {
+    page: proposta;
   }
 
   html,

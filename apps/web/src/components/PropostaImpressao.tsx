@@ -65,7 +65,11 @@ export default function PropostaImpressao({ mac, identificacaoCliente, proposta,
 
   return (
     <div
-      className={`${preview ? "block" : "hidden print:block"} print:text-black mx-auto w-full max-w-[210mm] bg-white p-6 text-[11px] leading-snug text-black`}
+      // "folha-proposta" liga a página nomeada A4 paisagem definida em
+      // globals.css (pedido explícito do usuário — o modelo de referência
+      // da Macfab é horizontal, não retrato) só quando ISSO imprime, sem
+      // afetar o Relatório do orçamento (que continua em retrato).
+      className={`folha-proposta ${preview ? "block" : "hidden print:block"} print:text-black mx-auto w-full max-w-[297mm] bg-white p-6 text-[11px] leading-snug text-black`}
       style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
     >
       <p className="mb-1 text-right text-[9px] text-zinc-500">Pág. 1</p>
