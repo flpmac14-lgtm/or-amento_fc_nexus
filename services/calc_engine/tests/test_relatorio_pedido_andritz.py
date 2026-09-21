@@ -27,11 +27,14 @@ def test_gerar_excel_pedido_andritz_colunas_e_valores():
     ws = wb.active
 
     cabecalho = [c.value for c in ws[1]]
-    assert cabecalho == ["Item", "Valor", "Quantidade", "Material", "Descrição", "MAC", "Data de entrega"]
+    assert cabecalho == [
+        "Item", "Material", "Valor", "Quantidade", "Material antigo", "Descrição", "MAC", "Data de entrega",
+    ]
 
     linha = [c.value for c in ws[2]]
     assert linha == [
         "4505093989-010",
+        "301947766",
         "2.866,68",
         4,
         "GPS-24A-TU-0613P319",

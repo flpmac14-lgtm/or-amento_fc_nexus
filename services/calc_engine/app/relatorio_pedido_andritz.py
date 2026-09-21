@@ -12,9 +12,10 @@ import io
 
 COLUNAS: list[tuple[str, str]] = [
     ("item", "Item"),
+    ("material", "Material"),
     ("valor_total", "Valor"),
     ("quantidade", "Quantidade"),
-    ("material_antigo", "Material"),
+    ("material_antigo", "Material antigo"),
     ("descricao", "Descrição"),
     ("mac", "MAC"),
     ("data_entrega", "Data de entrega"),

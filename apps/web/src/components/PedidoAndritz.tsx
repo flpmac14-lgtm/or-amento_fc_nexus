@@ -144,9 +144,10 @@ export default function PedidoAndritz() {
               <thead className="bg-stone-50 dark:bg-slate-900/60 text-left text-xs uppercase tracking-wide text-stone-500 dark:text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Material</th>
                   <th className="px-3 py-2">Valor</th>
                   <th className="px-3 py-2">Quantidade</th>
-                  <th className="px-3 py-2">Material</th>
+                  <th className="px-3 py-2">Material antigo</th>
                   <th className="px-3 py-2">Descrição</th>
                   <th className="px-3 py-2">MAC</th>
                   <th className="px-3 py-2">Data de entrega</th>
@@ -156,6 +157,7 @@ export default function PedidoAndritz() {
                 {resultado.itens.map((item) => (
                   <tr key={item.item} className="text-stone-800 dark:text-slate-200">
                     <td className="px-3 py-2 font-mono">{item.item}</td>
+                    <td className="px-3 py-2 font-mono">{item.material}</td>
                     <td className="px-3 py-2 font-mono">R$ {item.valor_total}</td>
                     <td className="px-3 py-2">{item.quantidade}</td>
                     <td className="px-3 py-2">{item.material_antigo ?? "—"}</td>
