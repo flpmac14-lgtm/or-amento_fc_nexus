@@ -65,6 +65,11 @@ Endpoints:
                                        da planilha de controle de pedidos
                                        do usuário — ver
                                        app/relatorio_pedido_andritz.py
+  POST /pedidos-weir        -> extração determinística (sem IA) de um ou
+                                mais Pedidos WEIR de uma vez — ver
+                                app/extraction/weir_oc.py no extractor
+  POST /pedidos-weir/excel  -> planilha dos pedidos WEIR extraídos — ver
+                                app/relatorio_pedido_weir.py
 
 Este endpoint combinado é uma conveniência de demonstração local — em
 produção a orquestração PDF -> extração -> orçamento provavelmente mora no
@@ -105,6 +110,7 @@ from app.precos_mercado import (
 )
 from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar_excel_bom, ler_excel
 from app.relatorio_pedido_andritz import gerar_excel_pedido_andritz
+from app.relatorio_pedido_weir import gerar_excel_pedido_weir
 from app.tubos_catalogo import buscar_tubos
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
@@ -525,6 +531,45 @@ def ordem_compra_andritz_excel(pedido: dict) -> Response:
         content=conteudo,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"},
+    )
+
+
+@app.post("/pedidos-weir")
+async def pedidos_weir(files: list[UploadFile]) -> dict:
+    """Repassa pro extractor (POST /pedidos-weir) — extração determinística
+    (texto + regex, sem IA) de um ou mais Pedidos WEIR de uma vez. Ver
+    app/extraction/weir_oc.py no extractor."""
+    for arquivo in files:
+        if not arquivo.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"Envie apenas PDFs (recebido: {arquivo.filename})")
+
+    files_payload = [("files", (a.filename, await a.read(), "application/pdf")) for a in files]
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(f"{EXTRACTOR_URL}/pedidos-weir", files=files_payload)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Não consegui falar com o serviço de extração em {EXTRACTOR_URL}. Ele está rodando?",
+        ) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text) from e
+
+
+@app.post("/pedidos-weir/excel")
+def pedidos_weir_excel(pedido: dict) -> Response:
+    """Planilha dos pedidos WEIR extraídos (ver app/relatorio_pedido_weir.py)
+    — mesma estrutura de colunas da planilha de controle de pedidos do
+    usuário, com a coluna "Referência" (equivalente à MAC) editável antes
+    de baixar, porque a extração não preenche isso sozinha."""
+    itens = pedido.get("itens") or []
+    conteudo = gerar_excel_pedido_weir(itens)
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=pedidos-weir.xlsx"},
     )
 
 

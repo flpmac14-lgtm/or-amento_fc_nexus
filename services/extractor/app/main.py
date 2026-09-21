@@ -14,6 +14,7 @@ from app.pipeline import (
     processar_ordem_compra_andritz,
     processar_pdf,
     processar_pdfs,
+    processar_pedidos_weir,
     processar_texto,
     status_dependencias,
 )
@@ -99,6 +100,34 @@ async def ordem_compra_andritz(file: UploadFile) -> dict:
         raise HTTPException(
             status_code=422,
             detail="Esse PDF não parece ser uma Ordem de Compra da ANDRITZ no formato reconhecido.",
+        )
+    return resultado
+
+
+@app.post("/pedidos-weir")
+async def pedidos_weir(files: list[UploadFile]) -> dict:
+    """Extração determinística (texto + regex, sem IA) de um ou mais
+    Pedidos WEIR — pedido explícito do usuário: aceita vários PDFs de uma
+    vez (cada um pode ser um pedido diferente). A referência (equivalente
+    à MAC da ANDRITZ) sai sempre vazia — o usuário preenche à mão, item a
+    item. Ver app/extraction/weir_oc.py."""
+    for file in files:
+        if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"Envie apenas PDFs (recebido: {file.filename})")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        caminhos = []
+        for file in files:
+            conteudo = await file.read()
+            pdf_path = Path(tmp) / file.filename
+            pdf_path.write_bytes(conteudo)
+            caminhos.append(str(pdf_path))
+        resultado = await run_in_threadpool(processar_pedidos_weir, caminhos)
+
+    if not resultado["itens"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Nenhum desses PDFs parece ser um Pedido da WEIR no formato reconhecido.",
         )
     return resultado
 

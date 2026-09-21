@@ -7,6 +7,7 @@ import type {
   EstimativasOrcamento,
   ItemCalculado,
   ItemComercial,
+  ItemPedidoWeir,
   ItemContingenciamento,
   MaterialCatalogo,
   OperacaoUsinagem,
@@ -18,6 +19,7 @@ import type {
   PrecosMercadoLista,
   PropostaConfig,
   RespostaPedidoAndritz,
+  RespostaPedidoWeir,
   RespostaOrcamentoDePdf,
   ResultadoOrcamentoDTO,
   ServicoPorPeso,
@@ -183,6 +185,53 @@ export async function baixarExcelPedidoAndritz(
   const link = document.createElement("a");
   link.href = url;
   link.download = `pedido-${numeroOc ?? "andritz"}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Extração determinística (texto + regex, sem IA) de um ou mais Pedidos
+ * WEIR de uma vez — pedido explícito do usuário: cada arquivo pode ser um
+ * pedido diferente, os itens de todos saem juntos numa lista só. */
+export async function extrairPedidosWeir(arquivos: File[]): Promise<RespostaPedidoWeir> {
+  const formData = new FormData();
+  arquivos.forEach((arquivo) => formData.append("files", arquivo));
+
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pedidos-weir`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(
+      `Falha ao extrair os pedidos (${resposta.status}). ${corpo || "Confira se são Pedidos da WEIR."}`,
+    );
+  }
+
+  return resposta.json();
+}
+
+/** Planilha dos pedidos WEIR extraídos, no formato da planilha de
+ * controle que o usuário já usa. */
+export async function baixarExcelPedidoWeir(itens: ItemPedidoWeir[]): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pedidos-weir/excel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itens }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao gerar o Excel dos pedidos (${resposta.status}). ${corpo}`);
+  }
+
+  const blob = await resposta.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "pedidos-weir.xlsx";
   document.body.appendChild(link);
   link.click();
   link.remove();

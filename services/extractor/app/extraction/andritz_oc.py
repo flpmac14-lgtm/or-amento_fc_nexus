@@ -28,13 +28,13 @@ dá pra evitar (ex.: "Número"), usam "." como curinga no lugar do acento.
 from __future__ import annotations
 
 import re
-from datetime import datetime
 
 from app.extraction.bom_parser import (
     extrair_codigo_equipamento,
     extrair_codigos_equipamento_candidatos,
     mac_valor_curto,
 )
+from app.extraction.formatos_br import data_br_2_digitos, valor_br_para_float
 
 MARCADOR_ORDEM_COMPRA = "Ordem de Compra"
 
@@ -58,21 +58,6 @@ _RE_MATERIAL_ANTIGO = re.compile(r"Id do sistema antigo\s*\n[^\n]*antigo do mate
 def parece_ordem_compra_andritz(texto: str) -> bool:
     texto = texto or ""
     return MARCADOR_ORDEM_COMPRA in texto and "andritz" in texto.lower()
-
-
-def _formatar_data_br_2_digitos(data_ddmmaaaa: str) -> str | None:
-    """"24.08.2026" -> "24/08/26" — formato que o usuário já usa na
-    planilha de controle de pedidos."""
-    try:
-        return datetime.strptime(data_ddmmaaaa, "%d.%m.%Y").strftime("%d/%m/%y")
-    except ValueError:
-        return None
-
-
-def _valor_br_para_float(valor: str) -> float:
-    """"2.866,68" -> 2866.68 — número de verdade, não texto, pra planilha
-    poder formatar como moeda (pedido explícito do usuário) e somar."""
-    return float(valor.strip().replace(".", "").replace(",", "."))
 
 
 def extrair_pedido_andritz(texto: str) -> dict:
@@ -106,13 +91,13 @@ def extrair_pedido_andritz(texto: str) -> dict:
         itens.append(
             {
                 "item": f"{numero_oc}-{item_numero}" if numero_oc else item_numero,
-                "valor_total": _valor_br_para_float(m.group("valor_total")),
+                "valor_total": valor_br_para_float(m.group("valor_total")),
                 "quantidade": int(m.group("qtd")),
                 "material": m.group("material"),
                 "material_antigo": material_antigo_match.group(1) if material_antigo_match else None,
                 "descricao": descricao_match.group(1).strip() if descricao_match else None,
                 "mac": mac,
-                "data_entrega": _formatar_data_br_2_digitos(data_match.group(1)) if data_match else None,
+                "data_entrega": data_br_2_digitos(data_match.group(1)) if data_match else None,
             }
         )
 

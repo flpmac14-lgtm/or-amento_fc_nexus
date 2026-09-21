@@ -416,6 +416,26 @@ export interface RespostaPedidoAndritz {
   itens: ItemPedidoAndritz[];
 }
 
+// Pedidos WEIR — mesma ideia da ANDRITZ, mas aceita vários PDFs de uma
+// vez (cada um pode ser um pedido diferente) e o valor já sai ajustado
+// (dividido por um fator e sempre arredondado pra cima, pedido explícito
+// do usuário — ver services/extractor/app/extraction/weir_oc.py). A WEIR
+// não tem um campo tipo MAC pra detectar sozinho: `referencia` sempre
+// vem null da extração, editável linha a linha na tela antes de baixar.
+export interface ItemPedidoWeir {
+  item: string; // "4501751360-010"
+  codigo: string | null; // nº do desenho (ex: "A15792")
+  descricao: string;
+  quantidade: number;
+  valor_total: number;
+  referencia: string | null;
+  data_entrega: string | null;
+}
+
+export interface RespostaPedidoWeir {
+  itens: ItemPedidoWeir[];
+}
+
 export interface PerfilCatalogo {
   designacao: string;
   peso_kg_m: number;

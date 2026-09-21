@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PedidoAndritz from "@/components/PedidoAndritz";
+import PedidoWeir from "@/components/PedidoWeir";
 
 // Aba "Extração de Pedidos" — pedido explícito do usuário: cada cliente
 // manda a Ordem de Compra num formato de PDF diferente, então a extração
@@ -13,7 +14,7 @@ type ClientePedido = "andritz" | "weir";
 
 const CLIENTES: { valor: ClientePedido; rotulo: string; disponivel: boolean }[] = [
   { valor: "andritz", rotulo: "ANDRITZ", disponivel: true },
-  { valor: "weir", rotulo: "WEIR", disponivel: false },
+  { valor: "weir", rotulo: "WEIR", disponivel: true },
 ];
 
 export default function ExtracaoPedidos() {
@@ -44,11 +45,7 @@ export default function ExtracaoPedidos() {
 
       {cliente === "andritz" && <PedidoAndritz />}
 
-      {cliente === "weir" && (
-        <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 text-sm text-stone-500 dark:text-slate-500">
-          Extração de pedidos da WEIR ainda não está implementada — em desenvolvimento.
-        </div>
-      )}
+      {cliente === "weir" && <PedidoWeir />}
     </div>
   );
 }

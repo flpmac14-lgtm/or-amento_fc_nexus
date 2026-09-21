@@ -20,6 +20,7 @@ from __future__ import annotations
 from app.ai_fallback.client import analisar_paginas, fallback_habilitado
 from app.extraction import bom_parser
 from app.extraction.andritz_oc import extrair_pedido_andritz
+from app.extraction.weir_oc import extrair_pedido_weir
 from app.extraction.bom_sap_export import extrair_bom_sap_export
 from app.extraction.bom_table import _campo, extrair_bom_de_tabelas
 from app.extraction.bom_texto_manual import extrair_bom_de_texto_manual
@@ -268,6 +269,19 @@ def processar_ordem_compra_andritz(pdf_path: str) -> dict:
     cliente)."""
     texto_completo, _, _ = _extrair_texto_completo(pdf_path)
     return extrair_pedido_andritz(texto_completo)
+
+
+def processar_pedidos_weir(pdf_paths: list[str]) -> dict:
+    """Extração determinística (texto + regex, sem IA) de um ou mais
+    Pedidos WEIR — pedido explícito do usuário: aceita vários PDFs de uma
+    vez (cada um pode ser um pedido diferente) e junta os itens de todos
+    num resultado só. PDFs que não baterem com o formato WEIR reconhecido
+    (ver weir_oc.parece_pedido_weir) simplesmente não contribuem itens."""
+    itens: list[dict] = []
+    for pdf_path in pdf_paths:
+        texto_completo, _, _ = _extrair_texto_completo(pdf_path)
+        itens.extend(extrair_pedido_weir(texto_completo))
+    return {"itens": itens}
 
 
 def status_dependencias() -> dict:
