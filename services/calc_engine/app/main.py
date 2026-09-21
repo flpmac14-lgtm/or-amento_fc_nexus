@@ -48,6 +48,9 @@ Endpoints:
   GET    /orcamentos-salvos       -> lista os orçamentos salvos (resumo)
   GET    /orcamentos-salvos/{id}  -> um orçamento salvo completo (resultado
                                       + estado de edição, quando existir)
+  POST   /orcamentos-salvos/{id}/desenhos -> anexa mais um desenho (PDF) ao
+                                      orçamento — dá pra anexar vários, e
+                                      não exige o orçamento estar aberto
   DELETE /orcamentos-salvos/{id}  -> exclui um orçamento salvo
   GET  /processos-terceirizados/catalogo -> catálogo pequeno (usinagem,
                                       serviços de outsourcing, tratamento
@@ -97,6 +100,7 @@ from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
 from app.orcamento import montar_orcamento, resolver_params
 from app.orcamentos_salvos import BancoNaoConfigurado
+from app.orcamentos_salvos import anexar_desenho as anexar_desenho_orcamento
 from app.orcamentos_salvos import buscar as buscar_orcamento_salvo
 from app.orcamentos_salvos import excluir as excluir_orcamento_salvo
 from app.orcamentos_salvos import listar as listar_orcamentos_salvos
@@ -161,8 +165,6 @@ def orcamentos_salvos_criar(pedido: dict) -> dict:
             orcamento_id=pedido.get("id"),
             relatorio_tecnico=pedido.get("relatorio_tecnico"),
             proposta=pedido.get("proposta"),
-            desenho_storage_path=pedido.get("desenho_storage_path"),
-            desenho_nome_arquivo=pedido.get("desenho_nome_arquivo"),
         )
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -187,6 +189,23 @@ def orcamentos_salvos_obter(orcamento_id: str) -> dict:
     if not encontrado:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado")
     return encontrado
+
+
+@app.post("/orcamentos-salvos/{orcamento_id}/desenhos")
+def orcamentos_salvos_anexar_desenho(orcamento_id: str, pedido: dict) -> dict:
+    """Anexa MAIS UM desenho ao orçamento já salvo — pedido explícito do
+    usuário: dá pra anexar quantos quiser, nunca substitui os anteriores
+    (ver app/orcamentos_salvos.py::anexar_desenho). Não exige o orçamento
+    "aberto" (resultado/estado_manual carregados), só o id — por isso dá
+    pra usar direto na lista de orçamentos salvos, sem abrir."""
+    try:
+        return anexar_desenho_orcamento(
+            orcamento_id=orcamento_id,
+            storage_path=pedido["storage_path"],
+            nome_arquivo=pedido["nome_arquivo"],
+        )
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.delete("/orcamentos-salvos/{orcamento_id}")

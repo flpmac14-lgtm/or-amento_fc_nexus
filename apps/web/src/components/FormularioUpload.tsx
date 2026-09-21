@@ -58,7 +58,7 @@ interface Props {
   // extração). Ver RelatorioTecnicoIA.tsx.
   onAnexarDesenho: (arquivo: File) => void;
   anexandoDesenho: boolean;
-  desenhoAnexadoNome: string | null;
+  desenhosAnexados: string[];
 }
 
 export default function FormularioUpload({
@@ -80,7 +80,7 @@ export default function FormularioUpload({
   onGerarPdfProposta,
   onAnexarDesenho,
   anexandoDesenho,
-  desenhoAnexadoNome,
+  desenhosAnexados,
 }: Props) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -197,7 +197,7 @@ export default function FormularioUpload({
           onItensEstruturadosChange={onItensEstruturadosChange}
           onAnexarDesenho={onAnexarDesenho}
           anexandoDesenho={anexandoDesenho}
-          desenhoAnexadoNome={desenhoAnexadoNome}
+          desenhosAnexados={desenhosAnexados}
         />
       )}
 

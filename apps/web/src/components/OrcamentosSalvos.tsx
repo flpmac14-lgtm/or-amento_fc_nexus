@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { buscarOrcamentoSalvo, excluirOrcamentoSalvo, listarOrcamentosSalvos } from "@/lib/api";
+import {
+  anexarDesenhoOrcamento,
+  buscarOrcamentoSalvo,
+  enviarDesenhoParaStorage,
+  excluirOrcamentoSalvo,
+  listarOrcamentosSalvos,
+} from "@/lib/api";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
 import type { OrcamentoSalvoCompleto, OrcamentoSalvoResumo } from "@/lib/types";
 
@@ -15,17 +21,21 @@ const ORIGEM_ROTULO: Record<string, string> = {
   texto: "Itens digitados",
 };
 
-// Pedido explícito do usuário: ícone vermelho quando o orçamento tem um
-// PDF anexado (ver "Anexar desenho" em RelatorioTecnicoIA.tsx), cinza
-// quando não tem (ex.: orçamentos feitos só no Cálculo manual).
-function IconeDesenhoAnexado({ anexado }: { anexado: boolean }) {
+// Pedido explícito do usuário: ícone vermelho quando o orçamento tem pelo
+// menos um PDF anexado, cinza quando não tem — e clicável direto na
+// lista (sem precisar abrir o orçamento) pra anexar um desenho, inclusive
+// mais um quando já tem algum (ver components/OrcamentosSalvos.tsx ->
+// handleAnexar / lib/api.ts -> anexarDesenhoOrcamento).
+function IconeDesenhoAnexado({ anexado, anexando }: { anexado: boolean; anexando: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      className={`h-4 w-4 ${anexado ? "text-red-600 dark:text-red-500" : "text-stone-300 dark:text-slate-700"}`}
+      className={`h-4 w-4 ${anexando ? "animate-pulse text-stone-400 dark:text-slate-500" : anexado ? "text-red-600 dark:text-red-500" : "text-stone-300 dark:text-slate-700"}`}
     >
-      <title>{anexado ? "Desenho anexado" : "Sem desenho anexado"}</title>
+      <title>
+        {anexando ? "Enviando…" : anexado ? "Desenho anexado — clique pra anexar mais um" : "Clique pra anexar um desenho"}
+      </title>
       <path
         d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
         fill="currentColor"
@@ -41,6 +51,7 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
   const [erro, setErro] = useState("");
   const [abrindoId, setAbrindoId] = useState<string | null>(null);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [anexandoId, setAnexandoId] = useState<string | null>(null);
 
   function buscar() {
     setCarregando(true);
@@ -81,13 +92,32 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
     }
   }
 
+  async function anexar(id: string, arquivo: File) {
+    setAnexandoId(id);
+    setErro("");
+    try {
+      const path = await enviarDesenhoParaStorage(id, arquivo);
+      await anexarDesenhoOrcamento(id, path, arquivo.name);
+      setLista((atual) =>
+        atual.map((o) =>
+          o.id === id ? { ...o, resumo: { ...o.resumo, tem_desenho_anexado: true } } : o,
+        ),
+      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao anexar o desenho.");
+    } finally {
+      setAnexandoId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-stone-600 dark:text-slate-400">
           Orçamentos salvos — clique em &quot;Abrir&quot; pra continuar de onde parou. Só os de{" "}
           <span className="text-stone-700 dark:text-slate-300">cálculo manual</span> reabrem com a lista de itens
-          editável; os de PDF/texto reabrem só o resultado já calculado.
+          editável; os de PDF/texto reabrem só o resultado já calculado. Clique no ícone de desenho pra
+          anexar um PDF direto (dá pra anexar mais de um).
         </p>
         <button
           type="button"
@@ -119,7 +149,23 @@ export default function OrcamentosSalvos({ onAbrir }: Props) {
             {lista.map((o) => (
               <tr key={o.id} className="text-stone-800 dark:text-slate-200">
                 <td className="px-3 py-2">
-                  <IconeDesenhoAnexado anexado={o.resumo.tem_desenho_anexado} />
+                  <label className="cursor-pointer">
+                    <IconeDesenhoAnexado
+                      anexado={o.resumo.tem_desenho_anexado}
+                      anexando={anexandoId === o.id}
+                    />
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      disabled={anexandoId === o.id}
+                      onChange={(e) => {
+                        const arquivo = e.target.files?.[0];
+                        e.target.value = "";
+                        if (arquivo) anexar(o.id, arquivo);
+                      }}
+                    />
+                  </label>
                 </td>
                 <td className="px-3 py-2">{o.nome}</td>
                 <td className="px-3 py-2 text-stone-600 dark:text-slate-400">{ORIGEM_ROTULO[o.origem] ?? o.origem}</td>

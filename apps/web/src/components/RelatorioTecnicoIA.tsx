@@ -11,10 +11,11 @@ interface Props {
   onItensEstruturadosChange: (itens: ItemEstruturadoIA[]) => void;
   // "Anexar desenho" — pedido explícito do usuário: vincula esse PDF ao
   // orçamento salvo só quando esse botão é clicado (nunca automático na
-  // extração acima). Precisa do orçamento já salvo (ver page.tsx).
+  // extração acima), e dá pra anexar mais de um. Precisa do orçamento já
+  // salvo (ver page.tsx).
   onAnexarDesenho: (arquivo: File) => void;
   anexandoDesenho: boolean;
-  desenhoAnexadoNome: string | null;
+  desenhosAnexados: string[];
 }
 
 // Extração da lista de materiais (BOM) por IA — pedido explícito do
@@ -26,7 +27,7 @@ interface Props {
 // editável — o orçamentista confere/ajusta antes de fechar (custo/hora/
 // preço continuam sempre vindo do motor determinístico).
 export default function RelatorioTecnicoIA({
-  arquivo, onItensEstruturadosChange, onAnexarDesenho, anexandoDesenho, desenhoAnexadoNome,
+  arquivo, onItensEstruturadosChange, onAnexarDesenho, anexandoDesenho, desenhosAnexados,
 }: Props) {
   const [extraindo, setExtraindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export default function RelatorioTecnicoIA({
     }
   }
 
-  if (!arquivo && itensEstruturados.length === 0 && !desenhoAnexadoNome) return null;
+  if (!arquivo && itensEstruturados.length === 0 && desenhosAnexados.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
@@ -114,11 +115,18 @@ export default function RelatorioTecnicoIA({
         </div>
       </div>
 
-      {desenhoAnexadoNome && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-stone-600 dark:text-slate-400">
-          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />
-          Desenho anexado a este orçamento: {desenhoAnexadoNome}
-        </p>
+      {desenhosAnexados.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1">
+          {desenhosAnexados.map((nome, i) => (
+            <li
+              key={`${nome}-${i}`}
+              className="flex items-center gap-1.5 text-xs text-stone-600 dark:text-slate-400"
+            >
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />
+              Desenho anexado a este orçamento: {nome}
+            </li>
+          ))}
+        </ul>
       )}
 
       {erro && (

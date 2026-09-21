@@ -3,6 +3,7 @@ import type {
   CantoneiraCatalogo,
   CatalogoGeometria,
   CatalogoProcessosTerceirizados,
+  DesenhoAnexado,
   EstadoCalculoManual,
   EstimativasOrcamento,
   ItemCalculado,
@@ -597,8 +598,6 @@ export async function salvarOrcamento(payload: {
   estado_texto?: { texto: string; estimativas: EstimativasOrcamento } | null;
   relatorio_tecnico?: string | null;
   proposta?: PropostaConfig | null;
-  desenho_storage_path?: string | null;
-  desenho_nome_arquivo?: string | null;
 }): Promise<{ id: string; created_at: string; updated_at: string }> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos`, {
     method: "POST",
@@ -615,10 +614,12 @@ export async function salvarOrcamento(payload: {
 }
 
 // "Anexar desenho" — pedido explícito do usuário: o PDF só fica vinculado
-// ao orçamento quando esse botão é clicado (nunca automático na
-// extração). Sobe direto pro Supabase Storage pelo cliente do navegador
-// (mesma sessão autenticada do login, ver lib/supabase/client.ts) — o
-// calc_engine só guarda o CAMINHO (desenho_storage_path), não o arquivo.
+// ao orçamento quando o usuário anexa (nunca automático na extração), e
+// dá pra anexar mais de um. Sobe direto pro Supabase Storage pelo cliente
+// do navegador (mesma sessão autenticada do login, ver
+// lib/supabase/client.ts) — o calc_engine só guarda o CAMINHO, não o
+// arquivo. Não exige o orçamento estar aberto (só o id já salvo), por
+// isso dá pra anexar direto na lista de orçamentos salvos.
 export async function enviarDesenhoParaStorage(orcamentoId: string, arquivo: File): Promise<string> {
   const supabase = criarClienteSupabaseNavegador();
   const path = `${orcamentoId}/${Date.now()}-${arquivo.name}`;
@@ -627,6 +628,25 @@ export async function enviarDesenhoParaStorage(orcamentoId: string, arquivo: Fil
     throw new Error(`Falha ao enviar o desenho (${error.message}).`);
   }
   return path;
+}
+
+export async function anexarDesenhoOrcamento(
+  orcamentoId: string,
+  storagePath: string,
+  nomeArquivo: string,
+): Promise<DesenhoAnexado> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/orcamentos-salvos/${orcamentoId}/desenhos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ storage_path: storagePath, nome_arquivo: nomeArquivo }),
+  });
+
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao anexar o desenho (${resposta.status}). ${corpo}`);
+  }
+
+  return resposta.json();
 }
 
 export async function listarOrcamentosSalvos(): Promise<OrcamentoSalvoResumo[]> {

@@ -381,13 +381,20 @@ export interface OrcamentoSalvoCompleto {
   // antes dessa aba existir, ou nunca foi aberta (ver
   // lib/propostaPadrao.ts::criarPropostaInicial).
   proposta: PropostaConfig | null;
-  // "Anexar desenho" — PDF original guardado no Supabase Storage, só
-  // quando o usuário clica no botão (nunca automático). null = sem
-  // desenho anexado (ícone cinza na lista; vermelho quando preenchido).
-  desenho_storage_path: string | null;
-  desenho_nome_arquivo: string | null;
+  // "Anexar desenho" — PDFs originais guardados no Supabase Storage, só
+  // quando o usuário anexa (nunca automático). Pode ter vários (pedido
+  // explícito do usuário); [] = sem desenho anexado (ícone cinza na
+  // lista de orçamentos salvos; vermelho quando tem pelo menos um).
+  desenhos: DesenhoAnexado[];
   created_at: string;
   updated_at: string;
+}
+
+export interface DesenhoAnexado {
+  id: string;
+  storage_path: string;
+  nome_arquivo: string;
+  created_at: string;
 }
 
 // Aba "Pedido ANDRITZ" — extração determinística (texto + regex, sem IA)

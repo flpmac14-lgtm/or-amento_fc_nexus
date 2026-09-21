@@ -104,6 +104,33 @@ def test_relatorio_tecnico_salvo_e_preservado_em_update_sem_relatorio():
 
 
 @pytest.mark.skipif(SEM_BANCO, reason="SUPABASE_DB_URL não configurada nesta máquina")
+def test_anexar_mais_de_um_desenho_ao_mesmo_orcamento():
+    criado = orcamentos_salvos.salvar(
+        nome="Orçamento com desenhos — pytest", origem="pdf", resultado=_resultado_exemplo(),
+    )
+    orcamento_id = criado["id"]
+    try:
+        lista_antes = orcamentos_salvos.listar()
+        item_antes = next(o for o in lista_antes if o["id"] == orcamento_id)
+        assert item_antes["resumo"]["tem_desenho_anexado"] is False
+
+        orcamentos_salvos.anexar_desenho(orcamento_id, "path/a.pdf", "a.pdf")
+        orcamentos_salvos.anexar_desenho(orcamento_id, "path/b.pdf", "b.pdf")
+
+        desenhos = orcamentos_salvos.listar_desenhos(orcamento_id)
+        assert [d["nome_arquivo"] for d in desenhos] == ["a.pdf", "b.pdf"]
+
+        completo = orcamentos_salvos.buscar(orcamento_id)
+        assert [d["nome_arquivo"] for d in completo["desenhos"]] == ["a.pdf", "b.pdf"]
+
+        lista_depois = orcamentos_salvos.listar()
+        item_depois = next(o for o in lista_depois if o["id"] == orcamento_id)
+        assert item_depois["resumo"]["tem_desenho_anexado"] is True
+    finally:
+        orcamentos_salvos.excluir(orcamento_id)
+
+
+@pytest.mark.skipif(SEM_BANCO, reason="SUPABASE_DB_URL não configurada nesta máquina")
 def test_atualizar_id_inexistente_da_erro_claro():
     with pytest.raises(ValueError, match="não encontrado"):
         orcamentos_salvos.salvar(

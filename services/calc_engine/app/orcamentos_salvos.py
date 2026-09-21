@@ -44,8 +44,6 @@ def salvar(
     orcamento_id: str | None = None,
     relatorio_tecnico: str | None = None,
     proposta: dict | None = None,
-    desenho_storage_path: str | None = None,
-    desenho_nome_arquivo: str | None = None,
 ) -> dict:
     from psycopg.types.json import Jsonb
 
@@ -57,29 +55,25 @@ def salvar(
                 set nome = %s, origem = %s, resultado = %s, estado_manual = %s, estado_texto = %s,
                     relatorio_tecnico = coalesce(%s, relatorio_tecnico),
                     proposta = coalesce(%s, proposta),
-                    desenho_storage_path = coalesce(%s, desenho_storage_path),
-                    desenho_nome_arquivo = coalesce(%s, desenho_nome_arquivo),
                     updated_at = now()
                 where id = %s
                 returning id, created_at, updated_at
                 """,
                 (nome, origem, Jsonb(resultado), Jsonb(estado_manual) if estado_manual else None,
                  Jsonb(estado_texto) if estado_texto else None, relatorio_tecnico,
-                 Jsonb(proposta) if proposta else None, desenho_storage_path, desenho_nome_arquivo,
-                 orcamento_id),
+                 Jsonb(proposta) if proposta else None, orcamento_id),
             )
         else:
             cur.execute(
                 """
                 insert into orcamentos_salvos
-                    (nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, proposta,
-                     desenho_storage_path, desenho_nome_arquivo)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, proposta)
+                values (%s, %s, %s, %s, %s, %s, %s)
                 returning id, created_at, updated_at
                 """,
                 (nome, origem, Jsonb(resultado), Jsonb(estado_manual) if estado_manual else None,
                  Jsonb(estado_texto) if estado_texto else None, relatorio_tecnico,
-                 Jsonb(proposta) if proposta else None, desenho_storage_path, desenho_nome_arquivo),
+                 Jsonb(proposta) if proposta else None),
             )
         row = cur.fetchone()
         conn.commit()
@@ -87,6 +81,41 @@ def salvar(
     if not row:
         raise ValueError(f"Orçamento '{orcamento_id}' não encontrado")
     return {"id": str(row[0]), "created_at": row[1].isoformat(), "updated_at": row[2].isoformat()}
+
+
+def anexar_desenho(orcamento_id: str, storage_path: str, nome_arquivo: str) -> dict:
+    """Anexa MAIS UM desenho ao orçamento (pedido explícito do usuário:
+    "até mais que 1") — nunca substitui os anteriores, cada anexo é uma
+    linha independente em `orcamento_desenhos`. Não exige o orçamento
+    estar "aberto" (resultado/estado_manual carregados): só o id já
+    salvo, por isso dá pra anexar direto na lista de orçamentos salvos."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into orcamento_desenhos (orcamento_id, storage_path, nome_arquivo)
+            values (%s, %s, %s)
+            returning id, created_at
+            """,
+            (orcamento_id, storage_path, nome_arquivo),
+        )
+        row = cur.fetchone()
+        conn.commit()
+
+    return {"id": str(row[0]), "storage_path": storage_path, "nome_arquivo": nome_arquivo, "created_at": row[1].isoformat()}
+
+
+def listar_desenhos(orcamento_id: str) -> list[dict]:
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select id, storage_path, nome_arquivo, created_at from orcamento_desenhos "
+            "where orcamento_id = %s order by created_at",
+            (orcamento_id,),
+        )
+        rows = cur.fetchall()
+    return [
+        {"id": str(r[0]), "storage_path": r[1], "nome_arquivo": r[2], "created_at": r[3].isoformat()}
+        for r in rows
+    ]
 
 
 def _resumo(resultado: dict) -> dict:
@@ -108,15 +137,20 @@ def _resumo(resultado: dict) -> dict:
 def listar() -> list[dict]:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
-            "select id, nome, origem, resultado, desenho_storage_path, created_at, updated_at "
-            "from orcamentos_salvos order by updated_at desc"
+            """
+            select o.id, o.nome, o.origem, o.resultado,
+                   exists(select 1 from orcamento_desenhos d where d.orcamento_id = o.id) as tem_desenho,
+                   o.created_at, o.updated_at
+            from orcamentos_salvos o
+            order by o.updated_at desc
+            """
         )
         rows = cur.fetchall()
 
     return [
         {
             "id": str(r[0]), "nome": r[1], "origem": r[2],
-            "resumo": {**_resumo(r[3]), "tem_desenho_anexado": r[4] is not None},
+            "resumo": {**_resumo(r[3]), "tem_desenho_anexado": r[4]},
             "created_at": r[5].isoformat(), "updated_at": r[6].isoformat(),
         }
         for r in rows
@@ -127,7 +161,7 @@ def buscar(orcamento_id: str) -> dict | None:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
             "select id, nome, origem, resultado, estado_manual, estado_texto, relatorio_tecnico, "
-            "proposta, desenho_storage_path, desenho_nome_arquivo, created_at, updated_at "
+            "proposta, created_at, updated_at "
             "from orcamentos_salvos where id = %s",
             (orcamento_id,),
         )
@@ -139,8 +173,8 @@ def buscar(orcamento_id: str) -> dict | None:
         "id": str(row[0]), "nome": row[1], "origem": row[2],
         "resultado": row[3], "estado_manual": row[4], "estado_texto": row[5],
         "relatorio_tecnico": row[6], "proposta": row[7],
-        "desenho_storage_path": row[8], "desenho_nome_arquivo": row[9],
-        "created_at": row[10].isoformat(), "updated_at": row[11].isoformat(),
+        "desenhos": listar_desenhos(orcamento_id),
+        "created_at": row[8].isoformat(), "updated_at": row[9].isoformat(),
     }
 
 
