@@ -155,7 +155,10 @@ async def relatorio_tecnico(file: UploadFile) -> dict:
     # run_in_threadpool: extrair_lista_materiais faz uma chamada síncrona e
     # bloqueante à Anthropic — sem isso, travava o event loop inteiro do
     # serviço durante a chamada (ver /extract acima).
-    itens = await run_in_threadpool(extrair_lista_materiais, paginas_png)
+    itens, erro = await run_in_threadpool(extrair_lista_materiais, paginas_png)
     if itens is None:
-        raise HTTPException(status_code=502, detail="Não foi possível extrair a lista de materiais agora. Tente de novo.")
+        detalhe = "Não foi possível extrair a lista de materiais agora. Tente de novo."
+        if erro:
+            detalhe += f" ({erro})"
+        raise HTTPException(status_code=502, detail=detalhe)
     return {"itens_estruturados": itens}

@@ -166,14 +166,17 @@ def _validar_item_estruturado(bruto: dict) -> dict:
     return item
 
 
-def extrair_lista_materiais(paginas_png: list[bytes]) -> list[dict] | None:
-    """Devolve os itens da BOM extraídos pela IA, ou None em qualquer falha
+def extrair_lista_materiais(paginas_png: list[bytes]) -> tuple[list[dict] | None, str | None]:
+    """Devolve (itens, None) em sucesso ou (None, motivo) em qualquer falha
     (nunca propaga exceção — é um recurso de apoio, não pode derrubar
-    nada)."""
+    nada). `motivo` é só pra log/diagnóstico (ex.: aparecer no erro HTTP
+    devolvido pro calc_engine/frontend) — antes esse erro real (rate limit,
+    timeout, modelo sobrecarregado etc.) ficava só no log do processo,
+    inacessível sem entrar no painel do Render pra debugar um 502 genérico."""
     if not fallback_habilitado():
-        return None
+        return None, "Extração de lista de materiais por IA não está configurada neste ambiente."
     if not paginas_png:
-        return None
+        return None, "Nenhuma página do desenho pra analisar."
 
     from google import genai
     from google.genai import types
@@ -206,8 +209,10 @@ def extrair_lista_materiais(paginas_png: list[bytes]) -> list[dict] | None:
                 f"(finish_reason={motivo}) — devolvendo lista vazia. Se finish_reason for "
                 f"MAX_TOKENS, o desenho tem mais itens do que MAX_TOKENS_LISTA comporta."
             )
-            return []
-        return [_validar_item_estruturado(item.model_dump()) for item in dados.itens]
+            return [], None
+        itens = [_validar_item_estruturado(item.model_dump()) for item in dados.itens]
+        return itens, None
     except Exception as exc:
-        print(f"[ai_fallback] extrair_lista_materiais falhou: {type(exc).__name__}: {exc}")
-        return None
+        motivo = f"{type(exc).__name__}: {exc}"
+        print(f"[ai_fallback] extrair_lista_materiais falhou: {motivo}")
+        return None, motivo

@@ -20,13 +20,17 @@ def test_desabilitado_por_padrao():
 
 
 def test_extrair_desligado_devolve_none():
-    assert lm.extrair_lista_materiais([b"fake-png"]) is None
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
+    assert itens is None
+    assert erro
 
 
 def test_extrair_sem_paginas_devolve_none(monkeypatch):
     monkeypatch.setenv("EXTRACTOR_AI_FALLBACK_ENABLED", "1")
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
-    assert lm.extrair_lista_materiais([]) is None
+    itens, erro = lm.extrair_lista_materiais([])
+    assert itens is None
+    assert erro
 
 
 def test_erro_da_api_nao_propaga_excecao(monkeypatch):
@@ -45,7 +49,9 @@ def test_erro_da_api_nao_propaga_excecao(monkeypatch):
 
     monkeypatch.setattr(genai, "Client", _ClienteQuebrado)
 
-    assert lm.extrair_lista_materiais([b"fake-png"]) is None
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
+    assert itens is None
+    assert "falha de rede simulada" in erro
 
 
 def _resposta_falsa_com(itens_brutos, monkeypatch):
@@ -86,8 +92,9 @@ def test_itens_estruturados_sao_extraidos_e_validados(monkeypatch):
     ]
     _resposta_falsa_com(itens_brutos, monkeypatch)
 
-    itens = lm.extrair_lista_materiais([b"fake-png"])
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
 
+    assert erro is None
     assert itens is not None
     assert len(itens) == 2
     item1, item2 = itens
@@ -108,5 +115,6 @@ def test_resposta_sem_parsed_devolve_lista_vazia(monkeypatch):
 
     _resposta_falsa_com(None, monkeypatch)
 
-    itens = lm.extrair_lista_materiais([b"fake-png"])
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
     assert itens == []
+    assert erro is None
