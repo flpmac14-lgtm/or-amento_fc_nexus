@@ -2,21 +2,25 @@
 laminado" do cálculo manual — busca por designação/bitola devolve o peso
 por metro direto do catálogo, sem o orçamentista precisar digitar.
 
-Dataset: `data/perfis_laminados.json`. Hoje só a série W está povoada — o
-peso por metro de um perfil W é, por definição da própria norma de
-designação (ex: "W 310 x 32,7" pesa exatamente 32,7 kg/m), então esses
-valores são corretos por construção, não por consulta a uma tabela externa.
+Dataset: `data/perfis_laminados.json`. A série W tem o peso por metro
+definido pela própria norma de designação (ex: "W 310 x 32,7" pesa
+exatamente 32,7 kg/m) — correto por construção. As séries I/H/U não
+carregam o peso na designação (ex: "I 200 x 100" seria só altura × largura
+da aba), então cada bitola aparece como "designação × peso" por extenso
+(ex: "I 6\" x 18,60") — pedido explícito do usuário, também resolve o caso
+de mais de uma bitola com a mesma altura pesando diferente (ex: "I 6\" x
+18,60" e "I 6\" x 22,00" coexistem no catálogo).
 
-As séries I, H e U ainda não têm catálogo aqui de propósito: ao contrário
-do W, a designação delas não carrega o peso (ex: "I 200 x 100" é só
-altura × largura da aba), então listar valores aqui exigiria copiar de uma
-tabela de fabricante — o mesmo princípio já aplicado a preço em
-`repositorio_materiais.py` ("não inventar preço") vale aqui: é melhor não
-ter o dado do que ter um errado usado num orçamento real. Pra usar I/H/U
-hoje, o cartão do frontend cai no modo de edição manual do kg/m (já
-previsto na interface). Pra povoar de verdade, adicione linhas em
-`data/perfis_laminados.json` (mesmo formato) com os valores do catálogo
-real do fornecedor.
+Todo peso_kg_m aqui é peso-BASE em aço carbono (densidade 7850 kg/m³) —
+pra outro material, quem aplica o fator de densidade é o frontend
+(CartaoPerfilLaminado.tsx), não este módulo (ver DENSIDADE_ACO_CARBONO_REFERENCIA
+lá). Isso evita duplicar uma tabela de perfis por material: a mesma linha
+de catálogo serve pra aço carbono, inox ou alumínio, só o fator muda.
+
+Base inicial de I/H/U cadastrada em 2026-09 (pedido explícito do usuário,
+valores de catálogo de fabricante). Pra adicionar/corrigir bitola, edite
+`data/perfis_laminados.json` (mesmo formato) — nenhuma mudança de lógica
+é necessária aqui nem no cálculo.
 """
 
 from __future__ import annotations

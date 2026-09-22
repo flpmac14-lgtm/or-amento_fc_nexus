@@ -37,9 +37,16 @@ def test_buscar_perfis_sem_filtro_devolve_so_ate_o_limite():
     assert len(resultado) == 5
 
 
-def test_buscar_perfis_tipo_sem_catalogo_devolve_vazio():
-    # I/H/U ainda não têm catálogo povoado (ver docstring do módulo) — o
-    # cartão deve cair no modo de edição manual do kg/m nesse caso.
-    assert buscar_perfis(tipo="I") == []
-    assert buscar_perfis(tipo="H") == []
-    assert buscar_perfis(tipo="U") == []
+def test_buscar_perfis_i_h_u_tem_catalogo_povoado():
+    # Base inicial cadastrada (pedido explícito do usuário) — designação
+    # inclui o peso por extenso porque, ao contrário do W, mais de uma
+    # bitola pode ter a mesma altura com pesos diferentes.
+    perfis_i = buscar_perfis(tipo="I")
+    perfis_h = buscar_perfis(tipo="H")
+    perfis_u = buscar_perfis(tipo="U")
+    assert len(perfis_i) == 15
+    assert len(perfis_h) == 12
+    assert len(perfis_u) == 14
+    assert buscar_peso_kg_m('I 6" x 18,60') == 18.60
+    assert buscar_peso_kg_m('I 6" x 22,00') == 22.00
+    assert buscar_peso_kg_m('U 8" x 17,10') == 17.10

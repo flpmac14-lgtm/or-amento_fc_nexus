@@ -12,6 +12,17 @@ type UnidadeComprimento = "mm" | "cm" | "m";
 
 const FATOR_PARA_METRO: Record<UnidadeComprimento, number> = { mm: 1 / 1000, cm: 1 / 100, m: 1 };
 
+// data/perfis_laminados.json cadastra peso-base em aço carbono (densidade
+// 7850 kg/m³, mesma referência dos exemplos do fabricante) — pedido
+// explícito do usuário: ao trocar o material, o peso/m ajusta sozinho pela
+// razão de densidade em vez de precisar de uma tabela de perfis por
+// material (ex.: inox ~1,9% mais pesado, alumínio ~65% mais leve que o
+// aço carbono, pra mesma bitola). Constante isolada aqui (não lida de
+// "materiais.json") de propósito: é a densidade que os VALORES DO
+// CATÁLOGO já assumem, não a densidade "atual" de nenhum material
+// específico — não deve mudar se alguém editar ASTM A36 no catálogo.
+const DENSIDADE_ACO_CARBONO_REFERENCIA = 7850;
+
 interface Props {
   materiais: MaterialCatalogo[];
   posicaoNum: number;
@@ -101,9 +112,17 @@ export default function CartaoPerfilLaminado({
     [perfisDoTipo, designacao],
   );
 
-  // Peso/m vem do catálogo por padrão; "editar manualmente" troca pra um
-  // valor digitado — derivado a cada render, sem efeito.
-  const pesoKgM = perfilEncontrado && !pesoEditadoManualmente ? String(perfilEncontrado.peso_kg_m) : pesoManual;
+  // Fator de densidade do material selecionado sobre a referência do
+  // catálogo (aço carbono) — 1 quando nenhum material foi escolhido ainda,
+  // pra não bloquear o preenchimento antes de chegar nesse campo.
+  const fatorMaterial = materialAtual ? materialAtual.densidade_kg_m3 / DENSIDADE_ACO_CARBONO_REFERENCIA : 1;
+
+  // Peso/m vem do catálogo (já multiplicado pelo fator de densidade do
+  // material) por padrão; "editar manualmente" troca pra um valor digitado
+  // direto — esse SIM é o valor final, sem fator nenhum por cima (pedido
+  // explícito do usuário: o manual sempre sobrescreve, sem composição).
+  const pesoKgMCatalogo = perfilEncontrado ? Number((perfilEncontrado.peso_kg_m * fatorMaterial).toFixed(3)) : null;
+  const pesoKgM = pesoKgMCatalogo !== null && !pesoEditadoManualmente ? String(pesoKgMCatalogo) : pesoManual;
 
   function selecionarDesignacao(valor: string) {
     setDesignacao(valor);
@@ -112,7 +131,7 @@ export default function CartaoPerfilLaminado({
 
   function alternarPesoManual() {
     const proximo = !pesoEditadoManualmente;
-    if (proximo && perfilEncontrado) setPesoManual(String(perfilEncontrado.peso_kg_m));
+    if (proximo && pesoKgMCatalogo !== null) setPesoManual(String(pesoKgMCatalogo));
     setPesoEditadoManualmente(proximo);
   }
 
@@ -126,15 +145,19 @@ export default function CartaoPerfilLaminado({
     const resultado = calcularPesoComercial(pesoUnitario, quantidade, perdaPct, precoKg, arredondamento);
     if (!resultado) return null;
 
+    const notaFatorMaterial =
+      perfilEncontrado && !pesoEditadoManualmente && fatorMaterial !== 1
+        ? ` (catálogo ${formatarNumero(perfilEncontrado.peso_kg_m, 2)} kg/m base aço carbono × fator ${formatarNumero(fatorMaterial, 3)} do material)`
+        : "";
     const memoria =
-      `${formatarNumero(pesoKgMNum, 2)} kg/m × ${formatarNumero(comprimentoM, 3)} m × qtd ${resultado.quantidadeNum} ` +
+      `${formatarNumero(pesoKgMNum, 2)} kg/m${notaFatorMaterial} × ${formatarNumero(comprimentoM, 3)} m × qtd ${resultado.quantidadeNum} ` +
       `= ${formatarNumero(resultado.pesoLiquido, 2)} kg líquido` +
       (resultado.perdaNum ? ` + perda ${formatarNumero(resultado.perdaNum, 1)}% = ${formatarNumero(resultado.pesoBrutoExato, 2)} kg` : "") +
       (resultado.incrementoArredondamento ? ` arredondado p/ cima em ${formatarNumero(resultado.incrementoArredondamento, 2)} kg = ${formatarNumero(resultado.pesoBruto, 2)} kg bruto` : "") +
       (resultado.custoMp !== null ? ` × R$ ${formatarNumero(resultado.precoKgNum ?? 0, 2)}/kg = ${formatarMoeda(resultado.custoMp)}` : "");
 
     return { ...resultado, memoria };
-  }, [pesoKgM, comprimento, unidadeComprimento, quantidade, perdaPct, precoKg, arredondamento]);
+  }, [pesoKgM, comprimento, unidadeComprimento, quantidade, perdaPct, precoKg, arredondamento, perfilEncontrado, pesoEditadoManualmente, fatorMaterial]);
 
   function adicionar() {
     if (!calculo || !materialAtual) {
@@ -248,6 +271,11 @@ export default function CartaoPerfilLaminado({
               </button>
             )}
           </div>
+          {perfilEncontrado && !pesoEditadoManualmente && fatorMaterial !== 1 && (
+            <span className="text-stone-500 dark:text-slate-500">
+              Base aço carbono: {formatarNumero(perfilEncontrado.peso_kg_m, 2)} kg/m × fator {formatarNumero(fatorMaterial, 3)} ({materialAtual?.material})
+            </span>
+          )}
         </label>
       </div>
 
