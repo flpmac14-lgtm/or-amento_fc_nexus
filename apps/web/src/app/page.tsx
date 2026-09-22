@@ -239,9 +239,38 @@ export default function Home() {
   // continua disponível à parte via Excel pra quem quiser conferir depois),
   // ordenado pela POS do desenho e com "Item" sequencial. `itens` vem como
   // `[]` no início de cada geração, o que só limpa o aviso.
+  // Roda o mesmo cálculo (zerado, se preciso) só pra popular `resultado` e
+  // liberar o botão "Salvar orçamento" — pedido explícito do usuário:
+  // assim que o desenho é processado (mesmo sem nenhum item aproveitável),
+  // já quer poder salvar (guarda identificação/anexo) em vez de esperar até
+  // ter um item com peso resolvido. Backend aceita BOM vazia numa boa
+  // (confirmado: devolve custo/peso zerados, não erro), então isso nunca
+  // fica "inventando" valor.
+  async function garantirResultadoParaSalvar() {
+    if (resultado) return;
+    try {
+      const r = await analisarBom(
+        estadoManual.itens, estadoManual.itensComerciais, estadoManual.insumosPintura,
+        estadoManual.operacoesUsinagem, estadoManual.servicosTerceiros, estadoManual.tratamentoTermico,
+        estadoManual.contingenciamento, estadoManual.ndtItens, estadoManual.engenhariaItens,
+        {
+          cenario_comercial: estadoManual.cenarioComercial,
+          usar_historico_horas: false,
+          corte_valor_kg: Number(estadoManual.corteValorKg.replace(",", ".")) || undefined,
+          peso_liquido_kg: pesoLiquidoManualAtivo ?? undefined,
+        },
+      );
+      handleResultadoManual(r, `cálculo manual (${estadoManual.itens.length} itens)`);
+    } catch {
+      // Sem item nenhum pra calcular mesmo — se isso falhar não há nada de
+      // novo a fazer, o aviso já orienta a adicionar manualmente.
+    }
+  }
+
   async function handleItensEstruturadosGerados(itens: ItemEstruturadoIA[]) {
     if (itens.length === 0) {
       setAvisoBom(null);
+      await garantirResultadoParaSalvar();
       return;
     }
     const { itens: calculados, ignorados } = await converterParaPesoDireto(itens);
@@ -249,6 +278,7 @@ export default function Home() {
       setAvisoBom(
         `Lista de materiais da IA: nenhum item pôde ser inserido (${ignorados.length} sem peso estimado) — adicione manualmente no Cálculo manual.`,
       );
+      await garantirResultadoParaSalvar();
       return;
     }
     const { itens: renumerados, proximoItemNum } = renumerarItensPorPosicao(calculados, estadoManual.itemNum);
