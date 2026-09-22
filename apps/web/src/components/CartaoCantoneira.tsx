@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buscarCantoneirasCatalogo, calcularPesoGeometria } from "@/lib/api";
 import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
@@ -96,6 +96,10 @@ export default function CartaoCantoneira({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorInicial?.id]);
 
+  // Token da última chamada — evita que a resposta de um cálculo mais
+  // antigo (rede lenta) sobrescreva o resultado de uma mudança mais nova.
+  const tokenCalculoRef = useRef(0);
+
   async function calcularManual() {
     const abaNum = Number(aba.replace(",", "."));
     const espessuraNum = Number(espessura.replace(",", "."));
@@ -105,6 +109,7 @@ export default function CartaoCantoneira({
       setErro("Preencha aba, espessura, comprimento e selecione o material antes de calcular.");
       return;
     }
+    const token = ++tokenCalculoRef.current;
     setErro("");
     setCalculandoManual(true);
     try {
@@ -113,14 +118,35 @@ export default function CartaoCantoneira({
         { aba_mm: abaNum, espessura_mm: espessuraNum, comprimento_mm: comprimentoNum, densidade_kg_m3: densidade },
         1,
       );
+      if (token !== tokenCalculoRef.current) return;
       setResultadoManual(r);
     } catch (e) {
+      if (token !== tokenCalculoRef.current) return;
       setResultadoManual(null);
       setErro(e instanceof Error ? e.message : "Erro ao calcular o peso.");
     } finally {
-      setCalculandoManual(false);
+      if (token === tokenCalculoRef.current) setCalculandoManual(false);
     }
   }
+
+  // Recalcula sozinho quando aba/espessura/comprimento ou a densidade do
+  // material mudam — mesmo problema do CartaoGeometriaPadrao.tsx: trocar o
+  // material depois de já ter calculado deixava o peso (modo manual, sem
+  // cantoneira no catálogo) com a densidade antiga até clicar em "Calcular"
+  // de novo. Só dispara se já existe um resultado calculado (evita chamada
+  // de rede a cada tecla no primeiro preenchimento).
+  useEffect(() => {
+    if (!modoManual || !resultadoManual) return;
+    const abaNum = Number(aba.replace(",", "."));
+    const espessuraNum = Number(espessura.replace(",", "."));
+    const comprimentoNum = Number(comprimento.replace(",", "."));
+    if (!abaNum || !espessuraNum || !comprimentoNum || !materialAtual?.densidade_kg_m3) return;
+    const timer = setTimeout(() => {
+      calcularManual();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoManual, aba, espessura, comprimento, materialAtual?.densidade_kg_m3]);
 
   const pesoUnitarioCatalogo = useMemo(() => {
     const kgMNum = Number(kgM.replace(",", "."));

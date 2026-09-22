@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buscarPrecoMercado, calcularPesoGeometria } from "@/lib/api";
 import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
@@ -258,6 +258,11 @@ export default function CartaoGeometriaPadrao({
 
   const extras = useMemo(() => calcularExtras(tipo, medidas), [tipo, medidas]);
 
+  // Token da última chamada — evita que a resposta de um cálculo mais
+  // antigo (rede lenta) sobrescreva o resultado de uma mudança mais nova,
+  // mesmo padrão de services/lib/useAutoCalculoOrcamento.ts.
+  const tokenCalculoRef = useRef(0);
+
   async function calcular() {
     const faltando = campos.some((c) => !medidas[c.chave]);
     const densidadeNum = Number(densidade.replace(",", "."));
@@ -265,20 +270,42 @@ export default function CartaoGeometriaPadrao({
       setErro("Preencha todas as medidas e selecione o material (ou informe a densidade) antes de calcular.");
       return;
     }
+    const token = ++tokenCalculoRef.current;
     setErro("");
     setCalculando(true);
     try {
       const medidasNumericas: Record<string, number> = { densidade_kg_m3: densidadeNum };
       for (const c of campos) medidasNumericas[c.chave] = numero(medidas, c.chave);
       const r = await calcularPesoGeometria(tipo, medidasNumericas, 1);
+      if (token !== tokenCalculoRef.current) return;
       setResultadoPeso(r);
     } catch (e) {
+      if (token !== tokenCalculoRef.current) return;
       setResultadoPeso(null);
       setErro(e instanceof Error ? e.message : "Erro ao calcular o peso.");
     } finally {
-      setCalculando(false);
+      if (token === tokenCalculoRef.current) setCalculando(false);
     }
   }
+
+  // Recalcula sozinho quando as medidas OU a densidade mudam — pedido
+  // explícito do usuário: trocar o material (ou editar a densidade manual)
+  // depois de já ter calculado deixava o peso mostrado desatualizado (com a
+  // densidade antiga) até clicar em "Calcular" de novo. Só dispara quando
+  // já existe um resultado calculado nesta sessão do cartão (evita chamada
+  // de rede a cada tecla no primeiro preenchimento, antes do primeiro
+  // "Calcular" manual) — debounce de 500ms, mesmo espírito de
+  // useAutoCalculoOrcamento.
+  useEffect(() => {
+    if (!resultadoPeso) return;
+    const completo = campos.every((c) => medidas[c.chave]) && Number(densidade.replace(",", ".")) > 0;
+    if (!completo) return;
+    const timer = setTimeout(() => {
+      calcular();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [medidas, densidade]);
 
   const calculo = useMemo(() => {
     if (!resultadoPeso) return null;

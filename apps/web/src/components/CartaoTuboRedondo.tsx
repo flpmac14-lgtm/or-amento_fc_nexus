@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buscarTubosCatalogo, calcularPesoGeometria } from "@/lib/api";
 import { calcularPesoComercial } from "@/lib/calculoPeso";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
@@ -105,6 +105,10 @@ export default function CartaoTuboRedondo({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorInicial?.id]);
 
+  // Token da última chamada — evita que a resposta de um cálculo mais
+  // antigo (rede lenta) sobrescreva o resultado de uma mudança mais nova.
+  const tokenCalculoRef = useRef(0);
+
   async function calcularManual() {
     const de = Number(diametroExterno.replace(",", "."));
     const e = Number(espessuraParede.replace(",", "."));
@@ -118,6 +122,7 @@ export default function CartaoTuboRedondo({
       setErro("A parede (2 × espessura) precisa ser menor que o diâmetro externo.");
       return;
     }
+    const token = ++tokenCalculoRef.current;
     setErro("");
     setCalculandoManual(true);
     try {
@@ -126,14 +131,34 @@ export default function CartaoTuboRedondo({
         { diametro_externo_mm: de, espessura_parede_mm: e, comprimento_mm: comprimentoNum, densidade_kg_m3: densidade },
         1,
       );
+      if (token !== tokenCalculoRef.current) return;
       setResultadoManual(r);
     } catch (e2) {
+      if (token !== tokenCalculoRef.current) return;
       setResultadoManual(null);
       setErro(e2 instanceof Error ? e2.message : "Erro ao calcular o peso.");
     } finally {
-      setCalculandoManual(false);
+      if (token === tokenCalculoRef.current) setCalculandoManual(false);
     }
   }
+
+  // Recalcula sozinho quando diâmetro/espessura/comprimento ou a densidade
+  // do material mudam — mesmo problema do CartaoGeometriaPadrao.tsx: trocar
+  // o material depois de já ter calculado deixava o peso (modo manual, sem
+  // tubo no catálogo) com a densidade antiga até clicar em "Calcular" de
+  // novo. Só dispara se já existe um resultado calculado.
+  useEffect(() => {
+    if (!modoManual || !resultadoManual) return;
+    const de = Number(diametroExterno.replace(",", "."));
+    const e = Number(espessuraParede.replace(",", "."));
+    const comprimentoNum = Number(comprimento.replace(",", "."));
+    if (!de || !e || !comprimentoNum || 2 * e >= de || !materialAtual?.densidade_kg_m3) return;
+    const timer = setTimeout(() => {
+      calcularManual();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoManual, diametroExterno, espessuraParede, comprimento, materialAtual?.densidade_kg_m3]);
 
   const pesoUnitarioCatalogo = useMemo(() => {
     const kgMNum = Number(kgM.replace(",", "."));
