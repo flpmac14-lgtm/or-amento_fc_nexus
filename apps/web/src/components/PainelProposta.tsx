@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import PropostaImpressao from "@/components/PropostaImpressao";
 import { formatarMoeda, formatarNumero } from "@/lib/format";
+import { baixarPropostaWord } from "@/lib/propostaWord";
 import {
   criarPropostaInicial,
   GARANTIA_PADRAO,
@@ -181,6 +182,8 @@ export default function PainelProposta({
   const [mostrarPreview, setMostrarPreview] = useState(false);
   const [novoItemEscopo, setNovoItemEscopo] = useState("");
   const [novaExclusao, setNovaExclusao] = useState("");
+  const [baixandoWord, setBaixandoWord] = useState(false);
+  const [erroWord, setErroWord] = useState<string | null>(null);
 
   // Primeira vez que a aba é aberta pra esse orçamento — semeia a partir
   // do que já existe (peso/preço calculados) + template padrão. Só roda
@@ -257,6 +260,18 @@ export default function PainelProposta({
     atualizar({ [lista]: [...proposta![lista], novo] });
     if (lista === "escopoMacfab") setNovoItemEscopo("");
     else setNovaExclusao("");
+  }
+
+  async function handleGerarWord() {
+    setErroWord(null);
+    setBaixandoWord(true);
+    try {
+      await baixarPropostaWord(mac, identificacaoCliente, proposta!);
+    } catch (e) {
+      setErroWord(e instanceof Error ? e.message : "Erro desconhecido ao gerar o Word.");
+    } finally {
+      setBaixandoWord(false);
+    }
   }
 
   return (
@@ -546,9 +561,18 @@ export default function PainelProposta({
         >
           Gerar PDF
         </button>
+        <button
+          type="button"
+          onClick={handleGerarWord}
+          disabled={baixandoWord}
+          className="rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-800 dark:text-slate-200 hover:border-green-600/50 dark:hover:border-cyan-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {baixandoWord ? "Gerando…" : "Gerar Word (.docx)"}
+        </button>
         <p className="text-xs text-stone-500 dark:text-slate-500">
           As alterações aqui já ficam salvas no orçamento ao clicar em &quot;Salvar orçamento&quot;, no topo da tela.
         </p>
+        {erroWord && <p className="w-full text-xs text-red-600 dark:text-red-400">{erroWord}</p>}
       </div>
 
       {mostrarPreview && (
