@@ -2,12 +2,13 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { loginParaEmail } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
 function FormularioLogin() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -18,10 +19,12 @@ function FormularioLogin() {
     setErro(null);
 
     const supabase = criarClienteSupabaseNavegador();
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    // Login simples (sem "@") vira e-mail interno; quem tem e-mail de
+    // verdade (ex: o admin) digita normalmente — ver lib/loginInterno.ts.
+    const { error } = await supabase.auth.signInWithPassword({ email: loginParaEmail(login), password: senha });
 
     if (error) {
-      setErro("E-mail ou senha inválidos.");
+      setErro("Login ou senha inválidos.");
       setCarregando(false);
       return;
     }
@@ -41,13 +44,13 @@ function FormularioLogin() {
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-stone-700 dark:text-slate-300">E-mail</span>
+            <span className="text-xs font-medium text-stone-700 dark:text-slate-300">Login</span>
             <input
-              type="email"
+              type="text"
               required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
               className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500"
             />
           </label>
