@@ -54,6 +54,98 @@ def test_erro_da_api_nao_propaga_excecao(monkeypatch):
     assert "falha de rede simulada" in erro
 
 
+def test_erro_transitorio_tenta_de_novo_e_funciona(monkeypatch):
+    monkeypatch.setenv("EXTRACTOR_AI_FALLBACK_ENABLED", "1")
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setattr(lm.time, "sleep", lambda *_a: None)
+
+    from google import genai
+    from google.genai import errors
+
+    chamadas = {"n": 0}
+
+    class _Resposta:
+        parsed = lm._ListaMateriais(itens=[lm._ItemBOM(posicao="1", descricao="X", quantidade=1, confianca=0.9)])
+
+    class _ModelsFalso:
+        def generate_content(self, **_kw):
+            chamadas["n"] += 1
+            if chamadas["n"] == 1:
+                raise errors.APIError(503, {"error": {"message": "sobrecarregado", "status": "UNAVAILABLE"}})
+            return _Resposta()
+
+    class _ClienteFalso:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        models = _ModelsFalso()
+
+    monkeypatch.setattr(genai, "Client", _ClienteFalso)
+
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
+    assert erro is None
+    assert itens is not None and len(itens) == 1
+    assert chamadas["n"] == 2
+
+
+def test_erro_transitorio_esgota_tentativas(monkeypatch):
+    monkeypatch.setenv("EXTRACTOR_AI_FALLBACK_ENABLED", "1")
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setattr(lm.time, "sleep", lambda *_a: None)
+
+    from google import genai
+    from google.genai import errors
+
+    chamadas = {"n": 0}
+
+    class _ModelsFalso:
+        def generate_content(self, **_kw):
+            chamadas["n"] += 1
+            raise errors.APIError(429, {"error": {"message": "rate limit", "status": "RESOURCE_EXHAUSTED"}})
+
+    class _ClienteFalso:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        models = _ModelsFalso()
+
+    monkeypatch.setattr(genai, "Client", _ClienteFalso)
+
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
+    assert itens is None
+    assert "429" in erro
+    assert chamadas["n"] == lm._TENTATIVAS
+
+
+def test_erro_nao_transitorio_nao_tenta_de_novo(monkeypatch):
+    monkeypatch.setenv("EXTRACTOR_AI_FALLBACK_ENABLED", "1")
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setattr(lm.time, "sleep", lambda *_a: None)
+
+    from google import genai
+    from google.genai import errors
+
+    chamadas = {"n": 0}
+
+    class _ModelsFalso:
+        def generate_content(self, **_kw):
+            chamadas["n"] += 1
+            raise errors.APIError(403, {"error": {"message": "chave sem permissão", "status": "PERMISSION_DENIED"}})
+
+    class _ClienteFalso:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        models = _ModelsFalso()
+
+    monkeypatch.setattr(genai, "Client", _ClienteFalso)
+
+    itens, erro = lm.extrair_lista_materiais([b"fake-png"])
+    assert itens is None
+    assert "403" in erro
+    assert chamadas["n"] == 1
+
+
 def _resposta_falsa_com(itens_brutos, monkeypatch):
     from google import genai
 
