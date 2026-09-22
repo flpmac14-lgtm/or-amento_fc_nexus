@@ -133,6 +133,7 @@ export default function FormularioUpload({
           onResultado={onResultadoManual}
           onErro={onErroManual}
           pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+          resultado={resultado}
         />
       )}
 

@@ -26,6 +26,35 @@ interface Props {
   onResultado: (resultado: RespostaOrcamentoDePdf, nomeArquivo: string) => void;
   onErro: (mensagem: string) => void;
   pesoLiquidoManualAtivo: number | null;
+  // Orçamento já calculado (mesmo objeto que "Custo por processo" exibe) —
+  // usado só pra achar o preço/kg REAL que o backend aplicou a cada item
+  // (ver precoRealResolvido abaixo). Sem isso, esta tela só sabia mostrar o
+  // preço que o PRÓPRIO frontend resolveu no momento de montar o cartão
+  // (item.preco_kg) — que pode ficar vazio (ex: a busca de preço de
+  // referência do cartão ainda não tinha voltado quando o item foi
+  // adicionado), mesmo o backend tendo achado e usado um preço real do
+  // histórico de compras na hora de montar o orçamento. Achado testando ao
+  // vivo: item marcado "sem preço de referência" aqui, mas "Ver cálculo"
+  // mostrava R$ 5,97/kg de verdade sendo usado.
+  resultado: RespostaOrcamentoDePdf | null;
+}
+
+// Extrai o R$/kg que o backend realmente usou pra ESSE item específico, a
+// partir da memória de cálculo da linha "materia_prima" (uma entrada de
+// texto por item, ver services/calc_engine/app/adapter.py). Só serve de
+// fallback pra exibição/badge quando o item não tem preco_kg próprio — quem
+// calcula pra valer continua sendo o backend, isso aqui só reflete o que
+// ele já calculou.
+function precoRealResolvido(item: ItemCalculado, resultado: RespostaOrcamentoDePdf | null): number | null {
+  const linhaMp = resultado?.orcamento.linhas.find((l) => l.codigo === "materia_prima");
+  if (!linhaMp) return null;
+  const marcador = `(${item.posicao}):`;
+  const linhaMemoria = linhaMp.memoria_calculo.find((m) => m.includes(marcador));
+  if (!linhaMemoria) return null;
+  const match = /R\$\s*([\d.,]+)\/kg/.exec(linhaMemoria);
+  if (!match) return null;
+  const numero = Number(match[1].replace(",", "."));
+  return Number.isFinite(numero) ? numero : null;
 }
 
 const MAX_RESULTADOS_BUSCA = 8;
@@ -44,7 +73,7 @@ const TIPOS_COM_CARTAO_PROPRIO = new Set(["perfil", "cantoneira", "tubo_redondo"
 // usuário, editar dimensões/material AQUI MESMO (sem trocar de aba), no
 // mesmo cartão que "Cálculo manual" usaria.
 export default function PainelItensOrcamento({
-  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo,
+  estado, onEstadoChange, onResultado, onErro, pesoLiquidoManualAtivo, resultado,
 }: Props) {
   const { itens, acrescimoPercentualPadrao } = estado;
   const percentualPadraoNum = Number(acrescimoPercentualPadrao.replace(",", ".")) || 0;
@@ -196,7 +225,7 @@ export default function PainelItensOrcamento({
   }
 
   const grupos = agruparItensPorPosicao(itens);
-  const semPreco = itens.filter((i) => i.preco_kg == null).length;
+  const semPreco = itens.filter((i) => i.preco_kg == null && precoRealResolvido(i, resultado) == null).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -240,6 +269,14 @@ export default function PainelItensOrcamento({
                   const usaPadrao =
                     item.acrescimoPercentual != null &&
                     Number(percentualAtual.toString().replace(",", ".")) === percentualPadraoNum;
+                  // item.preco_kg só existe quando ESTA tela (ou o cartão
+                  // original) já resolveu/digitou um preço explicitamente.
+                  // Quando falta, o backend pode ainda assim ter achado um
+                  // preço real do histórico de compras na hora de montar o
+                  // orçamento (ver precoRealResolvido) — nesse caso o preço
+                  // já está valendo no cálculo, só não foi "confirmado" aqui.
+                  const precoBackend = item.preco_kg == null ? precoRealResolvido(item, resultado) : null;
+                  const temAlgumPreco = item.preco_kg != null || precoBackend != null;
 
                   return (
                     <div
@@ -249,7 +286,7 @@ export default function PainelItensOrcamento({
                       // fica apertado demais numa célula só.
                       style={editandoIndice === indice ? { gridColumn: "1 / -1" } : undefined}
                       className={`flex flex-col gap-2 rounded-lg border p-3 text-sm ${
-                        item.preco_kg == null
+                        !temAlgumPreco
                           ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"
                           : "border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40"
                       }`}
@@ -279,6 +316,10 @@ export default function PainelItensOrcamento({
                                 </span>
                               )}
                             </>
+                          ) : precoBackend != null ? (
+                            <span title="Preço já usado pelo motor de cálculo (histórico de compras), mas ainda não confirmado nesta tela.">
+                              R$ {formatarNumero(precoBackend, 2)}/kg (calculado)
+                            </span>
                           ) : (
                             <span className="text-amber-700 dark:text-amber-400">sem preço de referência</span>
                           )}

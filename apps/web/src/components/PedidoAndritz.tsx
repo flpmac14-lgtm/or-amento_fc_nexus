@@ -56,10 +56,6 @@ export default function PedidoAndritz() {
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
         <p className="text-sm font-medium text-stone-800 dark:text-slate-200">Pedido (Ordem de Compra) — ANDRITZ</p>
-        <p className="mt-1 text-xs text-stone-500 dark:text-slate-500">
-          Envie o PDF da Ordem de Compra: item, material, quantidade, valor, data de entrega e a MAC saem
-          prontos no formato da planilha de controle de pedidos — extração 100% local (texto + regras), sem IA.
-        </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <label className="cursor-pointer rounded-md bg-green-600 dark:bg-cyan-500 px-4 py-2 text-sm font-medium text-white dark:text-slate-950 transition-colors hover:bg-green-500 dark:hover:bg-cyan-400">
