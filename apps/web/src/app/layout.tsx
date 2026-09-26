@@ -13,9 +13,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const TITULO = "FC Nexus — Orçamento Industrial I.A.";
+const DESCRICAO = "Análise automática de desenhos técnicos e orçamento industrial";
+
 export const metadata: Metadata = {
-  title: "FC Nexus — Orçamento Industrial I.A.",
-  description: "Análise automática de desenhos técnicos e orçamento industrial",
+  // Domínio próprio (fcnexus.app.br) — é o link que se compartilha —
+  // sem isso o preview (WhatsApp etc.) podia gerar URL de imagem errada
+  // ao trocar de deployment. Ver deploy_vercel_web na memória do projeto.
+  metadataBase: new URL("https://fcnexus.app.br"),
+  title: TITULO,
+  description: DESCRICAO,
+  // Card de preview ao colar o link (WhatsApp, Slack, etc.) — a imagem
+  // em si vem do arquivo opengraph-image.tsx (convenção do Next.js, acha
+  // sozinho, não precisa referenciar aqui).
+  openGraph: {
+    title: TITULO,
+    description: DESCRICAO,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITULO,
+    description: DESCRICAO,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -29,12 +29,14 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // icon/apple-icon: rotas especiais do Next (favicon/apple-touch-icon
-    // gerados via next/og, ver app/icon.tsx e app/apple-icon.tsx) — sem
-    // extensão de arquivo na URL, por isso precisam de exclusão própria
-    // (o filtro de extensão abaixo não pega elas). Sem isso, usuário
-    // deslogado é redirecionado pra /login ao pedir o ícone, e o
-    // navegador nunca mostra o favicon na tela de login.
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // icon/apple-icon/opengraph-image: rotas especiais do Next (geradas
+    // via next/og, ver app/icon.tsx, app/apple-icon.tsx e
+    // app/opengraph-image.tsx) — sem extensão de arquivo na URL, por isso
+    // precisam de exclusão própria (o filtro de extensão abaixo não pega
+    // elas). Sem isso, usuário deslogado (ex: o crawler do WhatsApp/
+    // Slack gerando o preview do link) é redirecionado pra /login ao
+    // pedir a imagem, e o preview nunca aparece — achado real testando o
+    // link de compartilhamento.
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

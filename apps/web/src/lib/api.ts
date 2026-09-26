@@ -630,6 +630,21 @@ export async function enviarDesenhoParaStorage(orcamentoId: string, arquivo: Fil
   return path;
 }
 
+// Ícone de "olho" na lista de orçamentos salvos — pedido explícito do
+// usuário: visualizar o PDF anexado sem precisar abrir o orçamento
+// inteiro. Bucket é privado (ver supabase/migrations/0011_desenho_anexado.sql),
+// então precisa de URL assinada de curta duração pra abrir numa nova aba.
+export async function gerarUrlVisualizacaoDesenho(storagePath: string): Promise<string> {
+  const supabase = criarClienteSupabaseNavegador();
+  const { data, error } = await supabase.storage
+    .from("desenhos-anexados")
+    .createSignedUrl(storagePath, 120);
+  if (error || !data?.signedUrl) {
+    throw new Error(`Falha ao gerar link do desenho (${error?.message ?? "sem URL"}).`);
+  }
+  return data.signedUrl;
+}
+
 export async function anexarDesenhoOrcamento(
   orcamentoId: string,
   storagePath: string,
