@@ -20,7 +20,9 @@ import type {
   PrecosMercadoLista,
   PropostaConfig,
   RespostaPedidoAndritz,
+  RespostaFollowUp,
   RespostaPedidoWeir,
+  ResultadoImportacaoFollowUp,
   RespostaOrcamentoDePdf,
   ResultadoOrcamentoDTO,
   ServicoPorPeso,
@@ -686,4 +688,37 @@ export async function excluirOrcamentoSalvo(id: string): Promise<void> {
   if (!resposta.ok) {
     throw new Error(`Falha ao excluir o orçamento salvo (${resposta.status}).`);
   }
+}
+
+// --- Aba FOLLOW UP ---------------------------------------------------------
+
+export async function listarFollowUp(): Promise<RespostaFollowUp> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar o Follow Up (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
+// Envia o .xlsb direto pro calc_engine (não passa pela Vercel: o arquivo
+// real tem ~17 MB e o limite de corpo de uma função da Vercel é 4,5 MB).
+export async function importarFollowUp(arquivo: File): Promise<ResultadoImportacaoFollowUp> {
+  const form = new FormData();
+  form.append("file", arquivo);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/importar`, { method: "POST", body: form });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(`Falha ao importar (${resposta.status}). ${detalhe}`);
+  }
+  return resposta.json();
+}
+
+export function urlImagemFollowUp(sha256: string): string {
+  return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
 }

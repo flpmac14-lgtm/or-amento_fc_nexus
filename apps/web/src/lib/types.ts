@@ -505,3 +505,130 @@ export interface PrecosMercadoLista {
   sincronizado_em: string | null;
   compras: CompraMercadoLinha[];
 }
+
+// --- Aba FOLLOW UP (importada da aba "Gerencia" do .xlsb — ver
+// services/calc_engine/app/follow_up.py) ---------------------------------
+
+export type EtapaFollowUp = "eng" | "cor" | "mon" | "sol" | "usi" | "dob" | "jat" | "pin";
+
+export interface ImagemFollowUp {
+  id: string;
+  sha256: string;
+  ordem: number;
+  origem: "imagem_na_celula" | "imagem_flutuante";
+  celula: string | null;
+  largura: number | null;
+  altura: number | null;
+}
+
+export interface CorCelulaFollowUp {
+  fundo?: string;
+  fonte?: string;
+  negrito?: boolean;
+}
+
+export interface ItemFollowUp {
+  id: string;
+  chave: string;
+  po: string;
+  cliente: string | null;
+  quantidade: number | null;
+  mac: string | null;
+  desenho: string | null;
+  descricao: string | null;
+  prazo_contratual: string | null; // AAAA-MM-DD
+  coleta: string | null; // como aparece na planilha (dd/mm/aaaa ou texto)
+  coleta_data: string | null;
+  status: string | null;
+  eng: number | null;
+  cor: number | null;
+  mon: number | null;
+  sol: number | null;
+  usi: number | null;
+  dob: number | null;
+  jat: number | null;
+  pin: number | null;
+  cor2: string | null;
+  cor_2: string | null;
+  plano_pintura: string | null;
+  fornecedor: string | null;
+  orcamento_terceirizado_unid: number | null;
+  orcamento_custo_macfab_unid: number | null;
+  preco_previsto: number | null;
+  obs_felipe_marcelo: string | null;
+  obs_alisson: string | null;
+  st: string | null;
+  nf: string | null;
+  tipagem: string | null;
+  peso_unid: number | null;
+  peso_total: number | null;
+  ano: number | null;
+  linha_planilha: number;
+  oculta_na_planilha: boolean;
+  cores: Record<string, CorCelulaFollowUp>;
+  presente_na_ultima_importacao: boolean;
+  updated_at: string;
+  imagens: ImagemFollowUp[];
+}
+
+export interface RegraFormatacaoFollowUp {
+  tipo: "dataBar" | "containsText" | "duplicateValues" | "uniqueValues" | "containsBlanks" | "notContainsBlanks";
+  prioridade: number;
+  intervalos: { campo: string; de: number; ate: number }[];
+  texto: string | null;
+  operador: "contains" | "notContains" | "beginsWith" | "endsWith" | null;
+  preenchimento: string | null;
+  fonte_cor: string | null;
+  barra_cor: string | null;
+  barra_min: number | null;
+  barra_max: number | null;
+}
+
+export interface RelatorioImportacaoFollowUp {
+  avisos: string[];
+  avisos_total: number;
+  linhas_ignoradas_sem_po: number;
+  imagens_na_celula: number;
+  imagens_flutuantes_total: number;
+  imagens_flutuantes_vinculadas: number;
+  imagens_flutuantes_invisiveis: number;
+  imagens_flutuantes_fora_de_registro: number;
+  linhas_ocultas: number;
+  regras_nao_reproduzidas: string[];
+}
+
+export interface ImportacaoFollowUp {
+  id: string;
+  arquivo_nome: string;
+  arquivo_sha256: string;
+  aba: string;
+  importado_em: string;
+  linhas_lidas: number;
+  inseridos: number;
+  atualizados: number;
+  inalterados: number;
+  ausentes: number;
+  imagens_vinculadas: number;
+  colunas: { campo: string | null; cabecalho: string; letra: string; tipo: string; formato: string | null }[];
+  regras: RegraFormatacaoFollowUp[];
+  barra_etapas: { cor: string | null; min: number; max: number } | null;
+  indicadores: { celula: string; valor: string | number | null }[];
+  relatorio: RelatorioImportacaoFollowUp;
+}
+
+export interface RespostaFollowUp {
+  importacao: ImportacaoFollowUp | null;
+  itens: ItemFollowUp[];
+}
+
+export interface ResultadoImportacaoFollowUp {
+  importacao_id: string;
+  arquivo_nome: string;
+  linhas_lidas: number;
+  inseridos: number;
+  atualizados: number;
+  inalterados: number;
+  ausentes: number;
+  imagens_vinculadas: number;
+  relatorio: RelatorioImportacaoFollowUp;
+}

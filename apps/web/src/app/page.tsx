@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import AbasFormulario from "@/components/AbasFormulario";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
+import FollowUp from "@/components/FollowUp";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
 import PropostaImpressao from "@/components/PropostaImpressao";
@@ -413,7 +414,7 @@ export default function Home() {
           nas outras abas continua no mesmo max-w-6xl de sempre. */}
       <main
         className={`print:hidden mx-auto flex flex-col gap-8 px-6 py-12 ${
-          modo === "itens" ? "max-w-[100rem]" : "max-w-6xl"
+          modo === "itens" || modo === "followup" ? "max-w-[100rem]" : "max-w-6xl"
         }`}
       >
         {/* Sticky: fica visível no canto superior mesmo rolando a página —
@@ -510,37 +511,45 @@ export default function Home() {
           <AbasFormulario modo={modo} setModo={setModo} />
         </header>
 
-        {/* Pedido explícito do usuário: sempre visível, antes do
-            cabeçalho de "Enviar desenho (PDF) / Cálculo manual" — CNPJ
-            automatiza nome/endereço, o resto é digitado à mão por
-            enquanto (uma etapa futura vai jogar dados extraídos do
-            desenho direto aqui pra revisão em Cálculo manual). */}
-        <PainelIdentificacaoCliente
-          valor={identificacaoCliente}
-          onChange={handleIdentificacaoClienteChange}
-        />
+        {/* Aba "Follow up" é um módulo à parte (obras em andamento, não um
+            orçamento): esconde identificação do cliente e o formulário do
+            orçamento — só com CSS, pra não perder o que já estava digitado
+            nas outras abas ao ir e voltar. */}
+        {modo === "followup" && <FollowUp />}
 
-        <FormularioUpload
-          modo={modo}
-          carregando={carregando}
-          onAnalisar={handleAnalisar}
-          onResultadoManual={handleResultadoManual}
-          onErroManual={handleErroManual}
-          estadoManual={estadoManual}
-          onEstadoManualChange={handleEstadoManualChange}
-          onAbrirSalvo={handleAbrirSalvo}
-          pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
-          onItensEstruturadosChange={handleItensEstruturadosGerados}
-          mac={nomeOrcamento}
-          resultado={resultado}
-          identificacaoCliente={identificacaoCliente}
-          propostaConfig={propostaConfig}
-          onPropostaConfigChange={setPropostaConfig}
-          onGerarPdfProposta={() => setAlvoImpressao("proposta")}
-          onAnexarDesenho={handleAnexarDesenho}
-          anexandoDesenho={anexandoDesenho}
-          desenhosAnexados={desenhosAnexados}
-        />
+        <div className={modo === "followup" ? "hidden" : "contents"}>
+          {/* Pedido explícito do usuário: sempre visível, antes do
+              cabeçalho de "Enviar desenho (PDF) / Cálculo manual" — CNPJ
+              automatiza nome/endereço, o resto é digitado à mão por
+              enquanto (uma etapa futura vai jogar dados extraídos do
+              desenho direto aqui pra revisão em Cálculo manual). */}
+          <PainelIdentificacaoCliente
+            valor={identificacaoCliente}
+            onChange={handleIdentificacaoClienteChange}
+          />
+
+          <FormularioUpload
+            modo={modo}
+            carregando={carregando}
+            onAnalisar={handleAnalisar}
+            onResultadoManual={handleResultadoManual}
+            onErroManual={handleErroManual}
+            estadoManual={estadoManual}
+            onEstadoManualChange={handleEstadoManualChange}
+            onAbrirSalvo={handleAbrirSalvo}
+            pesoLiquidoManualAtivo={pesoLiquidoManualAtivo}
+            onItensEstruturadosChange={handleItensEstruturadosGerados}
+            mac={nomeOrcamento}
+            resultado={resultado}
+            identificacaoCliente={identificacaoCliente}
+            propostaConfig={propostaConfig}
+            onPropostaConfigChange={setPropostaConfig}
+            onGerarPdfProposta={() => setAlvoImpressao("proposta")}
+            onAnexarDesenho={handleAnexarDesenho}
+            anexandoDesenho={anexandoDesenho}
+            desenhosAnexados={desenhosAnexados}
+          />
+        </div>
 
         {erro && (
           <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-300">
@@ -554,7 +563,7 @@ export default function Home() {
           </div>
         )}
 
-        {resultado && (
+        {resultado && modo !== "followup" && (
           <ResultadoOrcamento resultado={resultado} onEditarLinhaCusto={handleEditarLinhaCusto} />
         )}
 

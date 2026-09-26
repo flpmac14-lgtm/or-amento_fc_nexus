@@ -15,6 +15,7 @@ const ABAS: { valor: ModoFormulario; rotulo: string }[] = [
   { valor: "proposta", rotulo: "Proposta" },
   { valor: "referencia", rotulo: "Referência de preços" },
   { valor: "salvos", rotulo: "Orçamentos salvos" },
+  { valor: "followup", rotulo: "Follow up" },
 ];
 
 // Pedido explícito do usuário: essa barra de abas sobe pro cabeçalho fixo

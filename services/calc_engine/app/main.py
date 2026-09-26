@@ -89,12 +89,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 from app.adapter import montar_entrada_orcamento
 from app.cantoneiras_catalogo import buscar_cantoneiras
 from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_processos_terceirizados
 from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
+from app.follow_up import ImportacaoInvalida
+from app.follow_up import importar as importar_follow_up
+from app.follow_up import listar as listar_follow_up
+from app.follow_up import obter_midia as obter_midia_follow_up
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
@@ -116,6 +121,7 @@ from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar
 from app.relatorio_pedido_andritz import gerar_excel_pedido_andritz
 from app.relatorio_pedido_weir import gerar_excel_pedido_weir
 from app.tubos_catalogo import buscar_tubos
+from app.xlsb_leitor import ArquivoXlsbInvalido
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
 
@@ -217,6 +223,55 @@ def orcamentos_salvos_excluir(orcamento_id: str) -> dict:
     if not excluido:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado")
     return {"excluido": True}
+
+
+# Limite de tamanho do .xlsb aceito na importação do Follow Up (o arquivo
+# real tem ~17 MB, quase tudo imagem).
+_FOLLOW_UP_MAX_BYTES = 80 * 1024 * 1024
+
+
+@app.post("/follow-up/importar")
+async def follow_up_importar(file: UploadFile) -> dict:
+    """Aba FOLLOW UP — importa/atualiza a partir do "Gerenciamento de obras
+    ativas.xlsb" (só a aba Gerencia). Atualiza registros existentes pela
+    chave (PO), insere os novos e marca como ausentes os que saíram da
+    planilha — nunca duplica. Ver app/follow_up.py."""
+    nome = file.filename or "arquivo.xlsb"
+    if not nome.lower().endswith(".xlsb"):
+        raise HTTPException(status_code=400, detail="Envie o arquivo .xlsb (Gerenciamento de obras ativas.xlsb).")
+    conteudo = await file.read()
+    if len(conteudo) > _FOLLOW_UP_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Arquivo grande demais para importar (limite 80 MB).")
+    try:
+        # Leitura + gravação são síncronas (psycopg); fora do event loop.
+        return await run_in_threadpool(importar_follow_up, conteudo, nome)
+    except (ArquivoXlsbInvalido, ImportacaoInvalida) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/follow-up")
+def follow_up_listar() -> dict:
+    try:
+        return listar_follow_up()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/follow-up/midias/{sha256}")
+def follow_up_midia(sha256: str) -> Response:
+    """Imagem de um registro do Follow Up. O endereço é o hash do conteúdo,
+    então nunca muda de conteúdo — pode ficar em cache no navegador."""
+    try:
+        achado = obter_midia_follow_up(sha256)
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not achado:
+        raise HTTPException(status_code=404, detail="Imagem não encontrada")
+    conteudo, tipo = achado
+    return Response(content=conteudo, media_type=tipo,
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/processos-terceirizados/catalogo")

@@ -25,7 +25,8 @@ export type ModoFormulario =
   | "itens"
   | "proposta"
   | "referencia"
-  | "salvos";
+  | "salvos"
+  | "followup";
 
 interface Props {
   modo: ModoFormulario;
