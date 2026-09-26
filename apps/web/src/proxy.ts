@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, acessoSoFollowUp } from "@/lib/acesso";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 const ROTAS_PUBLICAS = ["/login"];
@@ -17,9 +18,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const soFollowUp = acessoSoFollowUp(user);
+
   if (user && rotaPublica) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Conta restrita (app_metadata.acesso = "follow_up", ver lib/acesso.ts):
+  // qualquer outra página (orçamentos, orçamentistas, APIs do Next) volta
+  // pro módulo Follow up — o bloqueio é aqui no servidor, não só na tela.
+  if (user && soFollowUp && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ erro: `Conta com acesso só ao ${ACESSO_SO_FOLLOW_UP}.` }, { status: 403 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = ROTA_FOLLOW_UP;
     url.search = "";
     return NextResponse.redirect(url);
   }
