@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import FollowUp from "@/components/FollowUp";
+import ModuloFollowUp from "@/components/ModuloFollowUp";
 import { acessoSoFollowUp } from "@/lib/acesso";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -66,7 +66,7 @@ export default function PaginaFollowUp() {
             </button>
           </div>
         </header>
-        <FollowUp />
+        <ModuloFollowUp />
       </main>
     </div>
   );

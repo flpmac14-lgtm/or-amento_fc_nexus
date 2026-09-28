@@ -632,3 +632,32 @@ export interface ResultadoImportacaoFollowUp {
   imagens_vinculadas: number;
   relatorio: RelatorioImportacaoFollowUp;
 }
+
+// --- Controle de obras (espelho da aba OBRAS, H:AB, do "Controle de
+// obras.xlsm", sincronizado a cada 15 min — ver
+// services/calc_engine/app/controle_obras.py) -------------------------------
+
+export interface ColunaControleObras {
+  letra: string;
+  cabecalho: string;
+  campo: string | null;
+  tipo: "codigo" | "texto" | "numero" | "data";
+}
+
+export type ValorControleObras = string | number | boolean | null;
+
+export interface RespostaControleObras {
+  status: {
+    arquivo: string;
+    aba: string;
+    intervalo: string;
+    colunas: ColunaControleObras[];
+    linhas: number;
+    arquivo_modificado_em: string | null;
+    ultima_alteracao_em: string;
+    ultima_verificacao_em: string;
+    ultimo_erro: string | null;
+    ultimo_erro_em: string | null;
+  } | null;
+  linhas: { linha: number; valores: ValorControleObras[] }[];
+}

@@ -20,6 +20,7 @@ import type {
   PrecosMercadoLista,
   PropostaConfig,
   RespostaPedidoAndritz,
+  RespostaControleObras,
   RespostaFollowUp,
   RespostaPedidoWeir,
   ResultadoImportacaoFollowUp,
@@ -721,4 +722,13 @@ export async function importarFollowUp(arquivo: File): Promise<ResultadoImportac
 
 export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
+}
+
+export async function listarControleObras(): Promise<RespostaControleObras> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/controle-obras`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar o Controle de obras (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
 }

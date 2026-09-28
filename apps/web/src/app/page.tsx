@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import AbasFormulario from "@/components/AbasFormulario";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
-import FollowUp from "@/components/FollowUp";
+import ModuloFollowUp from "@/components/ModuloFollowUp";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
 import RelatorioImpressao from "@/components/RelatorioImpressao";
 import PropostaImpressao from "@/components/PropostaImpressao";
@@ -515,7 +515,7 @@ export default function Home() {
             orçamento): esconde identificação do cliente e o formulário do
             orçamento — só com CSS, pra não perder o que já estava digitado
             nas outras abas ao ir e voltar. */}
-        {modo === "followup" && <FollowUp />}
+        {modo === "followup" && <ModuloFollowUp />}
 
         <div className={modo === "followup" ? "hidden" : "contents"}>
           {/* Pedido explícito do usuário: sempre visível, antes do

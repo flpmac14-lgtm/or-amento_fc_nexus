@@ -88,6 +88,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
@@ -96,6 +97,7 @@ from app.cantoneiras_catalogo import buscar_cantoneiras
 from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_processos_terceirizados
 from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
+from app.controle_obras import listar as listar_controle_obras
 from app.follow_up import ImportacaoInvalida
 from app.follow_up import importar as importar_follow_up
 from app.follow_up import listar as listar_follow_up
@@ -136,6 +138,10 @@ app = FastAPI(
 # sempre liberado pro dev local; ALLOWED_ORIGINS (separadas por vírgula) adiciona
 # o domínio real do frontend hospedado (ex.: https://fc-nexus.vercel.app).
 _ORIGENS_EXTRA = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+# Compressão das respostas grandes (ex.: /controle-obras, ~13 mil linhas ≈
+# 2,5 MB em JSON → ~0,4 MB compactado).
+app.add_middleware(GZipMiddleware, minimum_size=2048)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", *_ORIGENS_EXTRA],
@@ -272,6 +278,17 @@ def follow_up_midia(sha256: str) -> Response:
     conteudo, tipo = achado
     return Response(content=conteudo, media_type=tipo,
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/controle-obras")
+def controle_obras_listar() -> dict:
+    """Espelho da aba OBRAS (H:AB) do "Controle de obras.xlsm" — gravado a
+    cada 15 min pelo script agendado scripts/sincronizar_controle_obras.py
+    (roda na máquina da empresa que enxerga o J:). Aqui só leitura."""
+    try:
+        return listar_controle_obras()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/processos-terceirizados/catalogo")
