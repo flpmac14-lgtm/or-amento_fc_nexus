@@ -42,7 +42,8 @@ function tempoRelativo(iso: string | null | undefined, agora: number): string {
   return quando;
 }
 
-export default function ControleObras() {
+// telaCheia: modo "só os dados" (ver ModuloFollowUp) — some o texto do topo e os indicadores.
+export default function ControleObras({ telaCheia = false }: { telaCheia?: boolean }) {
   const [dados, setDados] = useState<RespostaControleObras | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [recebidoEm, setRecebidoEm] = useState(0);
@@ -160,7 +161,7 @@ export default function ControleObras() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
+      <div className={`${telaCheia ? "hidden" : ""} rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4`}>
         <h2 className="text-lg font-bold text-stone-900 dark:text-white">Controle de obras</h2>
         <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
           Atualizado automaticamente a cada 15 min a partir de{" "}
@@ -194,7 +195,7 @@ export default function ControleObras() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-4`}>
         <div className="rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">Kg total</p>
           <p className="font-mono text-2xl font-bold text-green-700 dark:text-cyan-300">
@@ -299,7 +300,7 @@ export default function ControleObras() {
         </div>
       </div>
 
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
+      <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>

@@ -129,7 +129,8 @@ function unicos(itens: ItemFollowUp[], campo: keyof ItemFollowUp): string[] {
   return [...s].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
 }
 
-export default function FollowUp() {
+// telaCheia: modo "só os dados" (ver ModuloFollowUp) — some o texto do topo e os indicadores.
+export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean }) {
   const [dados, setDados] = useState<RespostaFollowUp | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -400,7 +401,7 @@ export default function FollowUp() {
   return (
     <div className="flex flex-col gap-4">
       {/* Cabeçalho da aba: de onde vêm os dados + o que é editável */}
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
+      <div className={`${telaCheia ? "hidden" : "flex"} flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4`}>
         <div>
           <h2 className="text-lg font-bold text-stone-900 dark:text-white">Follow up de obras</h2>
           <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
@@ -426,7 +427,7 @@ export default function FollowUp() {
       )}
 
       {/* Indicadores — recalculados sobre os registros filtrados */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-5`}>
         <div className="col-span-2 rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3 lg:col-span-1">
           <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">Peso total</p>
           <p className="font-mono text-2xl font-bold text-green-700 dark:text-cyan-300">
@@ -563,7 +564,7 @@ export default function FollowUp() {
       </div>
 
       {/* Tabela */}
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
+      <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
