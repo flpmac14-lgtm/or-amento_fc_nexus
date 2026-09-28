@@ -9,6 +9,7 @@ import type {
   ItemCalculado,
   ItemComercial,
   ItemFollowUp,
+  ItemFollowUpCompleto,
   ItemPedidoWeir,
   ItemContingenciamento,
   MaterialCatalogo,
@@ -21,6 +22,7 @@ import type {
   PrecosMercadoLista,
   PropostaConfig,
   RespostaPedidoAndritz,
+  RegistroFollowUp,
   RespostaControleObras,
   RespostaFollowUp,
   RespostaPedidoWeir,
@@ -786,5 +788,39 @@ export async function listarControleObras(): Promise<RespostaControleObras> {
     const corpo = await resposta.text().catch(() => "");
     throw new Error(`Falha ao carregar o Controle de obras (${resposta.status}). ${corpo}`);
   }
+  return resposta.json();
+}
+
+// --- Registro diário / relatório do item (Follow up) -------------------------
+
+export async function listarRegistrosFollowUp(itemId: string): Promise<RegistroFollowUp[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${itemId}/registros`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar os registros");
+  return (await resposta.json()).registros;
+}
+
+export async function adicionarRegistroFollowUp(
+  itemId: string,
+  texto: string,
+  data: string,
+  autor: string | null,
+): Promise<RegistroFollowUp> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${itemId}/registros`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texto, data, autor }),
+  });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao salvar o registro");
+  return resposta.json();
+}
+
+export async function removerRegistroFollowUp(registroId: string): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/registros/${registroId}`, { method: "DELETE" });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao apagar o registro");
+}
+
+export async function buscarItemFollowUpCompleto(itemId: string): Promise<ItemFollowUpCompleto> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${itemId}/completo`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o item");
   return resposta.json();
 }

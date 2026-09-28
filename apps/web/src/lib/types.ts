@@ -665,3 +665,25 @@ export interface RespostaControleObras {
   } | null;
   linhas: { linha: number; valores: ValorControleObras[] }[];
 }
+
+// Registro diário de um item do Follow up (histórico do pedido).
+export interface RegistroFollowUp {
+  id: string;
+  data: string; // AAAA-MM-DD — dia a que se refere
+  texto: string;
+  autor: string | null;
+  created_at: string;
+}
+
+// Tudo do item pro relatório (GET /follow-up/itens/{id}/completo).
+export interface ItemFollowUpCompleto {
+  item: ItemFollowUp;
+  registros: RegistroFollowUp[];
+  entrada: {
+    origem: "importacao_gerencia" | "controle_obras";
+    em: string;
+    importado_de: string | null;
+    importado_em: string | null;
+    linha_controle_obras: number | null;
+  };
+}

@@ -46,16 +46,20 @@ interface Coluna {
   // Coluna estreita (rótulo curto, filtro pequeno) — pedido do usuário: Cliente e
   // Qtd menores pra caber o avanço das etapas na tela cheia.
   curto?: string;
+  // Largura máxima (corta o texto e mostra inteiro ao passar o mouse) —
+  // pedido do usuário: MAC e Desenho menores também.
+  maxW?: string;
+  centro?: boolean;
 }
 
 const COLUNAS: Coluna[] = [
   { campo: "foto", rotulo: "Foto", tipo: "foto", principal: true },
   { campo: "po", rotulo: "PO", tipo: "codigo", principal: true },
   { campo: "prazo_contratual", rotulo: "Prazo", tipo: "prazo", principal: true },
-  { campo: "cliente", rotulo: "Cliente", tipo: "texto", principal: true, curto: "Cli" },
-  { campo: "quantidade", rotulo: "Qtd", tipo: "numero", principal: true, curto: "Qtd" },
-  { campo: "mac", rotulo: "MAC", tipo: "codigo", principal: true },
-  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", principal: true },
+  { campo: "cliente", rotulo: "Cliente", tipo: "texto", principal: true, curto: "Cli", centro: true },
+  { campo: "quantidade", rotulo: "Qtd", tipo: "numero", principal: true, curto: "Qtd", centro: true },
+  { campo: "mac", rotulo: "MAC", tipo: "codigo", principal: true, curto: "MAC", maxW: "max-w-[5.5rem]" },
+  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", principal: true, curto: "Des.", maxW: "max-w-[6.5rem]" },
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", principal: true, largura: "min-w-[16rem]" },
   ...ETAPAS.map((e) => ({ campo: e.campo, rotulo: e.rotulo, tipo: "etapa" as const, principal: true })),
   { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true },
@@ -664,7 +668,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                       value={filtrosColuna[col.campo] ?? ""}
                       onChange={(e) => setFiltroColuna(col.campo, e.target.value)}
                       placeholder={col.curto ? "" : "filtrar"}
-                      className={col.curto ? `${classeFiltroColuna} !w-9 !min-w-0 !px-1` : classeFiltroColuna}
+                      className={col.curto ? `${classeFiltroColuna} ${col.centro ? "!w-9" : "!w-16"} !min-w-0 !px-1` : classeFiltroColuna}
                       aria-label={`Filtrar ${col.rotulo}`}
                     />
                   )}
@@ -689,8 +693,14 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                       style={estiloCelula(item, col)}
                       className={`border-b border-stone-100 dark:border-slate-800/80 ${col.tipo === "etapa" || col.curto ? "px-1" : "px-2"} py-1.5 align-middle ${col.largura ?? ""} ${
                         col.campo === "po" ? "sticky left-0 z-[1] bg-white dark:bg-slate-900" : ""
-                      } ${col.curto ? "whitespace-nowrap text-center" : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
-                      title={col.campo === "descricao" ? item.descricao ?? "" : undefined}
+                      } ${col.curto ? "whitespace-nowrap" : ""} ${col.centro ? "text-center" : ""} ${col.maxW ? `${col.maxW} truncate` : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
+                      title={
+                        col.campo === "descricao"
+                          ? item.descricao ?? ""
+                          : col.maxW
+                            ? String(item[col.campo as keyof ItemFollowUp] ?? "")
+                            : undefined
+                      }
                     >
                       {col.campo === "po" && destaque ? (
                         <span className="flex items-center gap-1.5">
@@ -773,6 +783,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           onFechar={() => setItemAberto(null)}
           onSalvarCampo={(campo, valor) => salvarCampo(itemAberto, campo, valor)}
           onAnexarImagem={() => setAnexarPara(itemAberto)}
+          autor={editadoPor}
           onAbrirImagem={(indice) => setGaleria({ item: itemAberto, indice })}
         />
       )}

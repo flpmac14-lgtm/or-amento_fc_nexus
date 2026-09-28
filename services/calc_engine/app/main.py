@@ -104,6 +104,10 @@ from app.follow_up_mae import ImagemInvalida
 from app.follow_up_mae import adicionar_imagem as adicionar_imagem_follow_up
 from app.follow_up_mae import editar as editar_follow_up
 from app.follow_up_mae import remover_imagem as remover_imagem_follow_up
+from app.follow_up_registros import adicionar as adicionar_registro_follow_up
+from app.follow_up_registros import completo as item_completo_follow_up
+from app.follow_up_registros import listar as listar_registros_follow_up
+from app.follow_up_registros import remover as remover_registro_follow_up
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
@@ -268,6 +272,50 @@ def follow_up_listar() -> dict:
         return listar_follow_up()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/follow-up/itens/{item_id}/registros")
+def follow_up_registros_listar(item_id: str) -> dict:
+    """Registro diário do item (mais recente primeiro) — ver app/follow_up_registros.py."""
+    try:
+        return {"registros": listar_registros_follow_up(item_id)}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/follow-up/itens/{item_id}/registros")
+def follow_up_registros_adicionar(item_id: str, pedido: dict) -> dict:
+    try:
+        registro = adicionar_registro_follow_up(item_id, pedido.get("texto", ""), pedido.get("data"), pedido.get("autor"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not registro:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return registro
+
+
+@app.delete("/follow-up/registros/{registro_id}")
+def follow_up_registros_remover(registro_id: str) -> dict:
+    try:
+        if not remover_registro_follow_up(registro_id):
+            raise HTTPException(status_code=404, detail="Registro não encontrado")
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"removido": True}
+
+
+@app.get("/follow-up/itens/{item_id}/completo")
+def follow_up_item_completo(item_id: str) -> dict:
+    """Tudo do item pro relatório: campos, imagens, registros e data de entrada."""
+    try:
+        dados = item_completo_follow_up(item_id)
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not dados:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return dados
 
 
 @app.post("/follow-up/itens/{item_id}/imagens")

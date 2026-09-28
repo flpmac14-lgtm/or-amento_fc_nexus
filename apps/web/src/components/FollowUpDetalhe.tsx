@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { CampoEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
+import FollowUpRegistros from "@/components/FollowUpRegistros";
 import {
   CAMPOS_EDITAVEIS,
   ETAPAS,
@@ -303,6 +304,7 @@ export default function FollowUpDetalhe({
   onAbrirImagem,
   onSalvarCampo,
   onAnexarImagem,
+  autor,
 }: {
   item: ItemFollowUp;
   ctx: ContextoRegras;
@@ -312,6 +314,7 @@ export default function FollowUpDetalhe({
   onAbrirImagem: (indice: number) => void;
   onSalvarCampo: (campo: string, valor: string) => Promise<void>;
   onAnexarImagem: () => void;
+  autor: string | null; // login de quem está usando (registro diário)
 }) {
   // Campo de acompanhamento: sempre editável aqui, salva sozinho.
   const editavel = (campo: keyof ItemFollowUp, longo = false) => {
@@ -328,7 +331,8 @@ export default function FollowUpDetalhe({
   };
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
+      // Galeria / janela de anexar abertas por cima: Esc fecha só elas.
+      if (e.key === "Escape" && !document.querySelector(".z-\\[60\\], .z-\\[70\\]")) onFechar();
     }
     window.addEventListener("keydown", tecla);
     return () => window.removeEventListener("keydown", tecla);
@@ -370,16 +374,32 @@ export default function FollowUpDetalhe({
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onFechar}
-            className="shrink-0 rounded border border-stone-300 dark:border-slate-700 px-3 py-1 text-sm text-stone-600 dark:text-slate-300 hover:border-red-400"
-          >
-            Fechar
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.open(`/follow-up/relatorio/${item.id}`, "_blank")}
+              title="Relatório completo do item (imprimir ou salvar em PDF)"
+              className="inline-flex items-center gap-1.5 rounded border border-green-600/50 dark:border-cyan-500/50 px-3 py-1 text-sm text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10"
+            >
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M5 2.5h7l3.5 3.5v11.5H5z" strokeLinejoin="round" />
+                <path d="M12 2.5V6h3.5M7.5 10h5M7.5 13h5" strokeLinecap="round" />
+              </svg>
+              Relatório
+            </button>
+            <button
+              type="button"
+              onClick={onFechar}
+              className="rounded border border-stone-300 dark:border-slate-700 px-3 py-1 text-sm text-stone-600 dark:text-slate-300 hover:border-red-400"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3">
+          <FollowUpRegistros key={item.id} itemId={item.id} autor={autor} />
+
           <Secao titulo="Identificação">
             <Campo rotulo="PO">
               <span className="font-mono">{item.po}</span>
