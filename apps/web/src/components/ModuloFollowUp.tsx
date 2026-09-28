@@ -35,6 +35,25 @@ export default function ModuloFollowUp() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   }
 
+  // Atalho F2 — pedido explícito do usuário: expande (e, apertando de novo,
+  // volta ao normal). Tecla conta como gesto do usuário, então o navegador
+  // aceita entrar em tela cheia a partir dela.
+  useEffect(() => {
+    function f2(e: KeyboardEvent) {
+      if (e.key !== "F2" || e.repeat) return;
+      e.preventDefault();
+      if (telaCheia) {
+        setTelaCheia(false);
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      } else {
+        setTelaCheia(true);
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+    }
+    window.addEventListener("keydown", f2);
+    return () => window.removeEventListener("keydown", f2);
+  }, [telaCheia]);
+
   useEffect(() => {
     if (!telaCheia) return;
     // Esc do navegador sai do fullscreen dele — acompanha e volta ao normal também.
@@ -67,7 +86,7 @@ export default function ModuloFollowUp() {
           <button
             type="button"
             onClick={sair}
-            title="Voltar ao normal (Esc)"
+            title="Voltar ao normal (Esc ou F2)"
             aria-label="Voltar ao normal"
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-700 dark:text-slate-200 hover:border-green-600 dark:hover:border-cyan-500"
           >
@@ -96,13 +115,13 @@ export default function ModuloFollowUp() {
           <button
             type="button"
             onClick={entrar}
-            title="Expandir para tela cheia — só os dados"
+            title="Expandir para tela cheia — só os dados (atalho: F2)"
             className="ml-auto inline-flex items-center gap-2 rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Tela cheia
+            Tela cheia <kbd className="rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F2</kbd>
           </button>
         )}
       </div>
