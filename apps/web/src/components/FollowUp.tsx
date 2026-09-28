@@ -42,14 +42,17 @@ interface Coluna {
   tipo: TipoColuna;
   principal: boolean;
   largura?: string;
+  // Coluna estreita (rótulo curto, filtro pequeno) — pedido do usuário: Cliente e
+  // Qtd menores pra caber o avanço das etapas na tela cheia.
+  curto?: string;
 }
 
 const COLUNAS: Coluna[] = [
   { campo: "foto", rotulo: "Foto", tipo: "foto", principal: true },
   { campo: "po", rotulo: "PO", tipo: "codigo", principal: true },
   { campo: "prazo_contratual", rotulo: "Prazo", tipo: "prazo", principal: true },
-  { campo: "cliente", rotulo: "Cliente", tipo: "texto", principal: true },
-  { campo: "quantidade", rotulo: "Qtd", tipo: "numero", principal: true },
+  { campo: "cliente", rotulo: "Cliente", tipo: "texto", principal: true, curto: "Cli" },
+  { campo: "quantidade", rotulo: "Qtd", tipo: "numero", principal: true, curto: "Qtd" },
   { campo: "mac", rotulo: "MAC", tipo: "codigo", principal: true },
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", principal: true },
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", principal: true, largura: "min-w-[16rem]" },
@@ -571,7 +574,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
               {colunas.map((col) => (
                 <th
                   key={col.campo}
-                  className={`border-b border-stone-200 dark:border-slate-800 px-2 pt-2 pb-1 font-semibold ${
+                  className={`border-b border-stone-200 dark:border-slate-800 ${col.curto ? "px-1" : "px-2"} pt-2 pb-1 font-semibold ${
                     col.campo === "po" ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   } ${col.tipo === "etapa" ? "text-center" : ""}`}
                 >
@@ -584,7 +587,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                       className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-green-700 dark:hover:text-cyan-300"
                       title={
                         CAMPOS_DA_MAE.has(col.campo)
-                          ? "Vem da Controle de obras (PROCV pelo PO) — não editável"
+                          ? `${col.rotulo} — vem da Controle de obras (PROCV pelo PO), não editável`
                           : col.tipo === "etapa"
                             ? `${ETAPAS.find((e) => e.campo === col.campo)?.nome} — clique na célula para editar`
                             : CAMPOS_EDITAVEIS[col.campo]
@@ -592,8 +595,8 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                               : undefined
                       }
                     >
-                      {col.rotulo}
-                      {CAMPOS_DA_MAE.has(col.campo) && <IconeCadeado />}
+                      {col.curto ?? col.rotulo}
+                      {CAMPOS_DA_MAE.has(col.campo) && !col.curto && <IconeCadeado />}
                       <span className="text-[10px]">{ordem?.campo === col.campo ? (ordem.desc ? "▼" : "▲") : ""}</span>
                     </button>
                   )}
@@ -604,7 +607,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
               {colunas.map((col) => (
                 <th
                   key={col.campo}
-                  className={`border-b border-stone-200 dark:border-slate-800 px-1.5 pb-1.5 ${
+                  className={`border-b border-stone-200 dark:border-slate-800 ${col.curto ? "px-0.5" : "px-1.5"} pb-1.5 ${
                     col.campo === "po" ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
@@ -635,8 +638,8 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                     <input
                       value={filtrosColuna[col.campo] ?? ""}
                       onChange={(e) => setFiltroColuna(col.campo, e.target.value)}
-                      placeholder="filtrar"
-                      className={classeFiltroColuna}
+                      placeholder={col.curto ? "" : "filtrar"}
+                      className={col.curto ? `${classeFiltroColuna} !w-9 !min-w-0 !px-1` : classeFiltroColuna}
                       aria-label={`Filtrar ${col.rotulo}`}
                     />
                   )}
@@ -659,9 +662,9 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                     <td
                       key={col.campo}
                       style={estiloCelula(item, col)}
-                      className={`border-b border-stone-100 dark:border-slate-800/80 px-2 py-1.5 align-middle ${col.largura ?? ""} ${
+                      className={`border-b border-stone-100 dark:border-slate-800/80 ${col.tipo === "etapa" || col.curto ? "px-1" : "px-2"} py-1.5 align-middle ${col.largura ?? ""} ${
                         col.campo === "po" ? "sticky left-0 z-[1] bg-white dark:bg-slate-900" : ""
-                      } ${col.tipo === "etapa" ? "px-1" : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
+                      } ${col.curto ? "whitespace-nowrap text-center" : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
                       title={col.campo === "descricao" ? item.descricao ?? "" : undefined}
                     >
                       {col.campo === "po" && destaque ? (
