@@ -568,6 +568,10 @@ export interface ItemFollowUp {
   cores: Record<string, CorCelulaFollowUp>;
   presente_na_ultima_importacao: boolean;
   updated_at: string;
+  // "controle_obras" = entrou sozinho vindo da mãe (pedido ST = A novo)
+  origem: "importacao_gerencia" | "controle_obras";
+  editado_em: string | null;
+  editado_por: string | null;
   imagens: ImagemFollowUp[];
 }
 

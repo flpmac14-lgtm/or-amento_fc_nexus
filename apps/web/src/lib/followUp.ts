@@ -15,6 +15,27 @@ export const ETAPAS: { campo: EtapaFollowUp; rotulo: string; nome: string }[] = 
   { campo: "pin", rotulo: "PIN", nome: "Pintura" },
 ];
 
+// Campos de acompanhamento — os únicos editáveis no app. O resto vem da
+// Controle de obras (PROCV pelo PO) ou é calculado (Status, Ano).
+// Espelha CAMPOS_EDITAVEIS de services/calc_engine/app/follow_up_mae.py.
+export type TipoEdicao = "etapa" | "coleta" | "texto" | "numero";
+export const CAMPOS_EDITAVEIS: Record<string, TipoEdicao> = {
+  ...Object.fromEntries(["eng", "cor", "mon", "sol", "usi", "dob", "jat", "pin"].map((e) => [e, "etapa" as const])),
+  coleta: "coleta",
+  fornecedor: "texto",
+  orcamento_terceirizado_unid: "numero",
+  orcamento_custo_macfab_unid: "numero",
+  obs_felipe_marcelo: "texto",
+  preco_previsto: "numero",
+};
+
+// Campos que vêm da Controle de obras (a "mãe", por PROCV pelo PO) —
+// travados no app. Espelha CAMPOS_MAE de app/follow_up_mae.py.
+export const CAMPOS_DA_MAE = new Set<string>([
+  "prazo_contratual", "cliente", "quantidade", "mac", "desenho", "descricao", "obs_alisson",
+  "cor2", "cor_2", "plano_pintura", "st", "nf", "tipagem", "peso_unid", "peso_total",
+]);
+
 // Mesmo critério da fórmula do Status na planilha: etapa "feita" = 100.
 export type SituacaoEtapa = "concluida" | "parcial" | "pendente";
 

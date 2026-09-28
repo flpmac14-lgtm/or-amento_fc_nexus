@@ -2,8 +2,10 @@
 
 import { useEffect } from "react";
 import { urlImagemFollowUp } from "@/lib/api";
-import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
+import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { CampoEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import {
+  CAMPOS_EDITAVEIS,
   ETAPAS,
   ROTULO_PRAZO,
   corDestaque,
@@ -211,10 +213,25 @@ export function GaleriaImagens({
 
 // --- Detalhe do registro -------------------------------------------------------
 
-function Campo({ rotulo, children, largo = false }: { rotulo: string; children: React.ReactNode; largo?: boolean }) {
+function Campo({
+  rotulo,
+  children,
+  largo = false,
+  mae = false,
+}: {
+  rotulo: string;
+  children: React.ReactNode;
+  largo?: boolean;
+  mae?: boolean; // vem da Controle de obras (PROCV) — não editável
+}) {
   return (
     <div className={largo ? "sm:col-span-2" : ""}>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">{rotulo}</dt>
+      <dt
+        className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500"
+        title={mae ? "Vem da Controle de obras (PROCV pelo PO) — não editável" : undefined}
+      >
+        {rotulo} {mae && <IconeCadeado />}
+      </dt>
       <dd className="mt-0.5 break-words text-sm text-stone-900 dark:text-slate-100">{children}</dd>
     </div>
   );
@@ -242,6 +259,7 @@ export default function FollowUpDetalhe({
   maxBarra,
   onFechar,
   onAbrirImagem,
+  onSalvarCampo,
 }: {
   item: ItemFollowUp;
   ctx: ContextoRegras;
@@ -249,7 +267,21 @@ export default function FollowUpDetalhe({
   maxBarra: number;
   onFechar: () => void;
   onAbrirImagem: (indice: number) => void;
+  onSalvarCampo: (campo: string, valor: string) => Promise<void>;
 }) {
+  // Campo de acompanhamento: sempre editável aqui, salva sozinho.
+  const editavel = (campo: keyof ItemFollowUp, longo = false) => {
+    const tipo = CAMPOS_EDITAVEIS[campo as string];
+    return (
+      <CampoEditavel
+        key={`${item.id}-${String(campo)}`}
+        valor={valorParaEdicao(item[campo] as string | number | null, tipo)}
+        tipo={tipo}
+        longo={longo}
+        salvar={(v) => onSalvarCampo(campo as string, v)}
+      />
+    );
+  };
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
       if (e.key === "Escape") onFechar();
@@ -259,7 +291,6 @@ export default function FollowUpDetalhe({
   }, [onFechar]);
 
   const destaque = corDestaque(item);
-  const coleta = item.coleta_data ? formatarDataBr(item.coleta_data) : item.coleta;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onFechar}>
@@ -309,101 +340,106 @@ export default function FollowUpDetalhe({
             <Campo rotulo="PO">
               <span className="font-mono">{item.po}</span>
             </Campo>
-            <Campo rotulo="Cliente">{texto(item.cliente)}</Campo>
-            <Campo rotulo="MAC">
+            <Campo rotulo="Cliente" mae>
+              {texto(item.cliente)}
+            </Campo>
+            <Campo rotulo="MAC" mae>
               <span className="font-mono">{texto(item.mac)}</span>
             </Campo>
-            <Campo rotulo="Desenho">
+            <Campo rotulo="Desenho" mae>
               <span className="font-mono">{texto(item.desenho)}</span>
             </Campo>
-            <Campo rotulo="Descrição" largo>
+            <Campo rotulo="Descrição" largo mae>
               {texto(item.descricao)}
             </Campo>
-            <Campo rotulo="Quantidade">{item.quantidade ?? vazio}</Campo>
+            <Campo rotulo="Quantidade" mae>
+              {item.quantidade ?? vazio}
+            </Campo>
           </Secao>
 
           <Secao titulo="Prazo">
-            <Campo rotulo="Prazo contratual">
+            <Campo rotulo="Prazo contratual" mae>
               <SeloPrazo prazo={item.prazo_contratual} />
             </Campo>
-            <Campo rotulo="Coleta">{texto(coleta)}</Campo>
+            <Campo rotulo="Coleta">{editavel("coleta")}</Campo>
             <Campo rotulo="Status" largo>
               <SeloStatus item={item} ctx={ctx} />
+              <span className="ml-2 text-[11px] text-stone-500 dark:text-slate-500">
+                calculado pelas etapas (mesma fórmula da planilha)
+              </span>
             </Campo>
           </Secao>
 
           <section className="rounded-lg border border-stone-200 dark:border-slate-800 p-3">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-green-700 dark:text-cyan-400">Produção</h3>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {ETAPAS.map((e) => (
                 <div key={e.campo}>
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">
                     {e.rotulo} <span className="normal-case tracking-normal">· {e.nome}</span>
                   </p>
                   <BarraEtapa valor={item[e.campo]} cor={corBarra} max={maxBarra} />
+                  <div className="mt-1">{editavel(e.campo)}</div>
                 </div>
               ))}
             </div>
           </section>
 
           <Secao titulo="Pintura">
-            <Campo rotulo="COR2">{texto(item.cor2)}</Campo>
-            <Campo rotulo="COR-2">{texto(item.cor_2)}</Campo>
-            <Campo rotulo="Plano de pintura" largo>
+            <Campo rotulo="COR2" mae>
+              {texto(item.cor2)}
+            </Campo>
+            <Campo rotulo="COR-2" mae>
+              {texto(item.cor_2)}
+            </Campo>
+            <Campo rotulo="Plano de pintura" largo mae>
               {texto(item.plano_pintura)}
             </Campo>
           </Secao>
 
           <Secao titulo="Comercial / terceiros">
-            <Campo rotulo="Fornecedor">{texto(item.fornecedor)}</Campo>
-            <Campo rotulo="Orçamento terceirizado (unid)">
-              {item.orcamento_terceirizado_unid !== null ? formatarMoeda(item.orcamento_terceirizado_unid) : vazio}
-            </Campo>
-            <Campo rotulo="Custo Macfab (unid)">
-              {item.orcamento_custo_macfab_unid !== null ? formatarMoeda(item.orcamento_custo_macfab_unid) : vazio}
-            </Campo>
-            <Campo rotulo="Preço previsto">
-              {item.preco_previsto !== null ? formatarMoeda(item.preco_previsto) : vazio}
-            </Campo>
+            <Campo rotulo="Fornecedor">{editavel("fornecedor")}</Campo>
+            <Campo rotulo="Orçamento terceirizado (unid, R$)">{editavel("orcamento_terceirizado_unid")}</Campo>
+            <Campo rotulo="Custo Macfab (unid, R$)">{editavel("orcamento_custo_macfab_unid")}</Campo>
+            <Campo rotulo="Preço previsto (R$)">{editavel("preco_previsto")}</Campo>
           </Secao>
 
           <Secao titulo="Observações">
             <Campo rotulo="Obs. Felipe / Marcelo" largo>
-              <span
-                className={item.cores?.obs_felipe_marcelo?.fundo ? "rounded px-1" : ""}
-                style={
-                  item.cores?.obs_felipe_marcelo?.fundo
-                    ? {
-                        backgroundColor: item.cores.obs_felipe_marcelo.fundo,
-                        color: corTextoSobre(item.cores.obs_felipe_marcelo.fundo),
-                      }
-                    : undefined
-                }
-              >
-                {texto(item.obs_felipe_marcelo)}
-              </span>
+              {item.cores?.obs_felipe_marcelo?.fundo && (
+                <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-slate-400">
+                  <span
+                    className="h-3 w-3 rounded-sm border border-black/10"
+                    style={{ backgroundColor: item.cores.obs_felipe_marcelo.fundo }}
+                  />
+                  cor de destaque na planilha
+                </span>
+              )}
+              {editavel("obs_felipe_marcelo", true)}
             </Campo>
-            <Campo rotulo="Obs. Alisson" largo>
+            <Campo rotulo="Obs. Alisson (OBS da Controle de obras)" largo mae>
               {texto(item.obs_alisson)}
             </Campo>
           </Secao>
 
           <Secao titulo="Expedição / documentação">
-            <Campo rotulo="ST">{texto(item.st)}</Campo>
-            <Campo rotulo="NF">
+            <Campo rotulo="ST" mae>
+              {texto(item.st)}
+            </Campo>
+            <Campo rotulo="NF" mae>
               <span className="font-mono">{texto(item.nf)}</span>
             </Campo>
-            <Campo rotulo="Tipagem">
+            <Campo rotulo="Tipagem" mae>
               <span className="font-mono">{texto(item.tipagem)}</span>
             </Campo>
             <Campo rotulo="Ano">{item.ano ?? vazio}</Campo>
           </Secao>
 
           <Secao titulo="Peso">
-            <Campo rotulo="Peso unitário">
+            <Campo rotulo="Peso unitário" mae>
               {item.peso_unid !== null ? `${formatarNumero(item.peso_unid, 2)} kg` : vazio}
             </Campo>
-            <Campo rotulo="Peso total">
+            <Campo rotulo="Peso total" mae>
               {item.peso_total !== null ? `${formatarNumero(item.peso_total, 2)} kg` : vazio}
             </Campo>
           </Secao>
@@ -433,7 +469,10 @@ export default function FollowUpDetalhe({
           </section>
 
           <p className="text-xs text-stone-500 dark:text-slate-500">
-            Atualizado no app em {new Date(item.updated_at).toLocaleString("pt-BR")}.
+            {item.origem === "controle_obras" && "Entrou sozinho vindo da Controle de obras. "}
+            {item.editado_em
+              ? `Última edição: ${new Date(item.editado_em).toLocaleString("pt-BR")}${item.editado_por ? ` por ${item.editado_por}` : ""}.`
+              : `Atualizado em ${new Date(item.updated_at).toLocaleString("pt-BR")}.`}
           </p>
         </div>
       </aside>

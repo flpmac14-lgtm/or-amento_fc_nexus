@@ -1,14 +1,20 @@
 "use client";
 
 // Aba FOLLOW UP — pedido explícito do usuário: módulo nativo baseado na aba
-// "Gerencia" do "Gerenciamento de obras ativas.xlsb". O Excel é só a fonte
-// de atualização (botão "Importar / Atualizar Follow Up"); os dados ficam no
-// banco do app (ver services/calc_engine/app/follow_up.py).
+// "Gerencia" (importada uma vez do .xlsb). Agora é "filha" do Controle de
+// obras: pedidos ST = A novos e os campos de PROCV (prazo, cliente, MAC...)
+// chegam sozinhos a cada 15 min e são travados; os campos de
+// acompanhamento (etapas, coleta, fornecedor...) são editados aqui e salvos
+// na hora (ver services/calc_engine/app/follow_up_mae.py).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { importarFollowUp, listarFollowUp, urlImagemFollowUp } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { editarItemFollowUp, listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
+import { emailParaLogin } from "@/lib/loginInterno";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import {
+  CAMPOS_DA_MAE,
+  CAMPOS_EDITAVEIS,
   ETAPAS,
   ROTULO_PRAZO,
   compararValores,
@@ -21,8 +27,12 @@ import {
   type SituacaoEtapa,
   type SituacaoPrazo,
 } from "@/lib/followUp";
-import type { ItemFollowUp, RespostaFollowUp, ResultadoImportacaoFollowUp } from "@/lib/types";
+import type { ItemFollowUp, RespostaFollowUp } from "@/lib/types";
 import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } from "@/components/FollowUpDetalhe";
+import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
+
+// Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
+const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
 type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso";
 
@@ -123,9 +133,7 @@ export default function FollowUp() {
   const [dados, setDados] = useState<RespostaFollowUp | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [importando, setImportando] = useState<string | null>(null);
-  const [resultadoImportacao, setResultadoImportacao] = useState<ResultadoImportacaoFollowUp | null>(null);
-  const [verAvisos, setVerAvisos] = useState(false);
+  const [editadoPor, setEditadoPor] = useState<string | null>(null);
 
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_PADRAO);
   const [filtrosColuna, setFiltrosColuna] = useState<Record<string, string>>({});
@@ -136,7 +144,6 @@ export default function FollowUp() {
   const [porPagina, setPorPagina] = useState(50);
   const [itemAberto, setItemAberto] = useState<ItemFollowUp | null>(null);
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
-  const inputArquivo = useRef<HTMLInputElement>(null);
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -148,34 +155,37 @@ export default function FollowUp() {
   }, []);
 
   useEffect(() => {
-    // Carga inicial (carregando já começa true) — só atualiza estado no retorno.
+    // Carga inicial (carregando já começa true) + recarga periódica — só
+    // atualiza estado no retorno. Campo em edição não se perde: cada célula
+    // guarda o próprio rascunho.
     let ativo = true;
-    listarFollowUp()
-      .then((r) => ativo && setDados(r))
-      .catch((e: Error) => ativo && setErro(e.message))
-      .finally(() => ativo && setCarregando(false));
+    function buscar() {
+      listarFollowUp()
+        .then((r) => ativo && setDados(r))
+        .catch((e: Error) => ativo && setErro(e.message))
+        .finally(() => ativo && setCarregando(false));
+    }
+    buscar();
+    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    criarClienteSupabaseNavegador()
+      .auth.getUser()
+      .then(({ data }) => ativo && data.user?.email && setEditadoPor(emailParaLogin(data.user.email)));
     return () => {
       ativo = false;
+      clearInterval(id);
     };
   }, []);
 
-  async function importar(arquivo: File) {
-    setErro("");
-    setResultadoImportacao(null);
-    setImportando(`Enviando ${arquivo.name} (${formatarNumero(arquivo.size / 1024 / 1024, 1)} MB)…`);
-    try {
-      const r = await importarFollowUp(arquivo);
-      setResultadoImportacao(r);
-      setVerAvisos(false);
-      setImportando("Carregando registros atualizados…");
-      const novos = await listarFollowUp();
-      setDados(novos);
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setImportando(null);
-    }
-  }
+  // Salva um campo de acompanhamento e troca o item pelo que o servidor
+  // devolveu (Status recalculado lá, com a mesma fórmula da planilha).
+  const salvarCampo = useCallback(
+    async (item: ItemFollowUp, campo: string, valor: string) => {
+      const atualizado = await editarItemFollowUp(item.id, { [campo]: valor }, editadoPor);
+      setDados((d) => (d ? { ...d, itens: d.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) } : d));
+      setItemAberto((aberto) => (aberto?.id === atualizado.id ? atualizado : aberto));
+    },
+    [editadoPor],
+  );
 
   const itens = useMemo(() => dados?.itens ?? [], [dados]);
   const importacao = dados?.importacao ?? null;
@@ -270,7 +280,6 @@ export default function FollowUp() {
     return { peso, prontos, atrasados, vencendo };
   }, [filtrados]);
 
-  const pesoPlanilha = importacao?.indicadores.find((i) => i.celula === "G1")?.valor;
   const colunas = todasColunas ? COLUNAS : COLUNAS.filter((c) => c.principal);
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
   const paginaAtual = Math.min(pagina, totalPaginas - 1);
@@ -295,6 +304,30 @@ export default function FollowUp() {
   }
 
   function renderCelula(item: ItemFollowUp, col: Coluna) {
+    const tipoEdicao = CAMPOS_EDITAVEIS[col.campo];
+    if (!tipoEdicao) return renderValor(item, col);
+    const bruto = col.campo === "coleta" ? item.coleta : (item[col.campo as keyof ItemFollowUp] as number | string | null);
+    return (
+      <CelulaEditavel
+        valor={valorParaEdicao(bruto, tipoEdicao)}
+        tipo={tipoEdicao}
+        exibicao={
+          bruto === null || bruto === "" ? (
+            col.tipo === "etapa" ? (
+              renderValor(item, col)
+            ) : (
+              <span className="text-xs text-stone-300 dark:text-slate-600">+</span>
+            )
+          ) : (
+            renderValor(item, col)
+          )
+        }
+        salvar={(v) => salvarCampo(item, col.campo, v)}
+      />
+    );
+  }
+
+  function renderValor(item: ItemFollowUp, col: Coluna) {
     switch (col.tipo) {
       case "foto": {
         const primeira = item.imagens[0];
@@ -366,103 +399,29 @@ export default function FollowUp() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cabeçalho da aba: importação + última atualização */}
+      {/* Cabeçalho da aba: de onde vêm os dados + o que é editável */}
       <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4">
         <div>
           <h2 className="text-lg font-bold text-stone-900 dark:text-white">Follow up de obras</h2>
           <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
-            {importacao ? (
-              <>
-                Última importação: <strong>{importacao.arquivo_nome}</strong> (aba {importacao.aba}) em{" "}
-                {new Date(importacao.importado_em).toLocaleString("pt-BR")}
-              </>
-            ) : carregando ? (
-              "Carregando…"
-            ) : (
-              "Nenhuma importação ainda — importe a planilha para começar."
-            )}
+            Pedidos novos com ST = A da <strong>Controle de obras</strong> entram sozinhos (a cada 15 min), junto com os
+            campos que vêm por PROCV <IconeCadeado /> — esses não são editáveis. Etapas, coleta, fornecedor, orçamentos,
+            obs. Felipe/Marcelo e preço previsto: clique na célula para editar; salva sozinho.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={carregar}
-            disabled={carregando || !!importando}
-            className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50 disabled:opacity-50"
-          >
-            Recarregar
-          </button>
-          <button
-            type="button"
-            onClick={() => inputArquivo.current?.click()}
-            disabled={!!importando}
-            className="rounded-lg bg-green-600 dark:bg-cyan-500 px-4 py-2 text-sm font-bold text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {importando ? "Importando…" : "Importar / Atualizar Follow Up"}
-          </button>
-          <input
-            ref={inputArquivo}
-            type="file"
-            accept=".xlsb"
-            className="hidden"
-            onChange={(e) => {
-              const arquivo = e.target.files?.[0];
-              e.target.value = "";
-              if (arquivo) importar(arquivo);
-            }}
-          />
-        </div>
+        <button
+          type="button"
+          onClick={carregar}
+          disabled={carregando}
+          className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50 disabled:opacity-50"
+        >
+          Recarregar
+        </button>
       </div>
-
-      {importando && (
-        <div className="rounded-lg border border-green-300 dark:border-cyan-800 bg-green-50 dark:bg-cyan-950/30 p-3 text-sm text-green-700 dark:text-cyan-300">
-          {importando} Lendo a aba Gerencia, imagens e formatação — o servidor pode levar até 1 minuto se estiver
-          “dormindo”.
-        </div>
-      )}
 
       {erro && (
         <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
           {erro}
-        </div>
-      )}
-
-      {resultadoImportacao && (
-        <div className="rounded-lg border border-green-300 dark:border-cyan-800 bg-green-50 dark:bg-cyan-950/30 p-3 text-sm text-green-800 dark:text-cyan-200">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p>
-              <strong>Importação concluída</strong> — {resultadoImportacao.linhas_lidas} linhas lidas ·{" "}
-              {resultadoImportacao.inseridos} novos · {resultadoImportacao.atualizados} atualizados ·{" "}
-              {resultadoImportacao.inalterados} sem alteração · {resultadoImportacao.ausentes} saíram da planilha ·{" "}
-              {resultadoImportacao.imagens_vinculadas} imagens vinculadas
-            </p>
-            <button type="button" onClick={() => setResultadoImportacao(null)} className="text-xs underline">
-              fechar
-            </button>
-          </div>
-          <p className="mt-1 text-xs opacity-80">
-            Imagens flutuantes na aba: {resultadoImportacao.relatorio.imagens_flutuantes_total}
-            {resultadoImportacao.relatorio.imagens_flutuantes_invisiveis > 0 &&
-              ` (${resultadoImportacao.relatorio.imagens_flutuantes_invisiveis} com tamanho zero — invisíveis no Excel, restos de linhas apagadas — não vinculadas)`}
-            {resultadoImportacao.relatorio.imagens_flutuantes_fora_de_registro > 0 &&
-              ` · ${resultadoImportacao.relatorio.imagens_flutuantes_fora_de_registro} fora de linhas de registro`}
-            {resultadoImportacao.relatorio.linhas_ignoradas_sem_po > 0 &&
-              ` · ${resultadoImportacao.relatorio.linhas_ignoradas_sem_po} linha(s) sem PO ignorada(s)`}
-          </p>
-          {resultadoImportacao.relatorio.avisos_total > 0 && (
-            <div className="mt-1 text-xs">
-              <button type="button" onClick={() => setVerAvisos((v) => !v)} className="underline">
-                {verAvisos ? "Esconder" : "Ver"} {resultadoImportacao.relatorio.avisos_total} aviso(s) da importação
-              </button>
-              {verAvisos && (
-                <ul className="mt-1 max-h-40 list-disc overflow-y-auto pl-5">
-                  {resultadoImportacao.relatorio.avisos.map((a, i) => (
-                    <li key={i}>{a}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -473,10 +432,7 @@ export default function FollowUp() {
           <p className="font-mono text-2xl font-bold text-green-700 dark:text-cyan-300">
             {formatarNumero(indicadores.peso, 2)} <span className="text-sm font-normal">kg</span>
           </p>
-          <p className="text-[11px] text-stone-500 dark:text-slate-500">
-            dos registros filtrados
-            {typeof pesoPlanilha === "number" && ` · planilha (G1): ${formatarNumero(pesoPlanilha, 2)}`}
-          </p>
+          <p className="text-[11px] text-stone-500 dark:text-slate-500">dos registros filtrados</p>
         </div>
         {[
           { rotulo: "Registros", valor: filtrados.length, detalhe: `de ${base.length}` },
@@ -625,9 +581,18 @@ export default function FollowUp() {
                       type="button"
                       onClick={() => alternarOrdem(col.campo)}
                       className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-green-700 dark:hover:text-cyan-300"
-                      title={col.tipo === "etapa" ? ETAPAS.find((e) => e.campo === col.campo)?.nome : undefined}
+                      title={
+                        CAMPOS_DA_MAE.has(col.campo)
+                          ? "Vem da Controle de obras (PROCV pelo PO) — não editável"
+                          : col.tipo === "etapa"
+                            ? `${ETAPAS.find((e) => e.campo === col.campo)?.nome} — clique na célula para editar`
+                            : CAMPOS_EDITAVEIS[col.campo]
+                              ? "Clique na célula para editar"
+                              : undefined
+                      }
                     >
                       {col.rotulo}
+                      {CAMPOS_DA_MAE.has(col.campo) && <IconeCadeado />}
                       <span className="text-[10px]">{ordem?.campo === col.campo ? (ordem.desc ? "▼" : "▲") : ""}</span>
                     </button>
                   )}
@@ -777,6 +742,7 @@ export default function FollowUp() {
           corBarra={corBarra}
           maxBarra={maxBarra}
           onFechar={() => setItemAberto(null)}
+          onSalvarCampo={(campo, valor) => salvarCampo(itemAberto, campo, valor)}
           onAbrirImagem={(indice) => setGaleria({ item: itemAberto, indice })}
         />
       )}

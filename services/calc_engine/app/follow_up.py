@@ -622,6 +622,36 @@ def _json(v):
     return v
 
 
+# dados_originais fica fora da listagem: dobra o tamanho da resposta.
+_COLUNAS_LISTAGEM = ["id", "chave"] + _COLUNAS_ITEM + [
+    "coleta_data", "linha_planilha", "oculta_na_planilha", "cores",
+    "presente_na_ultima_importacao", "updated_at", "origem", "editado_em", "editado_por"]
+
+
+def carregar_itens(cur, item_id: str | None = None) -> list[dict]:
+    """Itens (com imagens) prontos pro JSON — todos, ou só um pelo id."""
+    filtro, params = ("where id = %s", (item_id,)) if item_id else ("", ())
+    cur.execute(f"select {', '.join(_COLUNAS_LISTAGEM)} from follow_up_itens {filtro} order by linha_planilha, chave",
+                params)
+    itens = [{c: _json(v) for c, v in zip(_COLUNAS_LISTAGEM, row)} for row in cur.fetchall()]
+    filtro_img, params_img = ("where i.item_id = %s", (item_id,)) if item_id else ("", ())
+    cur.execute(
+        f"""select i.item_id, i.id, i.midia_sha256, i.ordem, i.origem, i.celula, m.largura, m.altura
+            from follow_up_imagens i join follow_up_midias m on m.sha256 = i.midia_sha256
+            {filtro_img} order by i.item_id, i.ordem""",
+        params_img,
+    )
+    imagens: dict[str, list] = {}
+    for it_id, img_id, sha, ordem, origem, celula, w, h in cur.fetchall():
+        imagens.setdefault(str(it_id), []).append(
+            {"id": str(img_id), "sha256": sha, "ordem": ordem, "origem": origem, "celula": celula,
+             "largura": w, "altura": h})
+    for item in itens:
+        item["id"] = str(item["id"])
+        item["imagens"] = imagens.get(item["id"], [])
+    return itens
+
+
 def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
@@ -630,25 +660,7 @@ def listar() -> dict:
                from follow_up_importacoes order by importado_em desc limit 1"""
         )
         imp = cur.fetchone()
-        colunas_sql = ["id", "chave"] + _COLUNAS_ITEM + [
-            "coleta_data", "linha_planilha", "oculta_na_planilha", "cores",
-            "presente_na_ultima_importacao", "updated_at"]  # dados_originais fica fora: dobra o tamanho da resposta
-        cur.execute(f"select {', '.join(colunas_sql)} from follow_up_itens order by linha_planilha, chave")
-        itens = [{c: _json(v) for c, v in zip(colunas_sql, row)} for row in cur.fetchall()]
-        cur.execute(
-            """select i.item_id, i.id, i.midia_sha256, i.ordem, i.origem, i.celula, m.largura, m.altura
-               from follow_up_imagens i join follow_up_midias m on m.sha256 = i.midia_sha256
-               order by i.item_id, i.ordem"""
-        )
-        imagens: dict[str, list] = {}
-        for item_id, img_id, sha, ordem, origem, celula, w, h in cur.fetchall():
-            imagens.setdefault(str(item_id), []).append(
-                {"id": str(img_id), "sha256": sha, "ordem": ordem, "origem": origem, "celula": celula,
-                 "largura": w, "altura": h})
-
-    for item in itens:
-        item["id"] = str(item["id"])
-        item["imagens"] = imagens.get(item["id"], [])
+        itens = carregar_itens(cur)
 
     importacao = None
     if imp:

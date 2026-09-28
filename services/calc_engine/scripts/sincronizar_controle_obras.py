@@ -25,6 +25,7 @@ load_dotenv(RAIZ / ".env")
 warnings.filterwarnings("ignore", module="openpyxl")
 
 from app.controle_obras import registrar_erro, sincronizar  # noqa: E402
+from app.follow_up_mae import propagar  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
 
@@ -42,6 +43,17 @@ def main() -> int:
             print(f"{agora} OK - planilha alterada, {r['linhas']} linhas gravadas")
         else:
             print(f"{agora} OK - sem alteração")
+        # Follow up é "filha" (PROCV pelo PO): leva os campos da mãe e os
+        # pedidos ST = A novos. Roda sempre (é barato e se corrige sozinho
+        # se uma rodada anterior falhou no meio).
+        # Falha aqui não invalida a leitura da Controle de obras (já gravada).
+        try:
+            p = propagar()
+            if p.get("atualizados") or p.get("novos"):
+                print(f"{agora} Follow up - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO no Follow up (mãe -> filha) - {type(e).__name__}: {e}")
+            return 1
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app
         print(f"{agora} ERRO - {type(e).__name__}: {e}")

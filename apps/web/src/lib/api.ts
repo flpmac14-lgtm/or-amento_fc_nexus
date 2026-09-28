@@ -8,6 +8,7 @@ import type {
   EstimativasOrcamento,
   ItemCalculado,
   ItemComercial,
+  ItemFollowUp,
   ItemPedidoWeir,
   ItemContingenciamento,
   MaterialCatalogo,
@@ -716,6 +717,30 @@ export async function importarFollowUp(arquivo: File): Promise<ResultadoImportac
       detalhe = await resposta.text().catch(() => "");
     }
     throw new Error(`Falha ao importar (${resposta.status}). ${detalhe}`);
+  }
+  return resposta.json();
+}
+
+// Salva na hora um campo de acompanhamento (etapas, coleta, fornecedor...).
+// Campos que vêm da Controle de obras são recusados pelo servidor (403).
+export async function editarItemFollowUp(
+  id: string,
+  alteracoes: Record<string, string | number | null>,
+  editadoPor: string | null,
+): Promise<ItemFollowUp> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alteracoes, editado_por: editadoPor }),
+  });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(detalhe || `Falha ao salvar (${resposta.status}).`);
   }
   return resposta.json();
 }

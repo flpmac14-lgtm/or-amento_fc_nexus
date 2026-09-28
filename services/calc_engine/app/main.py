@@ -90,7 +90,6 @@ from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
-from starlette.concurrency import run_in_threadpool
 
 from app.adapter import montar_entrada_orcamento
 from app.cantoneiras_catalogo import buscar_cantoneiras
@@ -98,10 +97,10 @@ from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_p
 from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
-from app.follow_up import ImportacaoInvalida
-from app.follow_up import importar as importar_follow_up
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
+from app.follow_up_mae import CampoNaoEditavel
+from app.follow_up_mae import editar as editar_follow_up
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
@@ -123,7 +122,6 @@ from app.relatorio_excel import calcular_itens_da_planilha, gerar_excel as gerar
 from app.relatorio_pedido_andritz import gerar_excel_pedido_andritz
 from app.relatorio_pedido_weir import gerar_excel_pedido_weir
 from app.tubos_catalogo import buscar_tubos
-from app.xlsb_leitor import ArquivoXlsbInvalido
 
 load_dotenv()  # antes de ler EXTRACTOR_URL/SUPABASE_DB_URL do ambiente
 
@@ -231,30 +229,34 @@ def orcamentos_salvos_excluir(orcamento_id: str) -> dict:
     return {"excluido": True}
 
 
-# Limite de tamanho do .xlsb aceito na importação do Follow Up (o arquivo
-# real tem ~17 MB, quase tudo imagem).
-_FOLLOW_UP_MAX_BYTES = 80 * 1024 * 1024
-
-
 @app.post("/follow-up/importar")
-async def follow_up_importar(file: UploadFile) -> dict:
-    """Aba FOLLOW UP — importa/atualiza a partir do "Gerenciamento de obras
-    ativas.xlsb" (só a aba Gerencia). Atualiza registros existentes pela
-    chave (PO), insere os novos e marca como ausentes os que saíram da
-    planilha — nunca duplica. Ver app/follow_up.py."""
-    nome = file.filename or "arquivo.xlsb"
-    if not nome.lower().endswith(".xlsb"):
-        raise HTTPException(status_code=400, detail="Envie o arquivo .xlsb (Gerenciamento de obras ativas.xlsb).")
-    conteudo = await file.read()
-    if len(conteudo) > _FOLLOW_UP_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Arquivo grande demais para importar (limite 80 MB).")
+def follow_up_importar() -> dict:
+    """Desligada — pedido explícito do usuário: o Follow up agora é editado no
+    app (campos de acompanhamento) e recebe os pedidos/campos da mãe (Controle
+    de obras) sozinho. Reimportar o .xlsb da Gerencia apagaria o que foi
+    digitado. A lógica de importação continua em app/follow_up.py::importar."""
+    raise HTTPException(
+        status_code=410,
+        detail="Importação do .xlsb desativada: o Follow up agora é atualizado pelo Controle de obras e editado no app.",
+    )
+
+
+@app.patch("/follow-up/itens/{item_id}")
+def follow_up_editar(item_id: str, pedido: dict) -> dict:
+    """Salva campo(s) de acompanhamento de um item (etapas, coleta,
+    fornecedor, orçamentos, obs. Felipe/Marcelo, preço previsto). Campos que
+    vêm da Controle de obras são recusados. Ver app/follow_up_mae.py."""
     try:
-        # Leitura + gravação são síncronas (psycopg); fora do event loop.
-        return await run_in_threadpool(importar_follow_up, conteudo, nome)
-    except (ArquivoXlsbInvalido, ImportacaoInvalida) as e:
+        item = editar_follow_up(item_id, pedido.get("alteracoes") or {}, pedido.get("editado_por"))
+    except CampoNaoEditavel as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return item
 
 
 @app.get("/follow-up")
