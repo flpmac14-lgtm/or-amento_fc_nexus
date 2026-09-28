@@ -42,7 +42,7 @@ export default function ModuloFollowUp() {
       if (!document.fullscreenElement) setTelaCheia(false);
     }
     function tecla(e: KeyboardEvent) {
-      if (e.key === "Escape" && !document.querySelector("aside, .z-\\[60\\]")) setTelaCheia(false);
+      if (e.key === "Escape" && !document.querySelector("aside, .z-\\[60\\], .z-\\[70\\]")) setTelaCheia(false);
     }
     document.addEventListener("fullscreenchange", aoMudar);
     window.addEventListener("keydown", tecla);

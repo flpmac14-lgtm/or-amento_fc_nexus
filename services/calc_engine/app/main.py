@@ -100,7 +100,10 @@ from app.controle_obras import listar as listar_controle_obras
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_mae import CampoNaoEditavel
+from app.follow_up_mae import ImagemInvalida
+from app.follow_up_mae import adicionar_imagem as adicionar_imagem_follow_up
 from app.follow_up_mae import editar as editar_follow_up
+from app.follow_up_mae import remover_imagem as remover_imagem_follow_up
 from app.geometria_dispatch import CATEGORIA_PRECO_POR_TIPO, TIPOS_GEOMETRIA, calcular_peso
 from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
@@ -265,6 +268,35 @@ def follow_up_listar() -> dict:
         return listar_follow_up()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/follow-up/itens/{item_id}/imagens")
+def follow_up_adicionar_imagem(item_id: str, file: UploadFile, enviada_por: str | None = Form(None)) -> dict:
+    """Imagem colada (Ctrl+V) ou escolhida no app para a coluna Foto — ver
+    app/follow_up_mae.py::adicionar_imagem. Função síncrona de propósito: o
+    FastAPI roda em thread, fora do event loop."""
+    try:
+        item = adicionar_imagem_follow_up(item_id, file.file.read(), enviada_por)
+    except ImagemInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return item
+
+
+@app.delete("/follow-up/imagens/{imagem_id}")
+def follow_up_remover_imagem(imagem_id: str, removida_por: str | None = None) -> dict:
+    try:
+        item = remover_imagem_follow_up(imagem_id, removida_por)
+    except ImagemInvalida as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Imagem não encontrada")
+    return item
 
 
 @app.get("/follow-up/midias/{sha256}")

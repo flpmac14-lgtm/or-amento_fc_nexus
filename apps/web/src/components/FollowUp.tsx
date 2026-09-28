@@ -8,7 +8,7 @@
 // na hora (ver services/calc_engine/app/follow_up_mae.py).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { editarItemFollowUp, listarFollowUp, urlImagemFollowUp } from "@/lib/api";
+import { editarItemFollowUp, listarFollowUp, removerImagemFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -30,6 +30,7 @@ import {
 import type { ItemFollowUp, RespostaFollowUp } from "@/lib/types";
 import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } from "@/components/FollowUpDetalhe";
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
+import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -148,6 +149,8 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
   const [porPagina, setPorPagina] = useState(50);
   const [itemAberto, setItemAberto] = useState<ItemFollowUp | null>(null);
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
+  // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
+  const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -182,13 +185,22 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
 
   // Salva um campo de acompanhamento e troca o item pelo que o servidor
   // devolveu (Status recalculado lá, com a mesma fórmula da planilha).
+  // Troca o item em todo lugar em que aparece (lista, painel, galeria).
+  const aplicarItem = useCallback((atualizado: ItemFollowUp) => {
+    setDados((d) => (d ? { ...d, itens: d.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) } : d));
+    setItemAberto((aberto) => (aberto?.id === atualizado.id ? atualizado : aberto));
+    setGaleria((g) => {
+      if (!g || g.item.id !== atualizado.id) return g;
+      if (atualizado.imagens.length === 0) return null;
+      return { item: atualizado, indice: Math.min(g.indice, atualizado.imagens.length - 1) };
+    });
+  }, []);
+
   const salvarCampo = useCallback(
     async (item: ItemFollowUp, campo: string, valor: string) => {
-      const atualizado = await editarItemFollowUp(item.id, { [campo]: valor }, editadoPor);
-      setDados((d) => (d ? { ...d, itens: d.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) } : d));
-      setItemAberto((aberto) => (aberto?.id === atualizado.id ? atualizado : aberto));
+      aplicarItem(await editarItemFollowUp(item.id, { [campo]: valor }, editadoPor));
     },
-    [editadoPor],
+    [editadoPor, aplicarItem],
   );
 
   const itens = useMemo(() => dados?.itens ?? [], [dados]);
@@ -335,7 +347,20 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
     switch (col.tipo) {
       case "foto": {
         const primeira = item.imagens[0];
-        if (!primeira) return <span className="text-xs text-stone-300 dark:text-slate-700">—</span>;
+        if (!primeira)
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAnexarPara(item);
+              }}
+              title="Anexar imagem — cole com Ctrl+V"
+              className="flex h-10 w-12 items-center justify-center rounded border border-dashed border-stone-300 dark:border-slate-700 text-lg text-stone-400 dark:text-slate-500 hover:border-green-600 hover:text-green-600 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
+            >
+              +
+            </button>
+          );
         return (
           <button
             type="button"
@@ -747,6 +772,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           maxBarra={maxBarra}
           onFechar={() => setItemAberto(null)}
           onSalvarCampo={(campo, valor) => salvarCampo(itemAberto, campo, valor)}
+          onAnexarImagem={() => setAnexarPara(itemAberto)}
           onAbrirImagem={(indice) => setGaleria({ item: itemAberto, indice })}
         />
       )}
@@ -758,6 +784,23 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           titulo={`PO ${galeria.item.po} — ${galeria.item.descricao ?? ""}`}
           onIndice={(indice) => setGaleria((g) => (g ? { ...g, indice } : g))}
           onFechar={() => setGaleria(null)}
+          onAdicionar={() => setAnexarPara(galeria.item)}
+          onRemover={async (img) => aplicarItem(await removerImagemFollowUp(img.id, editadoPor))}
+        />
+      )}
+
+      {anexarPara && (
+        <FollowUpAnexarImagem
+          item={anexarPara}
+          enviadaPor={editadoPor}
+          onEnviada={(atualizado) => {
+            aplicarItem(atualizado);
+            // Se a galeria estava aberta nesse item, mostra a imagem nova (última).
+            setGaleria((g) =>
+              g && g.item.id === atualizado.id ? { item: atualizado, indice: atualizado.imagens.length - 1 } : g,
+            );
+          }}
+          onFechar={() => setAnexarPara(null)}
         />
       )}
     </div>

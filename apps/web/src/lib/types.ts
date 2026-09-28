@@ -515,7 +515,7 @@ export interface ImagemFollowUp {
   id: string;
   sha256: string;
   ordem: number;
-  origem: "imagem_na_celula" | "imagem_flutuante";
+  origem: "imagem_na_celula" | "imagem_flutuante" | "enviada_app";
   celula: string | null;
   largura: number | null;
   altura: number | null;

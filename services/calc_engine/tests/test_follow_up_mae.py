@@ -2,7 +2,41 @@ from datetime import date
 
 import pytest
 
-from app.follow_up_mae import CampoNaoEditavel, _converter_edicao, _valor_mae, calcular_status, editar
+import io
+
+from PIL import Image
+
+from app.follow_up_mae import (
+    CampoNaoEditavel,
+    ImagemInvalida,
+    _converter_edicao,
+    _valor_mae,
+    calcular_status,
+    editar,
+    preparar_imagem,
+)
+
+
+def _png(tamanho, modo="RGB"):
+    buf = io.BytesIO()
+    Image.new(modo, tamanho, (200, 30, 30, 128) if modo == "RGBA" else (200, 30, 30)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_imagem_pequena_fica_como_esta():
+    original = _png((300, 200))
+    dados, tipo, w, h = preparar_imagem(original)
+    assert dados == original and tipo == "image/png" and (w, h) == (300, 200)
+
+
+def test_imagem_grande_e_reduzida_para_jpeg():
+    dados, tipo, w, h = preparar_imagem(_png((5000, 2500), "RGBA"))
+    assert tipo == "image/jpeg" and max(w, h) == 2400 and h == 1200
+
+
+def test_arquivo_que_nao_e_imagem_e_recusado():
+    with pytest.raises(ImagemInvalida):
+        preparar_imagem(b"isto nao e uma imagem")
 
 
 def test_status_igual_a_formula_da_planilha():

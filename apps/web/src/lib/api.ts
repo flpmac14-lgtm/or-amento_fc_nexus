@@ -745,6 +745,37 @@ export async function editarItemFollowUp(
   return resposta.json();
 }
 
+async function erroDaResposta(resposta: Response, padrao: string): Promise<Error> {
+  let detalhe = "";
+  try {
+    detalhe = (await resposta.json()).detail ?? "";
+  } catch {
+    detalhe = await resposta.text().catch(() => "");
+  }
+  return new Error(detalhe || `${padrao} (${resposta.status}).`);
+}
+
+// Imagem colada (Ctrl+V) ou escolhida na coluna Foto do Follow up.
+export async function enviarImagemFollowUp(
+  itemId: string,
+  imagem: Blob,
+  enviadaPor: string | null,
+): Promise<ItemFollowUp> {
+  const form = new FormData();
+  form.append("file", imagem, imagem instanceof File ? imagem.name : "imagem-colada.png");
+  if (enviadaPor) form.append("enviada_por", enviadaPor);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${itemId}/imagens`, { method: "POST", body: form });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao enviar a imagem");
+  return resposta.json();
+}
+
+export async function removerImagemFollowUp(imagemId: string, removidaPor: string | null): Promise<ItemFollowUp> {
+  const qs = removidaPor ? `?removida_por=${encodeURIComponent(removidaPor)}` : "";
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/imagens/${imagemId}${qs}`, { method: "DELETE" });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao remover a imagem");
+  return resposta.json();
+}
+
 export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
 }

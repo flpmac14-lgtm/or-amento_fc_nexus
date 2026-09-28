@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { CampoEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
@@ -116,17 +116,24 @@ export function GaleriaImagens({
   titulo,
   onIndice,
   onFechar,
+  onAdicionar,
+  onRemover,
 }: {
   imagens: ImagemFollowUp[];
   indice: number;
   titulo: string;
   onIndice: (i: number) => void;
   onFechar: () => void;
+  onAdicionar?: () => void; // abre a janela de colar/escolher imagem
+  onRemover?: (imagem: ImagemFollowUp) => Promise<void>; // só imagem enviada pelo app
 }) {
   const atual = imagens[indice];
+  const [removendo, setRemovendo] = useState(false);
+  const [erroRemover, setErroRemover] = useState("");
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
+      // Esc com a janela de anexar aberta por cima fecha só ela.
+      if (e.key === "Escape" && !document.querySelector(".z-\\[70\\]")) onFechar();
       if (e.key === "ArrowRight" && imagens.length > 1) onIndice((indice + 1) % imagens.length);
       if (e.key === "ArrowLeft" && imagens.length > 1) onIndice((indice - 1 + imagens.length) % imagens.length);
     }
@@ -143,6 +150,35 @@ export function GaleriaImagens({
         <div className="flex items-center justify-between gap-3">
           <p className="truncate text-sm font-semibold text-stone-800 dark:text-slate-200">{titulo}</p>
           <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-slate-400">
+            {onAdicionar && (
+              <button
+                type="button"
+                onClick={onAdicionar}
+                className="rounded border border-green-600/50 dark:border-cyan-500/50 px-2 py-1 text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10"
+              >
+                + Adicionar imagem
+              </button>
+            )}
+            {onRemover && atual.origem === "enviada_app" && (
+              <button
+                type="button"
+                disabled={removendo}
+                onClick={async () => {
+                  setRemovendo(true);
+                  setErroRemover("");
+                  try {
+                    await onRemover(atual);
+                  } catch (e) {
+                    setErroRemover((e as Error).message);
+                  } finally {
+                    setRemovendo(false);
+                  }
+                }}
+                className="rounded border border-red-400/50 px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                {removendo ? "Removendo…" : "Remover esta"}
+              </button>
+            )}
             {imagens.length > 1 && (
               <span>
                 {indice + 1} de {imagens.length}
@@ -186,9 +222,15 @@ export function GaleriaImagens({
           )}
         </div>
         <p className="text-center text-xs text-stone-500 dark:text-slate-500">
-          {atual.origem === "imagem_na_celula" ? "Imagem dentro da célula" : "Imagem flutuante"} {atual.celula ?? ""}
+          {atual.origem === "enviada_app"
+            ? "Adicionada pelo app"
+            : atual.origem === "imagem_na_celula"
+              ? "Imagem dentro da célula"
+              : "Imagem flutuante"}{" "}
+          {atual.celula ?? ""}
           {atual.largura && atual.altura ? ` · ${atual.largura}×${atual.altura}px` : ""}
         </p>
+        {erroRemover && <p className="text-center text-xs text-red-600 dark:text-red-400">{erroRemover}</p>}
         {imagens.length > 1 && (
           <div className="flex justify-center gap-2 overflow-x-auto">
             {imagens.map((img, i) => (
@@ -260,6 +302,7 @@ export default function FollowUpDetalhe({
   onFechar,
   onAbrirImagem,
   onSalvarCampo,
+  onAnexarImagem,
 }: {
   item: ItemFollowUp;
   ctx: ContextoRegras;
@@ -268,6 +311,7 @@ export default function FollowUpDetalhe({
   onFechar: () => void;
   onAbrirImagem: (indice: number) => void;
   onSalvarCampo: (campo: string, valor: string) => Promise<void>;
+  onAnexarImagem: () => void;
 }) {
   // Campo de acompanhamento: sempre editável aqui, salva sozinho.
   const editavel = (campo: keyof ItemFollowUp, longo = false) => {
@@ -447,9 +491,16 @@ export default function FollowUpDetalhe({
           <section className="rounded-lg border border-stone-200 dark:border-slate-800 p-3">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-green-700 dark:text-cyan-400">
               Anexos ({item.imagens.length})
+              <button
+                type="button"
+                onClick={onAnexarImagem}
+                className="ml-3 rounded border border-green-600/50 dark:border-cyan-500/50 px-2 py-0.5 text-[11px] normal-case tracking-normal text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10"
+              >
+                + Adicionar imagem (colar)
+              </button>
             </h3>
             {item.imagens.length === 0 ? (
-              <p className="text-sm text-stone-500 dark:text-slate-500">Nenhuma imagem nesta linha da planilha.</p>
+              <p className="text-sm text-stone-500 dark:text-slate-500">Nenhuma imagem ainda.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {item.imagens.map((img, i) => (
@@ -458,7 +509,7 @@ export default function FollowUpDetalhe({
                     type="button"
                     onClick={() => onAbrirImagem(i)}
                     className="h-28 w-28 overflow-hidden rounded border border-stone-200 dark:border-slate-700 bg-white hover:border-green-600 dark:hover:border-cyan-500"
-                    title={`${img.origem === "imagem_na_celula" ? "Imagem na célula" : "Imagem flutuante"} ${img.celula ?? ""}`}
+                    title={img.origem === "enviada_app" ? "Adicionada pelo app" : `${img.origem === "imagem_na_celula" ? "Imagem na célula" : "Imagem flutuante"} ${img.celula ?? ""}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={urlImagemFollowUp(img.sha256)} alt="" loading="lazy" className="h-full w-full object-contain" />

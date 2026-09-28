@@ -219,6 +219,103 @@ def _converter_edicao(campo: str, valor):
     return str(valor).strip()
 
 
+# --- imagem colada/enviada pelo app -------------------------------------------
+# Pedido explícito do usuário: clicar na coluna Foto e colar (Ctrl+V) uma
+# imagem copiada. Guarda no mesmo esquema das fotos que vieram da planilha
+# (follow_up_midias deduplicado por hash + vínculo em follow_up_imagens).
+
+IMAGEM_MAX_BYTES = 15 * 1024 * 1024
+_LADO_MAX = 2400
+_TAMANHO_SEM_RECOMPRIMIR = 1_500_000
+
+
+class ImagemInvalida(ValueError):
+    pass
+
+
+def preparar_imagem(conteudo: bytes) -> tuple[bytes, str, int, int]:
+    """Valida que é imagem; reduz/recomprime só se for grande (print de tela
+    em 4K, foto de celular). Devolve (bytes, content_type, largura, altura)."""
+    import io
+
+    from PIL import Image, ImageOps
+
+    if len(conteudo) > IMAGEM_MAX_BYTES:
+        raise ImagemInvalida("Imagem grande demais (limite 15 MB).")
+    try:
+        im = Image.open(io.BytesIO(conteudo))
+        im.load()
+    except Exception as e:  # noqa: BLE001 — qualquer falha do Pillow = não é imagem
+        raise ImagemInvalida("O arquivo enviado não é uma imagem válida.") from e
+    formato = (im.format or "").upper()
+    tipos = {"PNG": "image/png", "JPEG": "image/jpeg", "GIF": "image/gif", "WEBP": "image/webp"}
+    if formato in tipos and len(conteudo) <= _TAMANHO_SEM_RECOMPRIMIR and max(im.size) <= _LADO_MAX:
+        return conteudo, tipos[formato], im.size[0], im.size[1]
+
+    im = ImageOps.exif_transpose(im)
+    im.thumbnail((_LADO_MAX, _LADO_MAX))
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        fundo = Image.new("RGB", im.size, (255, 255, 255))
+        fundo.paste(im, mask=im.split()[-1])
+        im = fundo
+    elif im.mode != "RGB":
+        im = im.convert("RGB")
+    saida = io.BytesIO()
+    im.save(saida, "JPEG", quality=85, optimize=True)
+    return saida.getvalue(), "image/jpeg", im.size[0], im.size[1]
+
+
+def adicionar_imagem(item_id: str, conteudo: bytes, enviada_por: str | None = None) -> dict | None:
+    import hashlib
+
+    dados, tipo, largura, altura = preparar_imagem(conteudo)
+    sha = hashlib.sha256(dados).hexdigest()
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select 1 from follow_up_itens where id = %s for update", (item_id,))
+        if not cur.fetchone():
+            return None
+        cur.execute(
+            """insert into follow_up_midias (sha256, content_type, conteudo, largura, altura, tamanho)
+               values (%s, %s, %s, %s, %s, %s) on conflict (sha256) do nothing""",
+            (sha, tipo, dados, largura, altura, len(dados)),
+        )
+        cur.execute(
+            """insert into follow_up_imagens (item_id, midia_sha256, ordem, origem, enviada_por)
+               values (%s, %s, (select coalesce(max(ordem), -1) + 1 from follow_up_imagens where item_id = %s),
+                       'enviada_app', %s)""",
+            (item_id, sha, item_id, enviada_por),
+        )
+        cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
+                    (enviada_por, item_id))
+        item = carregar_itens(cur, item_id)[0]
+        conn.commit()
+    return item
+
+
+def remover_imagem(imagem_id: str, removida_por: str | None = None) -> dict | None:
+    """Remove só imagem enviada pelo app — as que vieram da planilha ficam."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select item_id, origem, midia_sha256 from follow_up_imagens where id = %s", (imagem_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        item_id, origem, sha = row
+        if origem != "enviada_app":
+            raise ImagemInvalida("Só dá pra remover imagem adicionada pelo app — as da planilha ficam.")
+        cur.execute("delete from follow_up_imagens where id = %s", (imagem_id,))
+        cur.execute(
+            "delete from follow_up_midias m where sha256 = %s and not exists "
+            "(select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256)",
+            (sha,),
+        )
+        cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
+                    (removida_por, item_id))
+        item = carregar_itens(cur, str(item_id))[0]
+        conn.commit()
+    return item
+
+
 def editar(item_id: str, alteracoes: dict, editado_por: str | None = None) -> dict | None:
     if not alteracoes:
         raise ValueError("Nada para salvar.")
