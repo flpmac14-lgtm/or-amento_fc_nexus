@@ -8,7 +8,7 @@
 // na hora (ver services/calc_engine/app/follow_up_mae.py).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { editarItemFollowUp, listarFollowUp, removerImagemFollowUp, urlImagemFollowUp } from "@/lib/api";
+import { baixarExcelFollowUp, editarItemFollowUp, listarFollowUp, removerImagemFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -155,6 +155,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
+  const [exportando, setExportando] = useState(false);
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -316,6 +317,19 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
   function setFiltroColuna(campo: string, valor: string) {
     setFiltrosColuna((f) => ({ ...f, [campo]: valor }));
     setPagina(0);
+  }
+
+  // Excel com o que está na tela: mesmos filtros e ordem (todas as páginas).
+  async function exportarExcel() {
+    setExportando(true);
+    setErro("");
+    try {
+      await baixarExcelFollowUp(filtrados.map((i) => i.id));
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setExportando(false);
+    }
   }
 
   function alternarOrdem(campo: Coluna["campo"]) {
@@ -507,6 +521,15 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
             className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-red-400 disabled:opacity-40"
           >
             Limpar filtros
+          </button>
+          <button
+            type="button"
+            onClick={exportarExcel}
+            disabled={exportando || filtrados.length === 0}
+            title="Baixa em Excel os registros filtrados (todas as páginas e colunas), com a foto de cada pedido"
+            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+          >
+            {exportando ? "Gerando Excel…" : `Exportar Excel (${filtrados.length})`}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">

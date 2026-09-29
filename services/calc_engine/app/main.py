@@ -99,6 +99,7 @@ from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
+from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
 from app.follow_up_mae import CampoNaoEditavel
 from app.follow_up_mae import ImagemInvalida
 from app.follow_up_mae import adicionar_imagem as adicionar_imagem_follow_up
@@ -360,6 +361,22 @@ def follow_up_midia(sha256: str) -> Response:
     conteudo, tipo = achado
     return Response(content=conteudo, media_type=tipo,
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.post("/follow-up/excel")
+def follow_up_excel(pedido: dict) -> Response:
+    """Follow up em Excel — só os pedidos que o app mandou (ids, já na ordem
+    e com os filtros da tela), com a 1ª foto na célula. Ver app/follow_up_excel.py."""
+    ids = [str(i) for i in pedido.get("ids") or []]
+    try:
+        conteudo = gerar_excel_follow_up(ids, com_fotos=bool(pedido.get("com_fotos", True)))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=follow-up.xlsx"},
+    )
 
 
 @app.get("/controle-obras")
