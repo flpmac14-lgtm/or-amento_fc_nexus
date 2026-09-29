@@ -145,6 +145,13 @@ function valorCampo(item: ItemFollowUp, campo: Coluna["campo"]): unknown {
   return item[campo];
 }
 
+// Chave do filtro da Coleta: "d:AAAA-MM-DD" pra data, "t:texto" pra texto, "" se vazia.
+function valorFiltroColeta(item: ItemFollowUp): string {
+  if (item.coleta_data) return `d:${item.coleta_data}`;
+  const texto = (item.coleta ?? "").trim();
+  return texto ? `t:${texto}` : "";
+}
+
 function unicos(itens: ItemFollowUp[], campo: keyof ItemFollowUp): string[] {
   const s = new Set<string>();
   for (const i of itens) {
@@ -305,6 +312,19 @@ export default function FollowUp({
   );
 
   // Grupos de pintura com 2+ pedidos na lista — só esses ganham cor e botão.
+  // Opções do filtro da Coleta: as datas preenchidas (em ordem) e depois os textos.
+  const opcoesColeta = useMemo(() => {
+    const m = new Map<string, { rotulo: string; n: number }>();
+    for (const i of base) {
+      const chave = valorFiltroColeta(i);
+      if (!chave) continue;
+      const atual = m.get(chave);
+      if (atual) atual.n++;
+      else m.set(chave, { rotulo: i.coleta_data ? formatarDataBr(i.coleta_data) : (i.coleta ?? "").trim(), n: 1 });
+    }
+    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "pt-BR"));
+  }, [base]);
+
   const gruposPintura = useMemo(() => {
     const m = new Map<number, { indice: number; n: number; exemplo: ItemFollowUp }>();
     for (const i of base) {
@@ -352,8 +372,13 @@ export default function FollowUp({
           if (!contem(formatarDataBr(i.prazo_contratual), termo)) return false;
         } else if (col.tipo === "coleta") {
           // Pedido do usuário: achar as coletas vazias pra marcar a data.
+          // E também cada data / texto que já foi preenchido (opções "d:…" / "t:…").
           const vazia = !(i.coleta ?? "").trim() && !i.coleta_data;
-          if ((termo === "vazia") !== vazia) return false;
+          if (termo === "vazia" || termo === "preenchida") {
+            if ((termo === "vazia") !== vazia) return false;
+          } else if (termo !== valorFiltroColeta(i)) {
+            return false;
+          }
         } else if (!contem(valorCampo(i, col.campo), termo)) {
           return false;
         }
@@ -884,6 +909,11 @@ Plano: ${e.plano_pintura ?? "—"}`}
                       <option value="">Todas</option>
                       <option value="vazia">Vazias</option>
                       <option value="preenchida">Preenchidas</option>
+                      {opcoesColeta.map(([chave, o]) => (
+                        <option key={chave} value={chave}>
+                          {o.rotulo} ({o.n})
+                        </option>
+                      ))}
                     </select>
                   ) : col.tipo === "foto" ? (
                     <select
