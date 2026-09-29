@@ -78,7 +78,7 @@ export function CelulaEditavel({
 
   if (editando) {
     return (
-      <div onClick={(e) => e.stopPropagation()}>
+      <div onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <input
           autoFocus
           type={tipo === "etapa" ? "number" : "text"}
@@ -103,6 +103,7 @@ export function CelulaEditavel({
     <button
       type="button"
       onClick={abrir}
+      onDoubleClick={(e) => e.stopPropagation()} // 2 cliques numa célula editável = editar, não abrir o card
       title="Clique para editar — salva sozinho"
       className="group relative block w-full min-w-[2.5rem] rounded text-left outline-none ring-green-600/40 hover:ring-1 focus-visible:ring-2 dark:ring-cyan-500/40"
     >

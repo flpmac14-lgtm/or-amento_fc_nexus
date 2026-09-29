@@ -414,6 +414,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                 e.stopPropagation();
                 setAnexarPara(item);
               }}
+              onDoubleClick={(e) => e.stopPropagation()}
               title="Anexar imagem — cole com Ctrl+V"
               className="flex h-10 w-12 items-center justify-center rounded border border-dashed border-stone-300 dark:border-slate-700 text-lg text-stone-400 dark:text-slate-500 hover:border-green-600 hover:text-green-600 dark:hover:border-cyan-500 dark:hover:text-cyan-400"
             >
@@ -427,6 +428,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
               e.stopPropagation();
               setGaleria({ item, indice: 0 });
             }}
+            onDoubleClick={(e) => e.stopPropagation()}
             className="relative block h-10 w-12 overflow-hidden rounded border border-stone-200 dark:border-slate-700 bg-white hover:border-green-600 dark:hover:border-cyan-500"
             title={item.imagens.length > 1 ? `${item.imagens.length} imagens` : "Ver imagem"}
           >
@@ -494,7 +496,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
             Pedidos novos com ST = A da <strong>Controle de obras</strong> entram sozinhos (a cada 15 min), junto com os
             campos que vêm por PROCV <IconeCadeado /> — esses não são editáveis. Etapas, coleta, fornecedor, orçamentos,
-            obs. Felipe/Marcelo e preço previsto: clique na célula para editar; salva sozinho.
+            obs. Felipe/Marcelo e preço previsto: clique na célula para editar; salva sozinho. Dois cliques na linha abrem o card do item.
           </p>
         </div>
         <button
@@ -762,7 +764,9 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
               return (
                 <tr
                   key={item.id}
-                  onClick={() => setItemAberto(item)}
+                  // Pedido do usuário: 1 clique edita a célula; o card do item só com 2 cliques.
+                  onDoubleClick={() => setItemAberto(item)}
+                  title="Dois cliques para abrir o card do item"
                   className={`cursor-pointer text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30 ${
                     item.presente_na_ultima_importacao ? "" : "opacity-50"
                   }`}
