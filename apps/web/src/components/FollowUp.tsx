@@ -127,6 +127,14 @@ const classeCampo =
 const classeFiltroColuna =
   "w-full min-w-[4rem] rounded border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs font-normal normal-case tracking-normal text-stone-800 dark:text-slate-200 outline-none focus:border-green-600 dark:focus:border-cyan-500";
 
+// Colunas congeladas na rolagem horizontal: Foto e PO — pedido do usuário.
+// Foto tem largura fixa (4rem = miniatura 3rem + padding) pra o PO encostar nela.
+function fixa(campo: Coluna["campo"], fundo: string): string {
+  if (campo === "foto") return `sticky left-0 w-16 min-w-16 max-w-16 ${fundo}`;
+  if (campo === "po") return `sticky left-16 ${fundo}`;
+  return "";
+}
+
 function valorCampo(item: ItemFollowUp, campo: Coluna["campo"]): unknown {
   if (campo === "foto") return item.imagens.length;
   if (campo === "coleta") return item.coleta_data ?? item.coleta;
@@ -692,7 +700,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                 <th
                   key={col.campo}
                   className={`border-b border-stone-200 dark:border-slate-800 ${col.curto ? "px-1" : "px-2"} pt-2 pb-1 font-semibold ${
-                    col.campo === "po" ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
+                    fixa(col.campo, "z-20 bg-stone-100 dark:bg-slate-900")
                   } ${col.tipo === "etapa" ? "text-center" : ""}`}
                 >
                   {col.tipo === "foto" ? (
@@ -725,7 +733,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                 <th
                   key={col.campo}
                   className={`border-b border-stone-200 dark:border-slate-800 ${col.curto ? "px-0.5" : "px-1.5"} pb-1.5 ${
-                    col.campo === "po" ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
+                    fixa(col.campo, "z-20 bg-stone-100 dark:bg-slate-900")
                   }`}
                 >
                   {col.tipo === "etapa" ? (
@@ -744,7 +752,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                     <select
                       value={filtrosColuna.foto ?? ""}
                       onChange={(e) => setFiltroColuna("foto", e.target.value)}
-                      className={classeFiltroColuna}
+                      className={`${classeFiltroColuna} !min-w-0 !px-0.5`}
                       aria-label="Filtrar por foto"
                     >
                       <option value="">Todas</option>
@@ -782,7 +790,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                       key={col.campo}
                       style={estiloCelula(item, col)}
                       className={`border-b border-stone-100 dark:border-slate-800/80 ${col.tipo === "etapa" || col.curto ? "px-1" : "px-2"} py-1.5 align-middle ${col.largura ?? ""} ${
-                        col.campo === "po" ? "sticky left-0 z-[1] bg-white dark:bg-slate-900" : ""
+                        fixa(col.campo, "z-[1] bg-white dark:bg-slate-900")
                       } ${col.curto ? "whitespace-nowrap" : ""} ${col.centro ? "text-center" : ""} ${col.maxW ? `${col.maxW} truncate` : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
                       title={
                         col.campo === "descricao"
