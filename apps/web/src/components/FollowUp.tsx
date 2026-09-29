@@ -64,6 +64,8 @@ const COLUNAS: Coluna[] = [
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", principal: true, largura: "min-w-[16rem]" },
   ...ETAPAS.map((e) => ({ campo: e.campo, rotulo: e.rotulo, tipo: "etapa" as const, principal: true })),
   { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true },
+  // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
+  { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
   // Colunas de pintura sempre visíveis — pedido do usuário. Plano de pintura é
   // longo: corta e mostra inteiro ao passar o mouse.
@@ -73,7 +75,6 @@ const COLUNAS: Coluna[] = [
   { campo: "fornecedor", rotulo: "Fornecedor", tipo: "texto", principal: false },
   { campo: "orcamento_terceirizado_unid", rotulo: "Orç. terceirizado unid", tipo: "moeda", principal: false },
   { campo: "orcamento_custo_macfab_unid", rotulo: "Custo Macfab unid", tipo: "moeda", principal: false },
-  { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: false, largura: "min-w-[14rem]" },
   { campo: "obs_alisson", rotulo: "Obs. Alisson", tipo: "texto", principal: false, largura: "min-w-[14rem]" },
   { campo: "st", rotulo: "ST", tipo: "codigo", principal: false },
   { campo: "nf", rotulo: "NF", tipo: "codigo", principal: false },
@@ -497,7 +498,7 @@ export default function FollowUp({
           <BarraEtapa valor={item[col.campo as keyof ItemFollowUp] as number | null} cor={corBarra} max={maxBarra} compacta />
         );
       case "status":
-        return <SeloStatus item={item} ctx={ctx} />;
+        return <SeloStatus item={item} ctx={ctx} compacto />;
       case "prazo":
         return <SeloPrazo prazo={item.prazo_contratual} compacto />;
       case "coleta":

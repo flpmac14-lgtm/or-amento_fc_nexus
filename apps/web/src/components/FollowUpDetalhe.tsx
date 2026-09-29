@@ -89,13 +89,16 @@ export function SeloPrazo({ prazo, compacto = false }: { prazo: string | null; c
   );
 }
 
-export function SeloStatus({ item, ctx }: { item: ItemFollowUp; ctx: ContextoRegras }) {
+// compacto: na tabela — corta o texto longo ("Falta Montagem, Solda...") e mostra inteiro ao passar o mouse.
+export function SeloStatus({ item, ctx, compacto = false }: { item: ItemFollowUp; ctx: ContextoRegras; compacto?: boolean }) {
+  const corte = compacto ? " max-w-[8.5rem] truncate align-middle" : "";
   const cond = corCondicional(ctx, item, "status");
   if (!item.status) return <span className="text-stone-400 dark:text-slate-600">—</span>;
   if (cond?.fundo) {
     return (
       <span
-        className="inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold"
+        className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold${corte}`}
+        title={compacto ? item.status : undefined}
         style={{ backgroundColor: cond.fundo, color: cond.fonte ?? corTextoSobre(cond.fundo) }}
       >
         {item.status}
@@ -103,7 +106,10 @@ export function SeloStatus({ item, ctx }: { item: ItemFollowUp; ctx: ContextoReg
     );
   }
   return (
-    <span className="inline-block whitespace-nowrap rounded border border-stone-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-0.5 text-xs font-semibold text-stone-800 dark:text-slate-200">
+    <span
+      className={`inline-block whitespace-nowrap rounded border border-stone-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-0.5 text-xs font-semibold text-stone-800 dark:text-slate-200${corte}`}
+      title={compacto ? item.status : undefined}
+    >
       {item.status}
     </span>
   );
