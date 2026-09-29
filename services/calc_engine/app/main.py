@@ -104,6 +104,7 @@ from app.follow_up_mae import CampoNaoEditavel
 from app.follow_up_mae import ImagemInvalida
 from app.follow_up_mae import adicionar_imagem as adicionar_imagem_follow_up
 from app.follow_up_mae import editar as editar_follow_up
+from app.follow_up_mae import listar_notificacoes as listar_notificacoes_follow_up
 from app.follow_up_mae import remover_imagem as remover_imagem_follow_up
 from app.follow_up_registros import adicionar as adicionar_registro_follow_up
 from app.follow_up_registros import completo as item_completo_follow_up
@@ -271,6 +272,15 @@ def follow_up_editar(item_id: str, pedido: dict) -> dict:
 def follow_up_listar() -> dict:
     try:
         return listar_follow_up()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/follow-up/notificacoes")
+def follow_up_notificacoes(limite: int = 200) -> dict:
+    """Sininho: pedidos novos / encerrados que a sincronização de 15 min trouxe."""
+    try:
+        return {"notificacoes": listar_notificacoes_follow_up(limite)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

@@ -30,6 +30,8 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
   const [alvoCards, setAlvoCards] = useState<HTMLDivElement | null>(null);
+  // Onde o Follow up desenha o sininho de notificações (sempre, no canto direito).
+  const [alvoSino, setAlvoSino] = useState<HTMLDivElement | null>(null);
 
   function entrar() {
     setTelaCheia(true);
@@ -133,10 +135,11 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
             Tela cheia <kbd className="rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F2</kbd>
           </button>
         )}
+        <div ref={setAlvoSino} className="shrink-0" />
       </div>
       {/* As duas ficam montadas (só escondidas) pra não recarregar/perder filtros ao alternar. */}
       <div className={visao === "followup" ? "" : "hidden"}>
-        <FollowUp telaCheia={telaCheia} alvoCards={telaCheia ? alvoCards : null} />
+        <FollowUp telaCheia={telaCheia} alvoCards={telaCheia ? alvoCards : null} alvoSino={alvoSino} />
       </div>
       <div className={visao === "controle" ? "" : "hidden"}>
         <ControleObras telaCheia={telaCheia} />

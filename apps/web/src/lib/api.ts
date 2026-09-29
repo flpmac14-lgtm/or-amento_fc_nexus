@@ -10,6 +10,7 @@ import type {
   ItemComercial,
   ItemFollowUp,
   ItemFollowUpCompleto,
+  NotificacaoFollowUp,
   ItemPedidoWeir,
   ItemContingenciamento,
   MaterialCatalogo,
@@ -840,6 +841,12 @@ export async function adicionarRegistroFollowUp(
 export async function removerRegistroFollowUp(registroId: string): Promise<void> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/registros/${registroId}`, { method: "DELETE" });
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao apagar o registro");
+}
+
+export async function listarNotificacoesFollowUp(): Promise<NotificacaoFollowUp[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/notificacoes`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar as notificações (${resposta.status}).`);
+  return (await resposta.json()).notificacoes;
 }
 
 export async function buscarItemFollowUpCompleto(itemId: string): Promise<ItemFollowUpCompleto> {

@@ -152,6 +152,9 @@ def propagar() -> dict:
         pos_existentes = {str(r[1]).upper() for r in existentes}
 
         atualizacoes = []
+        # Sininho (migration 0019): ST que muda de/para "A" vira notificação.
+        notificacoes = []
+        i_st, i_cli, i_desc = campos.index("st"), campos.index("cliente"), campos.index("descricao")
         for row in existentes:
             item_id, po, atuais, ano_atual = row[0], row[1], row[2:-1], row[-1]
             achado = mae.get(str(po).upper())
@@ -164,6 +167,10 @@ def propagar() -> dict:
             if all(_igual(a, b) for a, b in zip(atuais, novos)) and ano == ano_atual:
                 continue
             atualizacoes.append((*novos, ano, linha, agora, item_id))
+            st_antes, st_depois = atuais[i_st], novos[i_st]
+            if (st_antes == "A") != (st_depois == "A"):
+                notificacoes.append(("encerrado" if st_antes == "A" else "reaberto", item_id, po,
+                                     novos[i_cli], novos[i_desc], st_antes, st_depois))
 
         if atualizacoes:
             sets = ", ".join(f"{c} = %s" for c in campos)
@@ -184,8 +191,10 @@ def propagar() -> dict:
             novos = [_valor_mae(valores[indice[m]], t) for m, t in CAMPOS_MAE.values()]
             prazo = novos[campos.index("prazo_contratual")]
             po = _valor_mae(valores[indice["po"]], "texto")
-            inseridos.append((uuid.uuid4(), po, po, *novos, prazo.year if prazo else None, status_vazio,
+            novo_id = uuid.uuid4()
+            inseridos.append((novo_id, po, po, *novos, prazo.year if prazo else None, status_vazio,
                               proxima_linha, linha, agora))
+            notificacoes.append(("novo", novo_id, po, novos[i_cli], novos[i_desc], None, "A"))
             proxima_linha += 1
         if inseridos:
             cur.executemany(
@@ -196,8 +205,30 @@ def propagar() -> dict:
                             'controle_obras', false, '{{}}', '{{}}', '')""",
                 inseridos,
             )
+        if notificacoes:
+            cur.executemany(
+                """insert into follow_up_notificacoes (tipo, item_id, po, cliente, descricao, st_antes, st_depois)
+                   values (%s, %s, %s, %s, %s, %s, %s)""",
+                notificacoes,
+            )
         conn.commit()
-    return {"atualizados": len(atualizacoes), "novos": len(inseridos)}
+    return {"atualizados": len(atualizacoes), "novos": len(inseridos),
+            "encerrados": sum(1 for n in notificacoes if n[0] == "encerrado")}
+
+
+def listar_notificacoes(limite: int = 200) -> list[dict]:
+    """Últimas notificações do sininho (mais recentes primeiro)."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select id, tipo, item_id, po, cliente, descricao, st_antes, st_depois, criado_em
+               from follow_up_notificacoes order by criado_em desc, id desc limit %s""",
+            (max(1, min(limite, 1000)),),
+        )
+        return [
+            {"id": r[0], "tipo": r[1], "item_id": str(r[2]) if r[2] else None, "po": r[3], "cliente": r[4],
+             "descricao": r[5], "st_antes": r[6], "st_depois": r[7], "criado_em": r[8].isoformat()}
+            for r in cur.fetchall()
+        ]
 
 
 # --- edição no app ------------------------------------------------------------

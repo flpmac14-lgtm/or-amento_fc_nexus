@@ -53,7 +53,8 @@ def main() -> int:
         try:
             p = propagar()
             if p.get("atualizados") or p.get("novos"):
-                print(f"{agora} Follow up - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
+                print(f"{agora} Follow up - {p['novos']} pedido(s) novo(s), {p['encerrados']} encerrado(s), "
+                      f"{p['atualizados']} atualizado(s) pela mãe")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Follow up (mãe -> filha) - {type(e).__name__}: {e}")
             return 1

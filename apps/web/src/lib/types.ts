@@ -670,6 +670,19 @@ export interface RespostaControleObras {
 }
 
 // Registro diário de um item do Follow up (histórico do pedido).
+// Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.
+export interface NotificacaoFollowUp {
+  id: number;
+  tipo: "novo" | "encerrado" | "reaberto";
+  item_id: string | null;
+  po: string;
+  cliente: string | null;
+  descricao: string | null;
+  st_antes: string | null;
+  st_depois: string | null;
+  criado_em: string;
+}
+
 export interface RegistroFollowUp {
   id: string;
   data: string; // AAAA-MM-DD — dia a que se refere

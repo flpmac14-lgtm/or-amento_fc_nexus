@@ -33,6 +33,7 @@ import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/Foll
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
+import FollowUpSino from "@/components/FollowUpSino";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -159,9 +160,11 @@ function unicos(itens: ItemFollowUp[], campo: keyof ItemFollowUp): string[] {
 export default function FollowUp({
   telaCheia = false,
   alvoCards = null,
+  alvoSino = null,
 }: {
   telaCheia?: boolean;
   alvoCards?: HTMLElement | null;
+  alvoSino?: HTMLElement | null;
 }) {
   const [dados, setDados] = useState<RespostaFollowUp | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -565,6 +568,17 @@ export default function FollowUp({
           {erro}
         </div>
       )}
+
+      {alvoSino &&
+        createPortal(
+          <FollowUpSino
+            onAbrirItem={(id) => {
+              const item = itens.find((i) => i.id === id);
+              if (item) setItemAberto(item);
+            }}
+          />,
+          alvoSino,
+        )}
 
       {alvoCards &&
         createPortal(
