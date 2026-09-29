@@ -622,6 +622,11 @@ export default function FollowUp({
               const item = itens.find((i) => i.id === id);
               if (item) setItemAberto(item);
             }}
+            semFoto={(id) => itens.find((i) => i.id === id)?.imagens.length === 0}
+            onColarFoto={(id) => {
+              const item = itens.find((i) => i.id === id);
+              if (item) setAnexarPara(item);
+            }}
           />,
           alvoSino,
         )}

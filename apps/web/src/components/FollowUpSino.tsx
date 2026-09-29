@@ -26,7 +26,17 @@ function lerVisto(): number {
   }
 }
 
-export default function FollowUpSino({ onAbrirItem }: { onAbrirItem: (itemId: string) => void }) {
+// semFoto/onColarFoto: pedido do usuário — o pedido novo já entra sozinho no
+// Follow up; daqui ele só cola a foto (abre a janela de colar imagem direto).
+export default function FollowUpSino({
+  onAbrirItem,
+  semFoto,
+  onColarFoto,
+}: {
+  onAbrirItem: (itemId: string) => void;
+  semFoto: (itemId: string) => boolean;
+  onColarFoto: (itemId: string) => void;
+}) {
   const [lista, setLista] = useState<NotificacaoFollowUp[]>([]);
   const [vistoAte, setVistoAte] = useState(0); // conta o número vermelho
   const [destaqueAte, setDestaqueAte] = useState(0); // destaca, na lista aberta, o que era novo
@@ -58,7 +68,8 @@ export default function FollowUpSino({ onAbrirItem }: { onAbrirItem: (itemId: st
   useEffect(() => {
     if (!aberto) return;
     function fora(e: MouseEvent) {
-      if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
+      if (caixa.current && !caixa.current.contains(e.target as Node))
+        setAberto(false);
     }
     document.addEventListener("mousedown", fora);
     return () => document.removeEventListener("mousedown", fora);
@@ -83,7 +94,10 @@ export default function FollowUpSino({ onAbrirItem }: { onAbrirItem: (itemId: st
   // Agrupa por rodada de sincronização (mesmo minuto).
   const grupos: { quando: string; itens: NotificacaoFollowUp[] }[] = [];
   for (const n of lista) {
-    const quando = new Date(n.criado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    const quando = new Date(n.criado_em).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
     const g = grupos[grupos.length - 1];
     if (g && g.quando === quando) g.itens.push(n);
     else grupos.push({ quando, itens: [n] });
@@ -98,8 +112,17 @@ export default function FollowUpSino({ onAbrirItem }: { onAbrirItem: (itemId: st
         aria-label="Notificações"
         className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-700 dark:text-slate-200 hover:border-green-600 dark:hover:border-cyan-500"
       >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z" strokeLinejoin="round" />
+        <svg
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path
+            d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"
+            strokeLinejoin="round"
+          />
           <path d="M10 19a2 2 0 0 0 4 0" strokeLinecap="round" />
         </svg>
         {naoVistas > 0 && (
@@ -115,38 +138,67 @@ export default function FollowUpSino({ onAbrirItem }: { onAbrirItem: (itemId: st
           </p>
           {lista.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-stone-500 dark:text-slate-400">
-              Nenhuma ainda. Aparecem aqui os pedidos novos e encerrados a cada atualização (15 min).
+              Nenhuma ainda. Aparecem aqui os pedidos novos e encerrados a cada
+              atualização (15 min).
             </p>
           ) : (
             grupos.map((g) => (
-              <div key={g.quando} className="border-b border-stone-100 dark:border-slate-800">
+              <div
+                key={g.quando}
+                className="border-b border-stone-100 dark:border-slate-800"
+              >
                 <p className="bg-stone-50 dark:bg-slate-950/60 px-3 py-1 text-[11px] font-medium text-stone-500 dark:text-slate-400">
                   {g.quando}
                 </p>
                 {g.itens.map((n) => (
-                  <button
+                  <div
                     key={n.id}
-                    type="button"
-                    disabled={!n.item_id}
-                    onClick={() => {
-                      if (!n.item_id) return;
-                      onAbrirItem(n.item_id);
-                      setAberto(false);
-                    }}
-                    title="Abrir o card do pedido"
-                    className={`flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-green-50 dark:hover:bg-cyan-950/30 ${
-                      n.id > destaqueAte ? "bg-amber-50/60 dark:bg-amber-900/10" : ""
-                    }`}
+                    className={`flex items-center gap-1 pr-2 ${n.id > destaqueAte ? "bg-amber-50/60 dark:bg-amber-900/10" : ""}`}
                   >
-                    <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${ROTULO[n.tipo].classe}`}>
-                      {ROTULO[n.tipo].texto}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="font-mono text-xs font-semibold text-stone-900 dark:text-white">{n.po}</span>
-                      {n.cliente && <span className="ml-1.5 text-xs text-stone-500 dark:text-slate-400">{n.cliente}</span>}
-                      <span className="block truncate text-xs text-stone-600 dark:text-slate-400">{n.descricao}</span>
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      disabled={!n.item_id}
+                      onClick={() => {
+                        if (!n.item_id) return;
+                        onAbrirItem(n.item_id);
+                        setAberto(false);
+                      }}
+                      title="Abrir o card do pedido"
+                      className="flex min-w-0 flex-1 items-start gap-2 px-3 py-1.5 text-left hover:bg-green-50 dark:hover:bg-cyan-950/30"
+                    >
+                      <span
+                        className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${ROTULO[n.tipo].classe}`}
+                      >
+                        {ROTULO[n.tipo].texto}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-mono text-xs font-semibold text-stone-900 dark:text-white">
+                          {n.po}
+                        </span>
+                        {n.cliente && (
+                          <span className="ml-1.5 text-xs text-stone-500 dark:text-slate-400">
+                            {n.cliente}
+                          </span>
+                        )}
+                        <span className="block truncate text-xs text-stone-600 dark:text-slate-400">
+                          {n.descricao}
+                        </span>
+                      </span>
+                    </button>
+                    {n.tipo === "novo" && n.item_id && semFoto(n.item_id) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onColarFoto(n.item_id!);
+                          setAberto(false);
+                        }}
+                        title="Colar a foto deste pedido (Ctrl+V)"
+                        className="shrink-0 rounded border border-dashed border-green-600/60 dark:border-cyan-500/60 px-2 py-1 text-[11px] font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30"
+                      >
+                        + Colar foto
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             ))
