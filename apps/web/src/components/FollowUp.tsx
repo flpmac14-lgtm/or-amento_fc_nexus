@@ -38,7 +38,7 @@ import FollowUpSino from "@/components/FollowUpSino";
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
-type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso";
+type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao";
 
 interface Coluna {
   campo: keyof ItemFollowUp | "foto";
@@ -65,7 +65,8 @@ const COLUNAS: Coluna[] = [
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", principal: true, curto: "Des.", maxW: "max-w-[6.5rem]" },
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", principal: true, largura: "min-w-[16rem]" },
   ...ETAPAS.map((e) => ({ campo: e.campo, rotulo: e.rotulo, tipo: "etapa" as const, principal: true })),
-  { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true },
+  // Estreita (pedido do usuário): texto longo corta e aparece inteiro ao passar o mouse.
+  { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true, maxW: "max-w-[6rem]" },
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
@@ -85,6 +86,8 @@ const COLUNAS: Coluna[] = [
   { campo: "peso_total", rotulo: "Peso total", tipo: "peso", principal: false },
   { campo: "ano", rotulo: "Ano", tipo: "numero", principal: false },
   { campo: "preco_previsto", rotulo: "Preço previsto", tipo: "moeda", principal: false },
+  // Última coluna — pedido do usuário: quem editou a linha por último, com data e hora.
+  { campo: "editado_em", rotulo: "Última edição", tipo: "edicao", principal: true },
 ];
 
 interface Filtros {
@@ -150,6 +153,13 @@ function valorFiltroColeta(item: ItemFollowUp): string {
   if (item.coleta_data) return `d:${item.coleta_data}`;
   const texto = (item.coleta ?? "").trim();
   return texto ? `t:${texto}` : "";
+}
+
+// "29/09/2026 14:05" — hora local de quem está vendo.
+function formatarDataHora(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function unicos(itens: ItemFollowUp[], campo: keyof ItemFollowUp): string[] {
@@ -368,6 +378,8 @@ export default function FollowUp({
           if (situacaoEtapa(i[col.campo as keyof ItemFollowUp] as number | null) !== (termo as SituacaoEtapa)) return false;
         } else if (col.tipo === "foto") {
           if ((termo === "com") !== i.imagens.length > 0) return false;
+        } else if (col.tipo === "edicao") {
+          if (!contem(`${i.editado_por ?? ""} ${formatarDataHora(i.editado_em)}`, termo)) return false;
         } else if (col.tipo === "prazo") {
           if (!contem(formatarDataBr(i.prazo_contratual), termo)) return false;
         } else if (col.tipo === "coleta") {
@@ -532,6 +544,15 @@ export default function FollowUp({
         return <SeloStatus item={item} ctx={ctx} compacto />;
       case "prazo":
         return <SeloPrazo prazo={item.prazo_contratual} compacto />;
+      case "edicao":
+        return item.editado_em ? (
+          <span className="block whitespace-nowrap text-[11px] leading-tight">
+            <span className="font-semibold">{item.editado_por ?? "—"}</span>
+            <span className="block font-mono text-stone-500 dark:text-slate-400">{formatarDataHora(item.editado_em)}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-stone-300 dark:text-slate-600">—</span>
+        );
       case "coleta":
         return item.coleta_data ? (
           <span className="font-mono text-xs">{formatarDataBr(item.coleta_data)}</span>
@@ -903,7 +924,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
                     <select
                       value={filtrosColuna.coleta ?? ""}
                       onChange={(e) => setFiltroColuna("coleta", e.target.value)}
-                      className={classeFiltroColuna}
+                      className={`${classeFiltroColuna} !w-[5.5rem] !min-w-0`}
                       aria-label="Filtrar coleta"
                     >
                       <option value="">Todas</option>
@@ -911,7 +932,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
                       <option value="preenchida">Preenchidas</option>
                       {opcoesColeta.map(([chave, o]) => (
                         <option key={chave} value={chave}>
-                          {o.rotulo} ({o.n})
+                          {o.rotulo.length > 28 ? `${o.rotulo.slice(0, 27)}…` : o.rotulo} ({o.n})
                         </option>
                       ))}
                     </select>
