@@ -197,3 +197,21 @@ export function compararValores(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
   return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
 }
+
+// --- Relatório por obra -------------------------------------------------------
+// Pedido do usuário: gerar por MAC ou por PO. O valor digitado é o começo:
+// "4501743280" junta -010, -020...; "690.25" junta 690.25.20.01, 690.25.20.02...
+
+export type TipoObra = "po" | "mac";
+
+export function itensDaObra(itens: ItemFollowUp[], tipo: TipoObra, valor: string): ItemFollowUp[] {
+  const alvo = normalizarBusca(valor);
+  if (!alvo) return [];
+  return itens.filter((i) => normalizarBusca(String(i[tipo] ?? "")).startsWith(alvo));
+}
+
+// Valor sugerido a partir de um item: PO sem o número do item / MAC com 2 partes.
+export function obraDoItem(item: ItemFollowUp, tipo: TipoObra): string {
+  if (tipo === "po") return item.po.split("-")[0];
+  return (item.mac ?? "").split(".").slice(0, 2).join(".");
+}

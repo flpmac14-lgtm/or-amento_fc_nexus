@@ -32,6 +32,7 @@ import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } fr
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
+import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -180,6 +181,8 @@ export default function FollowUp({
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
   const [exportando, setExportando] = useState(false);
   const [relatorioColeta, setRelatorioColeta] = useState(false);
+  // Relatório por obra: aberto pela barra (vazio) ou pelo card (com o item).
+  const [relatorioObra, setRelatorioObra] = useState<{ item: ItemFollowUp | null } | null>(null);
   // "Salvar tudo" — pedido do usuário: mesmo com cada campo salvando sozinho,
   // um botão que confirma tudo (fecha o campo em edição, espera os envios em
   // andamento, recarrega do servidor e avisa se algo não salvou).
@@ -670,6 +673,15 @@ export default function FollowUp({
           </button>
           <button
             type="button"
+            onClick={() => setRelatorioObra({ item: null })}
+            disabled={itens.length === 0}
+            title="Resumo de uma obra (por PO ou por MAC) numa folha A4"
+            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+          >
+            Relatório por obra
+          </button>
+          <button
+            type="button"
             onClick={salvarTudo}
             disabled={salvandoTudo}
             title="Cada campo já salva sozinho — este botão confirma tudo: termina o campo em edição, espera os envios e recarrega do servidor"
@@ -992,6 +1004,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
           onFechar={() => setItemAberto(null)}
           onSalvarCampo={(campo, valor) => salvarCampo(itemAberto, campo, valor)}
           onAnexarImagem={() => setAnexarPara(itemAberto)}
+          onRelatorioObra={() => setRelatorioObra({ item: itemAberto })}
           autor={editadoPor}
           onAbrirImagem={(indice) => setGaleria({ item: itemAberto, indice })}
         />
@@ -1010,6 +1023,9 @@ Plano: ${e.plano_pintura ?? "—"}`}
       )}
 
       {relatorioColeta && <FollowUpRelatorioColeta itens={itens} onFechar={() => setRelatorioColeta(false)} />}
+      {relatorioObra && (
+        <FollowUpRelatorioObra itens={itens} itemInicial={relatorioObra.item} onFechar={() => setRelatorioObra(null)} />
+      )}
 
       {anexarPara && (
         <FollowUpAnexarImagem

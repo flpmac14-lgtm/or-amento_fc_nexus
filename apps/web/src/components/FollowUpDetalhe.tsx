@@ -310,6 +310,7 @@ export default function FollowUpDetalhe({
   onAbrirImagem,
   onSalvarCampo,
   onAnexarImagem,
+  onRelatorioObra,
   autor,
 }: {
   item: ItemFollowUp;
@@ -320,6 +321,7 @@ export default function FollowUpDetalhe({
   onAbrirImagem: (indice: number) => void;
   onSalvarCampo: (campo: string, valor: string) => Promise<void>;
   onAnexarImagem: () => void;
+  onRelatorioObra: () => void; // relatório da obra do item (por PO ou MAC)
   autor: string | null; // login de quem está usando (registro diário)
 }) {
   // Campo de acompanhamento: sempre editável aqui, salva sozinho.
@@ -383,6 +385,14 @@ export default function FollowUpDetalhe({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onRelatorioObra}
+              title="Resumo de toda a obra deste item (por PO ou por MAC) numa folha A4"
+              className="inline-flex items-center gap-1.5 rounded border border-green-600/50 dark:border-cyan-500/50 px-3 py-1 text-sm text-green-700 dark:text-cyan-300 hover:bg-green-600/10 dark:hover:bg-cyan-500/10"
+            >
+              Relatório da obra
+            </button>
             <button
               type="button"
               onClick={() => window.open(`/follow-up/relatorio/${item.id}`, "_blank")}

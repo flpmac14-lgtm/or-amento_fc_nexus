@@ -59,6 +59,18 @@ body {
     margin: 8mm;
   }
 
+  /* Relatório por obra do Follow up (app/follow-up/obra) — A4 retrato. */
+  @page obra {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  .folha-obra {
+    page: obra;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   .folha-coleta {
     page: coleta;
     print-color-adjust: exact;
