@@ -97,6 +97,7 @@ from app.catalogo_processos_terceirizados import carregar as carregar_catalogo_p
 from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
+from app.material_compra import listar as listar_material_compra
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -396,6 +397,16 @@ def controle_obras_listar() -> dict:
     (roda na máquina da empresa que enxerga o J:). Aqui só leitura."""
     try:
         return listar_controle_obras()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/material-compra")
+def material_compra_listar() -> dict:
+    """Espelho da aba MACLM do "MACLM.xlsx" (Material de compra) — gravado a
+    cada 15 min por scripts/sincronizar_material_compra.py. Aqui só leitura."""
+    try:
+        return listar_material_compra()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

@@ -7,7 +7,7 @@
 // quem edita é a planilha.
 
 import { useEffect, useMemo, useState } from "react";
-import { listarControleObras } from "@/lib/api";
+import { listarControleObras, listarMaterialCompra } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca, situacaoPrazo } from "@/lib/followUp";
 import type { ColunaControleObras, RespostaControleObras, ValorControleObras } from "@/lib/types";
@@ -16,7 +16,46 @@ import { SeloPrazo } from "@/components/FollowUpDetalhe";
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 // Tarefa roda a cada 15 min; sem verificação há mais de 45 min = parada.
 const VERIFICACAO_ATRASADA_MS = 45 * 60 * 1000;
-const CAMPOS_BUSCA = ["po", "desenho", "descricao", "mac", "nf", "tipar", "obs"];
+
+// Mesma tela serve de espelho pra outra planilha "mãe" — pedido do usuário:
+// Material de compra (aba MACLM do MACLM.xlsx), igual à Controle de obras.
+export interface ConfigEspelho {
+  titulo: string;
+  carregar: () => Promise<RespostaControleObras>;
+  arquivoPadrao: string;
+  abaPadrao: string;
+  tarefa: string; // nome da Tarefa Agendada
+  camposBusca: string[];
+  dicaBusca: string;
+  campoPrazo: string;
+  rotuloPrazo: string;
+  campoKg?: string;
+}
+
+export const CONFIG_CONTROLE_OBRAS: ConfigEspelho = {
+  titulo: "Controle de obras",
+  carregar: listarControleObras,
+  arquivoPadrao: "J:\\6 - PCP\\Controle de obras.xlsm",
+  abaPadrao: "OBRAS",
+  tarefa: "FCNexus - Sincronizar Controle de obras",
+  camposBusca: ["po", "desenho", "descricao", "mac", "nf", "tipar", "obs"],
+  dicaBusca: "Pesquisar PO, desenho, descrição, MAC, NF, Tipar ou OBS…",
+  campoPrazo: "pz_c",
+  rotuloPrazo: "PZ-C",
+  campoKg: "kg_tot",
+};
+
+export const CONFIG_MATERIAL_COMPRA: ConfigEspelho = {
+  titulo: "Material de compra",
+  carregar: listarMaterialCompra,
+  arquivoPadrao: "J:\\6 - PCP\\PCP-CP\\MACLM.xlsx",
+  abaPadrao: "MACLM",
+  tarefa: "FCNexus - Sincronizar Material de compra",
+  camposBusca: ["po_it_pos", "po", "descricao", "mac1", "desenho", "desenho_cj", "codigo", "mp", "mpd"],
+  dicaBusca: "Pesquisar PO, descrição, MAC1, desenho, DesenhoCJ, código ou MP…",
+  campoPrazo: "pzc",
+  rotuloPrazo: "PZC",
+};
 
 const classeCampo =
   "w-full rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500";
@@ -43,7 +82,13 @@ function tempoRelativo(iso: string | null | undefined, agora: number): string {
 }
 
 // telaCheia: modo "só os dados" (ver ModuloFollowUp) — some o texto do topo e os indicadores.
-export default function ControleObras({ telaCheia = false }: { telaCheia?: boolean }) {
+export default function ControleObras({
+  telaCheia = false,
+  config = CONFIG_CONTROLE_OBRAS,
+}: {
+  telaCheia?: boolean;
+  config?: ConfigEspelho;
+}) {
   const [dados, setDados] = useState<RespostaControleObras | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [recebidoEm, setRecebidoEm] = useState(0);
@@ -61,7 +106,8 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
   useEffect(() => {
     let ativo = true;
     function buscar() {
-      listarControleObras()
+      config
+        .carregar()
         .then((r) => {
           if (ativo) {
             setDados(r);
@@ -79,7 +125,7 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
       ativo = false;
       clearInterval(id);
     };
-  }, []);
+  }, [config]);
 
   const colunas = useMemo(() => dados?.status?.colunas ?? [], [dados]);
   const linhas = useMemo(() => dados?.linhas ?? [], [dados]);
@@ -101,13 +147,13 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
 
   const filtradas = useMemo(() => {
     const termo = normalizarBusca(busca);
-    const iBusca = CAMPOS_BUSCA.map((c) => idx[c]).filter((i) => i !== undefined);
+    const iBusca = config.camposBusca.map((c) => idx[c]).filter((i) => i !== undefined);
     const ativos = Object.entries(filtrosColuna).filter(([, v]) => v.trim());
     const lista = linhas.filter((l) => {
       const v = l.valores;
       if (st && String(v[idx.st] ?? "") !== st) return false;
       if (cl && String(v[idx.cl] ?? "") !== cl) return false;
-      const pz = typeof v[idx.pz_c] === "string" ? (v[idx.pz_c] as string) : "";
+      const pz = typeof v[idx[config.campoPrazo]] === "string" ? (v[idx[config.campoPrazo]] as string) : "";
       if (prazoDe && (!pz || pz < prazoDe)) return false;
       if (prazoAte && (!pz || pz > prazoAte)) return false;
       if (termo && !normalizarBusca(iBusca.map((i) => String(v[i] ?? "")).join(" ")).includes(termo)) return false;
@@ -127,19 +173,19 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
       });
     }
     return lista;
-  }, [linhas, colunas, idx, busca, st, cl, prazoDe, prazoAte, filtrosColuna, ordem]);
+  }, [linhas, colunas, idx, config, busca, st, cl, prazoDe, prazoAte, filtrosColuna, ordem]);
 
   const totais = useMemo(() => {
     let kg = 0;
     let vencidas = 0;
     for (const l of filtradas) {
-      const k = l.valores[idx.kg_tot];
+      const k = config.campoKg ? l.valores[idx[config.campoKg]] : null;
       if (typeof k === "number") kg += k;
-      const pz = l.valores[idx.pz_c];
+      const pz = l.valores[idx[config.campoPrazo]];
       if (l.valores[idx.st] === "A" && typeof pz === "string" && situacaoPrazo(pz) === "atrasado") vencidas++;
     }
     return { kg, vencidas };
-  }, [filtradas, idx]);
+  }, [filtradas, idx, config]);
 
   const status = dados?.status ?? null;
   const verificacaoAtrasada =
@@ -162,11 +208,11 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
   return (
     <div className="flex flex-col gap-4">
       <div className={`${telaCheia ? "hidden" : ""} rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4`}>
-        <h2 className="text-lg font-bold text-stone-900 dark:text-white">Controle de obras</h2>
+        <h2 className="text-lg font-bold text-stone-900 dark:text-white">{config.titulo}</h2>
         <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
           Atualizado automaticamente a cada 15 min a partir de{" "}
-          <strong>{status?.arquivo ?? "J:\\6 - PCP\\Controle de obras.xlsm"}</strong> (aba {status?.aba ?? "OBRAS"},
-          colunas {status?.intervalo ?? "H:AB"}). Só leitura — alterações são feitas na planilha.
+          <strong>{status?.arquivo ?? config.arquivoPadrao}</strong> (aba {status?.aba ?? config.abaPadrao}
+          {status?.intervalo && `, colunas ${status.intervalo}`}). Só leitura — alterações são feitas na planilha.
         </p>
         {status && (
           <p className="mt-1 text-xs text-stone-500 dark:text-slate-500">
@@ -189,14 +235,14 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
           {verificacaoAtrasada && (
             <p>
               A planilha não é verificada há mais de 45 min — a sincronização roda num computador da empresa (Tarefa
-              Agendada “FCNexus - Sincronizar Controle de obras”); confira se ele está ligado e com o J: acessível.
+              Agendada “{config.tarefa}”); confira se ele está ligado e com o J: acessível.
             </p>
           )}
         </div>
       )}
 
       <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-4`}>
-        <div className="rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3">
+        <div className={`${config.campoKg ? "" : "hidden"} rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3`}>
           <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">Kg total</p>
           <p className="font-mono text-2xl font-bold text-green-700 dark:text-cyan-300">
             {formatarNumero(totais.kg, 2)} <span className="text-sm font-normal">kg</span>
@@ -209,7 +255,7 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
           <p className="text-[11px] text-stone-500 dark:text-slate-500">de {linhas.length} na planilha</p>
         </div>
         <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">PZ-C vencido</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">{config.rotuloPrazo} vencido</p>
           <p className="font-mono text-2xl font-bold text-red-600 dark:text-red-400">{totais.vencidas}</p>
           <p className="text-[11px] text-stone-500 dark:text-slate-500">ST = A com prazo passado</p>
         </div>
@@ -224,7 +270,7 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
               setBusca(e.target.value);
               setPagina(0);
             }}
-            placeholder="Pesquisar PO, desenho, descrição, MAC, NF, Tipar ou OBS…"
+            placeholder={config.dicaBusca}
             className={`${classeCampo} min-w-[16rem] flex-1`}
           />
           <button
@@ -274,7 +320,7 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
             </select>
           </label>
           <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
-            PZ-C de
+            {config.rotuloPrazo} de
             <input
               type="date"
               value={prazoDe}
@@ -364,7 +410,7 @@ export default function ControleObras({ telaCheia = false }: { telaCheia?: boole
                       } ${c.campo === "descricao" || c.campo === "obs" ? "max-w-[22rem] truncate" : "whitespace-nowrap"}`}
                       title={c.campo === "descricao" || c.campo === "obs" ? exibir(v, c.tipo) : undefined}
                     >
-                      {c.campo === "pz_c" && ativa && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? (
+                      {c.campo === config.campoPrazo && ativa && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? (
                         <SeloPrazo prazo={v} compacto />
                       ) : (
                         exibir(v, c.tipo)

@@ -657,7 +657,7 @@ export interface RespostaControleObras {
   status: {
     arquivo: string;
     aba: string;
-    intervalo: string;
+    intervalo?: string; // só a Controle de obras (o Material de compra escolhe colunas pelo nome)
     colunas: ColunaControleObras[];
     linhas: number;
     arquivo_modificado_em: string | null;

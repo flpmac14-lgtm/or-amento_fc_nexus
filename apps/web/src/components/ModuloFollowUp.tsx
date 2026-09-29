@@ -11,13 +11,15 @@
 // (some a barra do navegador); Esc volta.
 
 import { useEffect, useState } from "react";
-import ControleObras from "@/components/ControleObras";
+import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
 import FollowUp from "@/components/FollowUp";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 
 const VISOES = [
   { valor: "followup", rotulo: "Follow up" },
   { valor: "controle", rotulo: "Controle de obras" },
+  // Espelho da aba MACLM do MACLM.xlsx — pedido do usuário (mãe de um projeto novo).
+  { valor: "material", rotulo: "Material de compra" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
@@ -26,6 +28,8 @@ const VISOES = [
 // completas já têm na tela principal.
 export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comReferenciaPrecos?: boolean }) {
   const [visao, setVisao] = useState<(typeof VISOES)[number]["valor"]>("followup");
+  // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
+  const [materialAberto, setMaterialAberto] = useState(false);
   const visoes = VISOES.filter((v) => v.valor !== "referencia" || comReferenciaPrecos);
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
@@ -110,7 +114,10 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
             <button
               key={v.valor}
               type="button"
-              onClick={() => setVisao(v.valor)}
+              onClick={() => {
+                setVisao(v.valor);
+                if (v.valor === "material") setMaterialAberto(true);
+              }}
               className={`rounded-md px-4 py-1.5 font-medium transition-colors ${
                 visao === v.valor
                   ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950"
@@ -144,6 +151,11 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
       <div className={visao === "controle" ? "" : "hidden"}>
         <ControleObras telaCheia={telaCheia} />
       </div>
+      {materialAberto && (
+        <div className={visao === "material" ? "" : "hidden"}>
+          <ControleObras telaCheia={telaCheia} config={CONFIG_MATERIAL_COMPRA} />
+        </div>
+      )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

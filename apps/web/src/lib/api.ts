@@ -806,6 +806,16 @@ export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
 }
 
+// Material de compra: mesmo formato da Controle de obras (espelho de planilha).
+export async function listarMaterialCompra(): Promise<RespostaControleObras> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/material-compra`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar o Material de compra (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
 export async function listarControleObras(): Promise<RespostaControleObras> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/controle-obras`);
   if (!resposta.ok) {
