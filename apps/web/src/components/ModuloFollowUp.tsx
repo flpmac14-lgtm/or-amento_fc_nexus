@@ -22,6 +22,8 @@ const VISOES = [
 export default function ModuloFollowUp() {
   const [visao, setVisao] = useState<(typeof VISOES)[number]["valor"]>("followup");
   const [telaCheia, setTelaCheia] = useState(false);
+  // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
+  const [alvoCards, setAlvoCards] = useState<HTMLDivElement | null>(null);
 
   function entrar() {
     setTelaCheia(true);
@@ -111,6 +113,7 @@ export default function ModuloFollowUp() {
             </button>
           ))}
         </div>
+        {telaCheia && <div ref={setAlvoCards} className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" />}
         {!telaCheia && (
           <button
             type="button"
@@ -127,7 +130,7 @@ export default function ModuloFollowUp() {
       </div>
       {/* As duas ficam montadas (só escondidas) pra não recarregar/perder filtros ao alternar. */}
       <div className={visao === "followup" ? "" : "hidden"}>
-        <FollowUp telaCheia={telaCheia} />
+        <FollowUp telaCheia={telaCheia} alvoCards={telaCheia ? alvoCards : null} />
       </div>
       <div className={visao === "controle" ? "" : "hidden"}>
         <ControleObras telaCheia={telaCheia} />

@@ -8,6 +8,7 @@
 // na hora (ver services/calc_engine/app/follow_up_mae.py).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { baixarExcelFollowUp, editarItemFollowUp, listarFollowUp, removerImagemFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -150,7 +151,15 @@ function unicos(itens: ItemFollowUp[], campo: keyof ItemFollowUp): string[] {
 }
 
 // telaCheia: modo "só os dados" (ver ModuloFollowUp) — some o texto do topo e os indicadores.
-export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean }) {
+// alvoCards: lugar no topo (ao lado das abas, na tela cheia) onde vão os cards
+// de ativos e de cada cliente.
+export default function FollowUp({
+  telaCheia = false,
+  alvoCards = null,
+}: {
+  telaCheia?: boolean;
+  alvoCards?: HTMLElement | null;
+}) {
   const [dados, setDados] = useState<RespostaFollowUp | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -371,6 +380,15 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
     return { peso, prontos, atrasados, vencendo };
   }, [filtrados]);
 
+  // Cards do topo — pedido do usuário: quantos ativos (ST = A) e um card por
+  // cliente. Contam todos os ativos, sem os filtros; clicar filtra o cliente.
+  const ativosPorCliente = useMemo(() => {
+    const ativos = base.filter((i) => i.st === "A");
+    const m = new Map<string, number>();
+    for (const i of ativos) m.set(i.cliente ?? "—", (m.get(i.cliente ?? "—") ?? 0) + 1);
+    return { total: ativos.length, clientes: [...m.entries()].sort((a, b) => b[1] - a[1]) };
+  }, [base]);
+
   const colunas = todasColunas ? COLUNAS : COLUNAS.filter((c) => c.principal);
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
   const paginaAtual = Math.min(pagina, totalPaginas - 1);
@@ -541,6 +559,43 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           {erro}
         </div>
       )}
+
+      {alvoCards &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              onClick={() => setFiltro("cliente", "")}
+              title="Pedidos ativos (ST = A) — clique para ver todos os clientes"
+              className={`rounded-lg border px-2.5 py-1 text-left leading-tight border-green-600/50 bg-white dark:border-cyan-500/50 dark:bg-slate-900`}
+            >
+              <span className="block text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">Ativos</span>
+              <span className="font-mono text-lg font-bold text-green-700 dark:text-cyan-300">{ativosPorCliente.total}</span>
+            </button>
+            {ativosPorCliente.clientes.map(([cliente, n]) => {
+              const ativo = filtros.cliente === cliente;
+              return (
+                <button
+                  key={cliente}
+                  type="button"
+                  onClick={() => setFiltro("cliente", ativo || cliente === "—" ? "" : cliente)}
+                  title={`${n} pedidos ativos de ${cliente} — clique para filtrar`}
+                  className={`rounded-lg border px-2.5 py-1 text-left leading-tight ${
+                    ativo
+                      ? "border-green-600 bg-green-50 dark:border-cyan-400 dark:bg-cyan-950/40"
+                      : "border-stone-200 bg-white hover:border-green-600/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/50"
+                  }`}
+                >
+                  <span className="block max-w-[7rem] truncate text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">
+                    {cliente}
+                  </span>
+                  <span className="font-mono text-lg font-bold text-stone-900 dark:text-white">{n}</span>
+                </button>
+              );
+            })}
+          </>,
+          alvoCards,
+        )}
 
       {/* Indicadores — recalculados sobre os registros filtrados */}
       <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-5`}>
