@@ -28,3 +28,6 @@ services/extractor/tmp/
 # Dados reais locais (preços/compras da empresa — sincronizados via OneDrive,
 # nunca commitados no repositório)
 /dados-locais/
+
+# Hash do último "Gerenciamento de obras ativas.xlsb" processado (fotos -> Follow up)
+sincronizar_fotos_gerencia.estado

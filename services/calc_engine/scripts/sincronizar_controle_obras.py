@@ -27,6 +27,9 @@ warnings.filterwarnings("ignore", module="openpyxl")
 from app.controle_obras import registrar_erro, sincronizar  # noqa: E402
 from app.follow_up_mae import propagar  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
+
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
 
 
@@ -53,6 +56,15 @@ def main() -> int:
                 print(f"{agora} Follow up - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Follow up (mãe -> filha) - {type(e).__name__}: {e}")
+            return 1
+        # Fotos da aba Gerencia que ainda faltam nos pedidos (depois da
+        # propagação, pra pedido novo já receber a foto). Só lê se o arquivo mudou.
+        try:
+            resumo = sincronizar_fotos_se_mudou()
+            if resumo:
+                print(f"{agora} Fotos Gerencia - " + resumo.replace("\n", " | "))
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO nas fotos da Gerencia - {type(e).__name__}: {e}")
             return 1
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app
