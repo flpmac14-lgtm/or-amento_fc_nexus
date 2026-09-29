@@ -14,7 +14,8 @@ import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { corGrupoPintura } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
-const COLUNAS = ["Foto", "PO", "Prazo contratual", "Cliente", "Qtd", "MAC", "Desenho", "Descrição", "Coleta", "NF", "Tipagem"];
+// Pedido do usuário: sem Prazo contratual e Cliente; com as colunas de pintura.
+const COLUNAS = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Cor 1", "Cor 2", "Plano de pintura", "Coleta", "NF", "Tipagem"];
 
 interface Grupo {
   chave: string;
@@ -161,12 +162,13 @@ function Relatorio() {
                         )}
                       </td>
                       <td className="border border-stone-400 px-1 font-mono text-[11px]">{i.po}</td>
-                      <td className="border border-stone-400 px-1">{formatarDataBr(i.prazo_contratual)}</td>
-                      <td className="border border-stone-400 px-1">{i.cliente}</td>
                       <td className="border border-stone-400 px-1">{i.quantidade ?? ""}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.mac}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.desenho}</td>
                       <td className="border border-stone-400 px-1 text-[9px]">{i.descricao}</td>
+                      <td className="border border-stone-400 px-1">{i.cor2}</td>
+                      <td className="border border-stone-400 px-1">{i.cor_2}</td>
+                      <td className="max-w-[55mm] border border-stone-400 px-1 text-[8px]">{i.plano_pintura}</td>
                       <td className="border border-stone-400 px-1 text-[9px]">{formatarDataBr(i.coleta_data)}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.nf}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.tipagem}</td>
