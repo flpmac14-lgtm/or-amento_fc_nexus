@@ -13,14 +13,20 @@
 import { useEffect, useState } from "react";
 import ControleObras from "@/components/ControleObras";
 import FollowUp from "@/components/FollowUp";
+import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 
 const VISOES = [
   { valor: "followup", rotulo: "Follow up" },
   { valor: "controle", rotulo: "Controle de obras" },
+  { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
-export default function ModuloFollowUp() {
+// comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
+// a aba "Referência de preços" (histórico de compras do ERP), que as contas
+// completas já têm na tela principal.
+export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comReferenciaPrecos?: boolean }) {
   const [visao, setVisao] = useState<(typeof VISOES)[number]["valor"]>("followup");
+  const visoes = VISOES.filter((v) => v.valor !== "referencia" || comReferenciaPrecos);
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
   const [alvoCards, setAlvoCards] = useState<HTMLDivElement | null>(null);
@@ -98,7 +104,7 @@ export default function ModuloFollowUp() {
           </button>
         )}
         <div className="flex w-fit gap-1 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
-          {VISOES.map((v) => (
+          {visoes.map((v) => (
             <button
               key={v.valor}
               type="button"
@@ -135,6 +141,7 @@ export default function ModuloFollowUp() {
       <div className={visao === "controle" ? "" : "hidden"}>
         <ControleObras telaCheia={telaCheia} />
       </div>
+      {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );
 }

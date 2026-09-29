@@ -66,7 +66,7 @@ export default function PaginaFollowUp() {
             </button>
           </div>
         </header>
-        <ModuloFollowUp />
+        <ModuloFollowUp comReferenciaPrecos={conta?.restrita ?? false} />
       </main>
     </div>
   );
