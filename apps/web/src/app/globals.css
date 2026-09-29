@@ -52,6 +52,19 @@ body {
     page: proposta;
   }
 
+  /* Relatório de coleta do Follow up (app/follow-up/coleta) — A4 paisagem,
+     igual ao PDF que o usuário tirava da planilha. */
+  @page coleta {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  .folha-coleta {
+    page: coleta;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   html,
   body {
     background: #ffffff !important;

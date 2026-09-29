@@ -31,6 +31,7 @@ import type { ItemFollowUp, RespostaFollowUp } from "@/lib/types";
 import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } from "@/components/FollowUpDetalhe";
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
+import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -177,6 +178,7 @@ export default function FollowUp({
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [relatorioColeta, setRelatorioColeta] = useState(false);
   // "Salvar tudo" — pedido do usuário: mesmo com cada campo salvando sozinho,
   // um botão que confirma tudo (fecha o campo em edição, espera os envios em
   // andamento, recarrega do servidor e avisa se algo não salvou).
@@ -658,6 +660,15 @@ export default function FollowUp({
           </button>
           <button
             type="button"
+            onClick={() => setRelatorioColeta(true)}
+            disabled={itens.length === 0}
+            title="Relatório dos pedidos de um cliente com coleta numa data — A4 paisagem, agrupado por pintura"
+            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+          >
+            Relatório de coleta
+          </button>
+          <button
+            type="button"
             onClick={salvarTudo}
             disabled={salvandoTudo}
             title="Cada campo já salva sozinho — este botão confirma tudo: termina o campo em edição, espera os envios e recarrega do servidor"
@@ -996,6 +1007,8 @@ Plano: ${e.plano_pintura ?? "—"}`}
           onRemover={async (img) => aplicarItem(await removerImagemFollowUp(img.id, editadoPor))}
         />
       )}
+
+      {relatorioColeta && <FollowUpRelatorioColeta itens={itens} onFechar={() => setRelatorioColeta(false)} />}
 
       {anexarPara && (
         <FollowUpAnexarImagem
