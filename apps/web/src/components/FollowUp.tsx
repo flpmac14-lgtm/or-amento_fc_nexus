@@ -117,6 +117,9 @@ const FILTROS_PADRAO: Filtros = {
   st: "A",
   destaque: "",
 };
+// Pedido do usuário: sempre ordenado pelo prazo, do mais próximo ao mais
+// adiante (sem prazo no fim).
+const ORDEM_PADRAO: { campo: Coluna["campo"]; desc: boolean } = { campo: "prazo_contratual", desc: false };
 const FILTROS_VAZIOS: Filtros = { ...FILTROS_PADRAO, st: "" };
 
 const classeCampo =
@@ -148,7 +151,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
 
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_PADRAO);
   const [filtrosColuna, setFiltrosColuna] = useState<Record<string, string>>({});
-  const [ordem, setOrdem] = useState<{ campo: Coluna["campo"]; desc: boolean } | null>(null);
+  const [ordem, setOrdem] = useState<{ campo: Coluna["campo"]; desc: boolean } | null>(ORDEM_PADRAO);
   const [todasColunas, setTodasColunas] = useState(false);
   const [mostrarAusentes, setMostrarAusentes] = useState(false);
   const [pagina, setPagina] = useState(0);
@@ -376,7 +379,8 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
   }
 
   function alternarOrdem(campo: Coluna["campo"]) {
-    setOrdem((o) => (o?.campo !== campo ? { campo, desc: false } : o.desc ? null : { campo, desc: true }));
+    // Terceiro clique volta pro padrão (prazo, do mais próximo ao mais adiante).
+    setOrdem((o) => (o?.campo !== campo ? { campo, desc: false } : o.desc ? ORDEM_PADRAO : { campo, desc: true }));
     setPagina(0);
   }
 
