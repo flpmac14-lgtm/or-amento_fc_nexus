@@ -36,6 +36,19 @@ _LARGURAS = {"imagem": 12, "descricao": 45, "obs_felipe_marcelo": 30, "obs_aliss
 FOTO_ALTURA_PX = 60
 
 
+def cor_grupo_pintura(indice: int) -> str:
+    """Mesma cor do app (corGrupoPintura em apps/web/src/lib/followUp.ts), em hex
+    sem '#', clareada como o tom da tabela."""
+    import colorsys
+
+    matiz = (indice * 137.508) % 360 / 360
+    luz = (58, 45, 70)[indice % 3] / 100
+    r, g, b = colorsys.hls_to_rgb(matiz, luz, 0.7)
+    # tom suave (35% da cor sobre branco) — legível impresso
+    r, g, b = (1 - 0.35 * (1 - x) for x in (r, g, b))
+    return "".join(f"{round(x * 255):02X}" for x in (r, g, b))
+
+
 def _valor(item: dict, campo: str):
     if campo == "coleta":
         campo_data = item.get("coleta_data")
@@ -94,6 +107,10 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
         celula.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     col = {c: i for i, c in enumerate(COLUNAS, start=1)}
+    contagem_grupo: dict[int, int] = {}
+    for i in itens:
+        if i.get("grupo_pintura"):
+            contagem_grupo[i["grupo_pintura"]] = contagem_grupo.get(i["grupo_pintura"], 0) + 1
     larguras = dict(_LARGURAS)
     miniaturas: dict[str, tuple[io.BytesIO, int, int] | None] = {}
     for linha, item in enumerate(itens, start=2):
@@ -108,6 +125,10 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
             ws.cell(row=linha, column=col[c]).number_format = "@"
         for celula in ws[linha]:
             celula.alignment = Alignment(vertical="center", wrap_text=celula.column == col["descricao"])
+        if item.get("grupo_pintura") and contagem_grupo.get(item["grupo_pintura"], 0) >= 2:
+            fundo = PatternFill("solid", fgColor=cor_grupo_pintura(item["grupo_pintura"]))
+            for c in ("cor2", "cor_2", "plano_pintura"):
+                ws.cell(row=linha, column=col[c]).fill = fundo
 
         if com_fotos and item["imagens"]:
             sha = item["imagens"][0]["sha256"]

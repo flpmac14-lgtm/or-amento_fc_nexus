@@ -18,8 +18,7 @@ import {
   ETAPAS,
   ROTULO_PRAZO,
   compararValores,
-  corCondicional,
-  corDestaque,
+  corGrupoPintura,
   montarContextoRegras,
   normalizarBusca,
   situacaoEtapa,
@@ -96,7 +95,7 @@ interface Filtros {
   fornecedor: string;
   ano: string;
   st: string;
-  destaque: string;
+  pintura: string; // número do grupo de pintura
 }
 
 // Padrão = o que a planilha mostra: a segmentação da aba Gerencia deixa só
@@ -115,7 +114,7 @@ const FILTROS_PADRAO: Filtros = {
   fornecedor: "",
   ano: "",
   st: "A",
-  destaque: "",
+  pintura: "",
 };
 // Pedido do usuário: sempre ordenado pelo prazo, do mais próximo ao mais
 // adiante (sem prazo no fim).
@@ -283,9 +282,24 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
       fornecedor: unicos(base, "fornecedor"),
       ano: unicos(base, "ano"),
       st: unicos(base, "st"),
-      destaque: [...new Set(base.map(corDestaque).filter((c): c is string => !!c))],
     }),
     [base],
+  );
+
+  // Grupos de pintura com 2+ pedidos na lista — só esses ganham cor e botão.
+  const gruposPintura = useMemo(() => {
+    const m = new Map<number, { indice: number; n: number; exemplo: ItemFollowUp }>();
+    for (const i of base) {
+      if (!i.grupo_pintura) continue;
+      const g = m.get(i.grupo_pintura);
+      if (g) g.n++;
+      else m.set(i.grupo_pintura, { indice: i.grupo_pintura, n: 1, exemplo: i });
+    }
+    return [...m.values()].filter((g) => g.n >= 2).sort((a, b) => b.n - a.n || a.indice - b.indice);
+  }, [base]);
+  const coresGrupo = useMemo(
+    () => new Map(gruposPintura.map((g) => [g.indice, corGrupoPintura(g.indice)])),
+    [gruposPintura],
   );
 
   const filtrados = useMemo(() => {
@@ -305,7 +319,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
       if (filtros.fornecedor && i.fornecedor !== filtros.fornecedor) return false;
       if (filtros.ano && String(i.ano ?? "") !== filtros.ano) return false;
       if (filtros.st && i.st !== filtros.st) return false;
-      if (filtros.destaque && corDestaque(i) !== filtros.destaque) return false;
+      if (filtros.pintura && String(i.grupo_pintura ?? "") !== filtros.pintura) return false;
       if (filtros.prazo && situacaoPrazo(i.prazo_contratual) !== filtros.prazo) return false;
       if (filtros.prazoDe && (!i.prazo_contratual || i.prazo_contratual < filtros.prazoDe)) return false;
       if (filtros.prazoAte && (!i.prazo_contratual || i.prazo_contratual > filtros.prazoAte)) return false;
@@ -319,7 +333,9 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
         } else if (col.tipo === "prazo") {
           if (!contem(formatarDataBr(i.prazo_contratual), termo)) return false;
         } else if (col.tipo === "coleta") {
-          if (!contem(i.coleta, termo)) return false;
+          // Pedido do usuário: achar as coletas vazias pra marcar a data.
+          const vazia = !(i.coleta ?? "").trim() && !i.coleta_data;
+          if ((termo === "vazia") !== vazia) return false;
         } else if (!contem(valorCampo(i, col.campo), termo)) {
           return false;
         }
@@ -487,18 +503,15 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
     }
   }
 
+  // Só as colunas de pintura ganham cor: a do grupo (mesmo Plano + COR2 +
+  // COR-2) — as cores da planilha foram tiradas a pedido do usuário.
   function estiloCelula(item: ItemFollowUp, col: Coluna): React.CSSProperties | undefined {
-    if (col.tipo === "foto" || col.tipo === "etapa" || col.tipo === "status") return undefined;
-    // Formatação condicional da planilha (ex.: PO duplicado em vermelho) tem
-    // precedência sobre a cor manual da célula — como no Excel.
-    const cond = corCondicional(ctx, item, col.campo);
-    const fundo = cond?.fundo ?? item.cores?.[col.campo]?.fundo;
-    if (!fundo) return undefined;
-    // Tom suave da mesma cor (e não o preenchimento cheio do Excel): mantém o
-    // significado da marcação e continua legível no tema claro e no escuro.
-    // Via sombra interna (e não background) pra coluna fixa do PO continuar
-    // opaca por baixo quando a tabela rola na horizontal.
-    return { boxShadow: `inset 0 0 0 999px color-mix(in srgb, ${fundo} ${cond ? 40 : 28}%, transparent)` };
+    if (col.campo !== "cor2" && col.campo !== "cor_2" && col.campo !== "plano_pintura") return undefined;
+    const cor = item.grupo_pintura ? coresGrupo.get(item.grupo_pintura) : undefined;
+    if (!cor) return undefined;
+    // Via sombra interna (e não background), igual antes: tom suave, legível
+    // nos dois temas.
+    return { boxShadow: `inset 0 0 0 999px color-mix(in srgb, ${cor} 40%, transparent)` };
   }
 
   return (
@@ -640,6 +653,45 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           />
           <Seletor rotulo="Ano" valor={filtros.ano} opcoes={opcoes.ano} onChange={(v) => setFiltro("ano", v)} />
         </div>
+        {gruposPintura.length > 0 && (
+          <div className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+            <span>
+              Pintura igual (mesmo plano + COR2 + COR-2) — clique para filtrar o grupo
+              {filtros.pintura && (
+                <button
+                  type="button"
+                  onClick={() => setFiltro("pintura", "")}
+                  className="ml-2 text-green-700 underline dark:text-cyan-300"
+                >
+                  mostrar todos
+                </button>
+              )}
+            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              {gruposPintura.map((g) => {
+                const ativo = filtros.pintura === String(g.indice);
+                const e = g.exemplo;
+                return (
+                  <button
+                    key={g.indice}
+                    type="button"
+                    onClick={() => setFiltro("pintura", ativo ? "" : String(g.indice))}
+                    className={`h-6 min-w-7 rounded border-2 px-1 font-mono text-[11px] font-bold text-black/75 ${
+                      ativo ? "border-stone-900 dark:border-white" : "border-transparent"
+                    } ${filtros.pintura && !ativo ? "opacity-40" : ""}`}
+                    style={{ backgroundColor: coresGrupo.get(g.indice) }}
+                    title={`${g.n} pedidos
+COR2: ${e.cor2 ?? "—"}
+COR-2: ${e.cor_2 ?? "—"}
+Plano: ${e.plano_pintura ?? "—"}`}
+                  >
+                    {g.n}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-end gap-2">
           <Seletor
             rotulo="ST"
@@ -656,25 +708,6 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
             até
             <input type="date" value={filtros.prazoAte} onChange={(e) => setFiltro("prazoAte", e.target.value)} className={classeCampo} />
           </label>
-          {opcoes.destaque.length > 0 && (
-            <div className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
-              Cor de destaque (planilha)
-              <div className="flex flex-wrap items-center gap-1">
-                {opcoes.destaque.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setFiltro("destaque", filtros.destaque === c ? "" : c)}
-                    className={`h-7 w-7 rounded border-2 ${
-                      filtros.destaque === c ? "border-green-600 dark:border-cyan-400" : "border-stone-300 dark:border-slate-700"
-                    }`}
-                    style={{ backgroundColor: c }}
-                    title={`Linhas marcadas com ${c} na planilha`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
           <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-stone-600 dark:text-slate-400">
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={todasColunas} onChange={(e) => setTodasColunas(e.target.checked)} />
@@ -748,6 +781,17 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
                       <option value="parcial">Parcial</option>
                       <option value="pendente">Pendente</option>
                     </select>
+                  ) : col.tipo === "coleta" ? (
+                    <select
+                      value={filtrosColuna.coleta ?? ""}
+                      onChange={(e) => setFiltroColuna("coleta", e.target.value)}
+                      className={classeFiltroColuna}
+                      aria-label="Filtrar coleta"
+                    >
+                      <option value="">Todas</option>
+                      <option value="vazia">Vazias</option>
+                      <option value="preenchida">Preenchidas</option>
+                    </select>
                   ) : col.tipo === "foto" ? (
                     <select
                       value={filtrosColuna.foto ?? ""}
@@ -774,7 +818,7 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           </thead>
           <tbody>
             {visiveis.map((item) => {
-              const destaque = corDestaque(item);
+              const destaque = item.grupo_pintura ? coresGrupo.get(item.grupo_pintura) : undefined;
               return (
                 <tr
                   key={item.id}

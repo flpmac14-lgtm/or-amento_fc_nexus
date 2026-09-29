@@ -628,6 +628,41 @@ _COLUNAS_LISTAGEM = ["id", "chave"] + _COLUNAS_ITEM + [
     "presente_na_ultima_importacao", "updated_at", "origem", "editado_em", "editado_por"]
 
 
+# --- Grupos de pintura (migration 0018) ---------------------------------------
+# Mesmo Plano de pintura + COR2 + COR-2 = mesmo grupo = mesma cor no app.
+
+def chave_pintura(item: dict) -> str | None:
+    partes = [re.sub(r"\s+", " ", str(item.get(c) or "")).strip().upper() for c in ("plano_pintura", "cor2", "cor_2")]
+    return "|".join(partes) if any(partes) else None
+
+
+def registrar_grupos_pintura(cur, itens: list[dict]) -> None:
+    """Dá número às combinações que se repetem (2+ pedidos presentes) e ainda
+    não estão na tabela de referência — uma vez só, então a cor não muda."""
+    contagem: dict[str, dict] = {}
+    for i in itens:
+        chave = chave_pintura(i)
+        if chave and i.get("presente_na_ultima_importacao"):
+            contagem.setdefault(chave, {"n": 0, "item": i})["n"] += 1
+    cur.execute("select chave from follow_up_grupos_pintura")
+    existentes = {r[0] for r in cur.fetchall()}
+    novas = sorted(k for k, v in contagem.items() if v["n"] >= 2 and k not in existentes)
+    for chave in novas:
+        i = contagem[chave]["item"]
+        cur.execute(
+            """insert into follow_up_grupos_pintura (chave, plano_pintura, cor2, cor_2) values (%s, %s, %s, %s)
+               on conflict (chave) do nothing""",
+            (chave, i.get("plano_pintura"), i.get("cor2"), i.get("cor_2")),
+        )
+
+
+def _anexar_grupos_pintura(cur, itens: list[dict]) -> None:
+    cur.execute("select chave, indice from follow_up_grupos_pintura")
+    indices = dict(cur.fetchall())
+    for i in itens:
+        i["grupo_pintura"] = indices.get(chave_pintura(i))
+
+
 def carregar_itens(cur, item_id: str | None = None) -> list[dict]:
     """Itens (com imagens) prontos pro JSON — todos, ou só um pelo id."""
     filtro, params = ("where id = %s", (item_id,)) if item_id else ("", ())
@@ -649,6 +684,7 @@ def carregar_itens(cur, item_id: str | None = None) -> list[dict]:
     for item in itens:
         item["id"] = str(item["id"])
         item["imagens"] = imagens.get(item["id"], [])
+    _anexar_grupos_pintura(cur, itens)
     return itens
 
 
@@ -661,6 +697,10 @@ def listar() -> dict:
         )
         imp = cur.fetchone()
         itens = carregar_itens(cur)
+        # Combinações novas ganham número aqui (os pedidos chegam da mãe a cada 15 min).
+        registrar_grupos_pintura(cur, itens)
+        conn.commit()
+        _anexar_grupos_pintura(cur, itens)
 
     importacao = None
     if imp:

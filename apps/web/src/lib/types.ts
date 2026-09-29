@@ -566,6 +566,9 @@ export interface ItemFollowUp {
   linha_planilha: number;
   oculta_na_planilha: boolean;
   cores: Record<string, CorCelulaFollowUp>;
+  // Grupo de pintura (mesmo Plano + COR2 + COR-2) — número fixo da tabela de
+  // referência follow_up_grupos_pintura; a cor sai de corGrupoPintura().
+  grupo_pintura: number | null;
   presente_na_ultima_importacao: boolean;
   updated_at: string;
   // "controle_obras" = entrou sozinho vindo da mãe (pedido ST = A novo)

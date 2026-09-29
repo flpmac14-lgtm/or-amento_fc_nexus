@@ -168,8 +168,14 @@ export function corTextoSobre(fundo: string): string {
 }
 
 // Cor de destaque manual da linha na planilha (preenchimento da célula do PO).
-export function corDestaque(item: ItemFollowUp): string | null {
-  return item.cores?.po?.fundo ?? null;
+// Cor do grupo de pintura — pedido do usuário: pedidos com o mesmo Plano de
+// pintura + COR2 + COR-2 destacados na mesma cor. Sai do número fixo do grupo
+// (ângulo de ouro no matiz, 3 níveis de luz) — mesma conta do Excel
+// (cor_grupo_pintura em services/calc_engine/app/follow_up_excel.py).
+export function corGrupoPintura(indice: number): string {
+  const matiz = (indice * 137.508) % 360;
+  const luz = [58, 45, 70][indice % 3];
+  return `hsl(${matiz.toFixed(1)} 70% ${luz}%)`;
 }
 
 // --- Busca / ordenação --------------------------------------------------------

@@ -9,7 +9,7 @@ import {
   CAMPOS_EDITAVEIS,
   ETAPAS,
   ROTULO_PRAZO,
-  corDestaque,
+  corGrupoPintura,
   corTextoSobre,
   diasParaPrazo,
   situacaoEtapa,
@@ -338,7 +338,6 @@ export default function FollowUpDetalhe({
     return () => window.removeEventListener("keydown", tecla);
   }, [onFechar]);
 
-  const destaque = corDestaque(item);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onFechar}>
@@ -366,10 +365,13 @@ export default function FollowUpDetalhe({
                   Linha oculta na planilha (segmentação)
                 </span>
               )}
-              {destaque && (
+              {item.grupo_pintura && (
                 <span className="inline-flex items-center gap-1 text-xs text-stone-500 dark:text-slate-400">
-                  <span className="h-3 w-3 rounded-sm border border-black/10" style={{ backgroundColor: destaque }} />
-                  Cor de destaque na planilha
+                  <span
+                    className="h-3 w-3 rounded-sm border border-black/10"
+                    style={{ backgroundColor: corGrupoPintura(item.grupo_pintura) }}
+                  />
+                  Grupo de pintura {item.grupo_pintura}
                 </span>
               )}
             </div>
@@ -470,15 +472,6 @@ export default function FollowUpDetalhe({
 
           <Secao titulo="Observações">
             <Campo rotulo="Obs. Felipe / Marcelo" largo>
-              {item.cores?.obs_felipe_marcelo?.fundo && (
-                <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-slate-400">
-                  <span
-                    className="h-3 w-3 rounded-sm border border-black/10"
-                    style={{ backgroundColor: item.cores.obs_felipe_marcelo.fundo }}
-                  />
-                  cor de destaque na planilha
-                </span>
-              )}
               {editavel("obs_felipe_marcelo", true)}
             </Campo>
             <Campo rotulo="Obs. Alisson (OBS da Controle de obras)" largo mae>
