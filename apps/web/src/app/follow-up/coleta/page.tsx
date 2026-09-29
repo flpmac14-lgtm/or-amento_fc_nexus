@@ -30,7 +30,8 @@ function chavePintura(i: ItemFollowUp): string {
   return [i.plano_pintura, i.cor2, i.cor_2].map((v) => (v ?? "").replace(/\s+/g, " ").trim().toUpperCase()).join("|");
 }
 
-// Grupos com mais pedidos primeiro; dentro do grupo, pelo prazo.
+// Grupos com mais pedidos primeiro; dentro do grupo, em sequência pelo PO
+// (pedido do usuário: -030, -050, -090 — do menor pro maior).
 function agrupar(itens: ItemFollowUp[]): Grupo[] {
   const m = new Map<string, Grupo>();
   for (const i of itens) {
@@ -43,8 +44,7 @@ function agrupar(itens: ItemFollowUp[]): Grupo[] {
     g.itens.push(i);
   }
   const grupos = [...m.values()];
-  for (const g of grupos)
-    g.itens.sort((a, b) => (a.prazo_contratual ?? "9999").localeCompare(b.prazo_contratual ?? "9999") || a.po.localeCompare(b.po));
+  for (const g of grupos) g.itens.sort((a, b) => a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
   return grupos.sort((a, b) => b.itens.length - a.itens.length || a.chave.localeCompare(b.chave));
 }
 
