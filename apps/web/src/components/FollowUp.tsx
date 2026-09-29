@@ -7,7 +7,7 @@
 // acompanhamento (etapas, coleta, fornecedor...) são editados aqui e salvos
 // na hora (ver services/calc_engine/app/follow_up_mae.py).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { baixarExcelFollowUp, editarItemFollowUp, listarFollowUp, removerImagemFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarMoeda, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -156,6 +156,13 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
   const [exportando, setExportando] = useState(false);
+  // "Salvar tudo" — pedido do usuário: mesmo com cada campo salvando sozinho,
+  // um botão que confirma tudo (fecha o campo em edição, espera os envios em
+  // andamento, recarrega do servidor e avisa se algo não salvou).
+  const pendentes = useRef(new Set<Promise<unknown>>());
+  const falhas = useRef(new Set<string>());
+  const [salvandoTudo, setSalvandoTudo] = useState(false);
+  const [avisoSalvo, setAvisoSalvo] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -203,10 +210,44 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
 
   const salvarCampo = useCallback(
     async (item: ItemFollowUp, campo: string, valor: string) => {
-      aplicarItem(await editarItemFollowUp(item.id, { [campo]: valor }, editadoPor));
+      const chave = `PO ${item.po} — ${campo}`;
+      const envio = editarItemFollowUp(item.id, { [campo]: valor }, editadoPor);
+      pendentes.current.add(envio);
+      setAvisoSalvo(null);
+      try {
+        aplicarItem(await envio);
+        falhas.current.delete(chave);
+      } catch (e) {
+        falhas.current.add(chave);
+        throw e;
+      } finally {
+        pendentes.current.delete(envio);
+      }
     },
     [editadoPor, aplicarItem],
   );
+
+  async function salvarTudo() {
+    setSalvandoTudo(true);
+    setAvisoSalvo(null);
+    // Tira o foco do campo em edição: o onBlur dele dispara o envio.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    await new Promise((r) => setTimeout(r, 50));
+    await Promise.allSettled([...pendentes.current]);
+    try {
+      setDados(await listarFollowUp());
+      const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      setAvisoSalvo(
+        falhas.current.size === 0
+          ? { ok: true, texto: `✓ Tudo salvo — ${hora}` }
+          : { ok: false, texto: `${falhas.current.size} campo(s) não salvaram: ${[...falhas.current].join("; ")}` },
+      );
+    } catch (e) {
+      setAvisoSalvo({ ok: false, texto: `Não consegui confirmar com o servidor: ${(e as Error).message}` });
+    } finally {
+      setSalvandoTudo(false);
+    }
+  }
 
   const itens = useMemo(() => dados?.itens ?? [], [dados]);
   const importacao = dados?.importacao ?? null;
@@ -531,6 +572,22 @@ export default function FollowUp({ telaCheia = false }: { telaCheia?: boolean })
           >
             {exportando ? "Gerando Excel…" : `Exportar Excel (${filtrados.length})`}
           </button>
+          <button
+            type="button"
+            onClick={salvarTudo}
+            disabled={salvandoTudo}
+            title="Cada campo já salva sozinho — este botão confirma tudo: termina o campo em edição, espera os envios e recarrega do servidor"
+            className="rounded-lg bg-green-600 dark:bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
+          >
+            {salvandoTudo ? "Salvando…" : "Salvar tudo"}
+          </button>
+          {avisoSalvo && (
+            <span
+              className={`text-sm ${avisoSalvo.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}
+            >
+              {avisoSalvo.texto}
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
           <Seletor rotulo="Cliente" valor={filtros.cliente} opcoes={opcoes.cliente} onChange={(v) => setFiltro("cliente", v)} />
