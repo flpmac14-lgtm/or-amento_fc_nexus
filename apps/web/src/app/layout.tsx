@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const TITULO = "FC Nexus — Orçamento Industrial I.A.";
+const TITULO = "FC Nexus — MACFAB";
 const DESCRICAO = "Análise automática de desenhos técnicos e orçamento industrial";
 
 export const metadata: Metadata = {

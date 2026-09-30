@@ -38,7 +38,7 @@ function FormularioLogin() {
     <div className="flex min-h-screen items-center justify-center bg-stone-50 dark:bg-slate-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-8 shadow-[0_0_40px_-15px_rgba(34,211,238,0.3)]">
         <h1 className="text-xl font-bold text-stone-900 dark:text-white">
-          FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> Orçamento Industrial I.A.
+          FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> MACFAB
         </h1>
         <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">Entre com a conta cadastrada pelo administrador.</p>
 

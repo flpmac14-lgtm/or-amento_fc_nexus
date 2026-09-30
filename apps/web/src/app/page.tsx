@@ -432,7 +432,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
-                  FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> Orçamento Industrial I.A.
+                  FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> MACFAB
                 </h1>
                 <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">
                   Arraste um desenho técnico em PDF e receba a análise de fabricação e o

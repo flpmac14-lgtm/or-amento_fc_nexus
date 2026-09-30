@@ -55,7 +55,7 @@ export default function RelatorioImpressao({
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[9px] text-zinc-400">FC Nexus — Orçamento Industrial I.A.</p>
+          <p className="text-[9px] text-zinc-400">FC Nexus — MACFAB</p>
           <p className="text-xs text-zinc-600">Arquivo: {nomeArquivo}</p>
           <p className="text-xs text-zinc-600">Gerado em {geradoEm}</p>
         </div>

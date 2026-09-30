@@ -29,7 +29,7 @@ export default function OpengraphImage() {
             FC Nexus
           </div>
           <div style={{ display: "flex", fontSize: 32, color: "#67e8f9", fontFamily: "Arial, sans-serif" }}>
-            Orçamento Industrial I.A.
+            MACFAB
           </div>
         </div>
       </div>
