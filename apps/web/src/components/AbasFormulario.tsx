@@ -17,11 +17,11 @@ const VENDAS: { valor: ModoFormulario; rotulo: string }[] = [
   { valor: "itens", rotulo: "Itens do orçamento" },
   { valor: "proposta", rotulo: "Proposta" },
   { valor: "referencia", rotulo: "Referência de preços" },
+  { valor: "salvos", rotulo: "Orçamentos salvos" },
 ];
 
 const GRUPOS: { valor: "vendas" | ModoFormulario; rotulo: string }[] = [
   { valor: "vendas", rotulo: "Vendas" },
-  { valor: "salvos", rotulo: "Orçamentos salvos" },
   { valor: "followup", rotulo: "Follow up" },
 ];
 
