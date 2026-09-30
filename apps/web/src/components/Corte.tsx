@@ -14,6 +14,7 @@ import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { MarcaCorte, ProgramaCorte } from "@/lib/types";
 import CorteHistorico from "@/components/CorteHistorico";
+import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
 // "Recentes" = liberados pelo projetista nos últimos dias e ainda não finalizados.
@@ -206,6 +207,11 @@ export default function Corte({
       setSalvando(null);
     }
   }
+
+  useLimparComF4("corte", () => {
+    setNumero("");
+    setFiltro("recentes");
+  });
 
   async function marcar(p: ProgramaCorte, marca: MarcaCorte) {
     const valor = !p[`${marca}_em`];

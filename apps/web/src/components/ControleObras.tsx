@@ -12,6 +12,7 @@ import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca, situacaoPrazo } from "@/lib/followUp";
 import type { ColunaControleObras, RespostaControleObras, ValorControleObras } from "@/lib/types";
 import { SeloPrazo } from "@/components/FollowUpDetalhe";
+import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 // Tarefa roda a cada 15 min; sem verificação há mais de 45 min = parada.
@@ -20,6 +21,7 @@ const VERIFICACAO_ATRASADA_MS = 45 * 60 * 1000;
 // Mesma tela serve de espelho pra outra planilha "mãe" — pedido do usuário:
 // Material de compra (aba MACLM do MACLM.xlsx), igual à Controle de obras.
 export interface ConfigEspelho {
+  aba: string; // nome da aba no ModuloFollowUp (atalho F4)
   titulo: string;
   carregar: () => Promise<RespostaControleObras>;
   arquivoPadrao: string;
@@ -33,6 +35,7 @@ export interface ConfigEspelho {
 }
 
 export const CONFIG_CONTROLE_OBRAS: ConfigEspelho = {
+  aba: "controle",
   titulo: "Controle de obras",
   carregar: listarControleObras,
   arquivoPadrao: "J:\\6 - PCP\\Controle de obras.xlsm",
@@ -46,6 +49,7 @@ export const CONFIG_CONTROLE_OBRAS: ConfigEspelho = {
 };
 
 export const CONFIG_MATERIAL_COMPRA: ConfigEspelho = {
+  aba: "material",
   titulo: "Material de compra",
   carregar: listarMaterialCompra,
   arquivoPadrao: "J:\\6 - PCP\\PCP-CP\\MACLM.xlsx",
@@ -204,6 +208,7 @@ export default function ControleObras({
     setFiltrosColuna({});
     setPagina(0);
   }
+  useLimparComF4(config.aba, limpar);
 
   return (
     <div className="flex flex-col gap-4">
@@ -277,9 +282,10 @@ export default function ControleObras({
             type="button"
             onClick={limpar}
             disabled={!temFiltro}
+            title="Limpar filtros (F4)"
             className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-red-400 disabled:opacity-40"
           >
-            Limpar filtros
+            Limpar filtros <kbd className="ml-1 rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F4</kbd>
           </button>
         </div>
         <div className="flex flex-wrap items-end gap-2">

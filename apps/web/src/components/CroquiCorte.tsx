@@ -17,6 +17,7 @@ import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemCroquiCorte } from "@/lib/types";
 import { CelulaEditavel, IconeCadeado } from "@/components/FollowUpEdicao";
 import FollowUpSino from "@/components/FollowUpSino";
+import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
@@ -259,6 +260,15 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   }
   const temFiltro = busca || status || projetista || Object.values(filtrosColuna).some((v) => v);
 
+  function limparFiltros() {
+    setBusca("");
+    setStatus("");
+    setProjetista("");
+    setFiltrosColuna({});
+    setPagina(0);
+  }
+  useLimparComF4("croqui", limparFiltros);
+
   function celula(item: ItemCroquiCorte, col: Coluna) {
     if (col.tipo === "status") {
       const cor = item.status ? COR_STATUS[item.status] : undefined;
@@ -407,17 +417,12 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         </label>
         <button
           type="button"
-          onClick={() => {
-            setBusca("");
-            setStatus("");
-            setProjetista("");
-            setFiltrosColuna({});
-            setPagina(0);
-          }}
+          onClick={limparFiltros}
           disabled={!temFiltro}
+          title="Limpar filtros (F4)"
           className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-red-400 disabled:opacity-40"
         >
-          Limpar filtros
+          Limpar filtros <kbd className="ml-1 rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F4</kbd>
         </button>
         <button
           type="button"

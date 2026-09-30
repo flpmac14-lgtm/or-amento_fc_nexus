@@ -34,6 +34,7 @@ import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
 import FollowUpSino from "@/components/FollowUpSino";
+import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -466,6 +467,13 @@ export default function FollowUp({
     }
   }
 
+  function limparFiltros() {
+    setFiltros(FILTROS_VAZIOS);
+    setFiltrosColuna({});
+    setPagina(0);
+  }
+  useLimparComF4("followup", limparFiltros);
+
   function alternarOrdem(campo: Coluna["campo"]) {
     // Terceiro clique volta pro padrão (prazo, do mais próximo ao mais adiante).
     setOrdem((o) => (o?.campo !== campo ? { campo, desc: false } : o.desc ? ORDEM_PADRAO : { campo, desc: true }));
@@ -708,15 +716,12 @@ export default function FollowUp({
           />
           <button
             type="button"
-            onClick={() => {
-              setFiltros(FILTROS_VAZIOS);
-              setFiltrosColuna({});
-              setPagina(0);
-            }}
+            onClick={limparFiltros}
             disabled={!filtrosAlterados}
+            title="Limpar filtros (F4)"
             className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-red-400 disabled:opacity-40"
           >
-            Limpar filtros
+            Limpar filtros <kbd className="ml-1 rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F4</kbd>
           </button>
           <button
             type="button"

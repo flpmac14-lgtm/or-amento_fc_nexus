@@ -16,6 +16,7 @@ import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
 import FollowUp from "@/components/FollowUp";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
+import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
 
 const VISOES = [
   { valor: "followup", rotulo: "Follow up" },
@@ -94,6 +95,17 @@ export default function ModuloFollowUp({
     window.addEventListener("keydown", f2);
     return () => window.removeEventListener("keydown", f2);
   }, [telaCheia]);
+
+  // Atalho F4 — pedido explícito do usuário: limpa os filtros da aba aberta.
+  useEffect(() => {
+    function f4(e: KeyboardEvent) {
+      if (e.key !== "F4" || e.repeat) return;
+      e.preventDefault();
+      pedirLimparFiltros(visao);
+    }
+    window.addEventListener("keydown", f4);
+    return () => window.removeEventListener("keydown", f4);
+  }, [visao]);
 
   useEffect(() => {
     if (!telaCheia) return;
