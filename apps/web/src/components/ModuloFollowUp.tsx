@@ -29,12 +29,22 @@ const VISOES = [
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
 // completas já têm na tela principal.
-export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comReferenciaPrecos?: boolean }) {
-  const [visao, setVisao] = useState<(typeof VISOES)[number]["valor"]>("followup");
+// soProjeto: conta de projetista — só Material de compra e Croqui de corte.
+export default function ModuloFollowUp({
+  comReferenciaPrecos = false,
+  soProjeto = false,
+}: {
+  comReferenciaPrecos?: boolean;
+  soProjeto?: boolean;
+}) {
+  const [visaoEscolhida, setVisao] = useState<(typeof VISOES)[number]["valor"]>(soProjeto ? "croqui" : "followup");
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(false);
   const [croquiAberto, setCroquiAberto] = useState(false);
-  const visoes = VISOES.filter((v) => v.valor !== "referencia" || comReferenciaPrecos);
+  const visoes = VISOES.filter((v) =>
+    soProjeto ? v.valor === "material" || v.valor === "croqui" : v.valor !== "referencia" || comReferenciaPrecos,
+  );
+  const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
   const [alvoCards, setAlvoCards] = useState<HTMLDivElement | null>(null);
@@ -150,18 +160,22 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
         <div ref={setAlvoSino} className="shrink-0" />
       </div>
       {/* As duas ficam montadas (só escondidas) pra não recarregar/perder filtros ao alternar. */}
-      <div className={visao === "followup" ? "" : "hidden"}>
-        <FollowUp telaCheia={telaCheia} alvoCards={telaCheia ? alvoCards : null} alvoSino={alvoSino} />
-      </div>
-      <div className={visao === "controle" ? "" : "hidden"}>
-        <ControleObras telaCheia={telaCheia} />
-      </div>
-      {materialAberto && (
+      {!soProjeto && (
+        <>
+          <div className={visao === "followup" ? "" : "hidden"}>
+            <FollowUp telaCheia={telaCheia} alvoCards={telaCheia ? alvoCards : null} alvoSino={alvoSino} />
+          </div>
+          <div className={visao === "controle" ? "" : "hidden"}>
+            <ControleObras telaCheia={telaCheia} />
+          </div>
+        </>
+      )}
+      {(materialAberto || visao === "material") && (
         <div className={visao === "material" ? "" : "hidden"}>
           <ControleObras telaCheia={telaCheia} config={CONFIG_MATERIAL_COMPRA} />
         </div>
       )}
-      {croquiAberto && (
+      {(croquiAberto || visao === "croqui") && (
         <div className={visao === "croqui" ? "" : "hidden"}>
           <CroquiCorte telaCheia={telaCheia} />
         </div>

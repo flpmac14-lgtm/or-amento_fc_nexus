@@ -15,6 +15,21 @@
   --foreground: #14231a;
 }
 
+/* Tema claro menos claro — pedido do usuário: "cinza chumbo, algo mais
+   agradável" no lugar do branco forte. Troca só as cores-base usadas no
+   tema claro (branco e a escala stone), e só na TELA: impresso (relatórios,
+   proposta) continua em folha branca. */
+@media screen {
+  :root:not([data-theme="dark"]) {
+    --background: #d5d9de;
+    --color-white: #eceef1;
+    --color-stone-50: #dde1e5;
+    --color-stone-100: #d1d6db;
+    --color-stone-200: #c3c9d0;
+    --color-stone-300: #aab1b9;
+  }
+}
+
 :root[data-theme="dark"] {
   --background: #020617;
   --foreground: #f1f5f9;

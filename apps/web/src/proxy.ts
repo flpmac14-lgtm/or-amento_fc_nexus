@@ -32,7 +32,7 @@ export async function proxy(request: NextRequest) {
   // pro módulo Follow up — o bloqueio é aqui no servidor, não só na tela.
   if (user && soFollowUp && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
-      return NextResponse.json({ erro: `Conta com acesso só ao ${ACESSO_SO_FOLLOW_UP}.` }, { status: 403 });
+      return NextResponse.json({ erro: `Conta com acesso restrito (${user.app_metadata?.acesso ?? ACESSO_SO_FOLLOW_UP}).` }, { status: 403 });
     }
     const url = request.nextUrl.clone();
     url.pathname = ROTA_FOLLOW_UP;

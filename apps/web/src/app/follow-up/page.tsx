@@ -7,20 +7,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
-import { acessoSoFollowUp } from "@/lib/acesso";
+import { acessoProjeto, acessoSoFollowUp } from "@/lib/acesso";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
 export default function PaginaFollowUp() {
   const router = useRouter();
-  const [conta, setConta] = useState<{ login: string; restrita: boolean } | null>(null);
+  const [conta, setConta] = useState<{ login: string; restrita: boolean; projeto: boolean } | null>(null);
 
   useEffect(() => {
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(({ data }) => {
         if (data.user) {
-          setConta({ login: emailParaLogin(data.user.email ?? ""), restrita: acessoSoFollowUp(data.user) });
+          setConta({
+            login: emailParaLogin(data.user.email ?? ""),
+            restrita: acessoSoFollowUp(data.user),
+            projeto: acessoProjeto(data.user),
+          });
         }
       });
   }, []);
@@ -66,7 +70,8 @@ export default function PaginaFollowUp() {
             </button>
           </div>
         </header>
-        <ModuloFollowUp comReferenciaPrecos={conta?.restrita ?? false} />
+        {/* Só monta depois de saber quem é: projetista não pode nem carregar o Follow up. */}
+        {conta && <ModuloFollowUp comReferenciaPrecos={conta.restrita && !conta.projeto} soProjeto={conta.projeto} />}
       </main>
     </div>
   );
