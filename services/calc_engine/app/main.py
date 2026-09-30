@@ -100,6 +100,7 @@ from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
 from app.croqui_corte import editar as editar_croqui_corte
+from app.croqui_corte import editar_lote as editar_lote_croqui_corte
 from app.croqui_corte import listar as listar_croqui_corte
 from app.croqui_corte import listar_notificacoes as listar_notificacoes_croqui
 from app.follow_up import listar as listar_follow_up
@@ -431,6 +432,20 @@ def croqui_corte_notificacoes(limite: int = 200) -> dict:
         return {"notificacoes": listar_notificacoes_croqui(limite)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/croqui-corte/itens/lote")
+def croqui_corte_editar_lote(pedido: dict) -> dict:
+    """Mesmo valor em várias linhas (puxar como no Excel)."""
+    try:
+        itens = editar_lote_croqui_corte(pedido.get("ids") or [], pedido.get("alteracoes") or {}, pedido.get("editado_por"))
+    except CampoNaoEditavelCorte as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"itens": itens}
 
 
 @app.patch("/croqui-corte/itens/{item_id}")

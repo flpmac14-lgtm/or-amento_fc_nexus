@@ -8,8 +8,8 @@
 // Observação — Status "Fazendo" grava Dt.Fazendo e "Feito" grava Dt.Feito
 // (no servidor, ver services/calc_engine/app/croqui_corte.py).
 
-import { useEffect, useMemo, useState } from "react";
-import { editarItemCroquiCorte, listarCroquiCorte, listarNotificacoesCroquiCorte } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { editarItemCroquiCorte, editarLoteCroquiCorte, listarCroquiCorte, listarNotificacoesCroquiCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca } from "@/lib/followUp";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -25,8 +25,12 @@ const COR_STATUS: Record<string, string> = {
   "Sem Corte": "#44B3E1",
   Fazendo: "#FFFF00",
   Feito: "#DAF2D0",
+  Terceirizado: "#C4A7E7",
   "Aguardando revisão": "#FF0000",
 };
+
+// Colunas que dá pra "puxar" como no Excel (arrastar o quadradinho do canto).
+const PUXAVEIS = new Set<Campo>(["status", "projetista", "n_programa", "observacao"]);
 
 type Campo = keyof ItemCroquiCorte;
 type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "editavel" | "edicao";
@@ -94,6 +98,14 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const [ordem, setOrdem] = useState<{ campo: Campo; desc: boolean } | null>(null);
   const [pagina, setPagina] = useState(0);
   const [porPagina, setPorPagina] = useState(100);
+  // "Salvar tudo" — pedido do usuário, igual ao do Follow up.
+  const pendentes = useRef(new Set<Promise<unknown>>());
+  const falhas = useRef(new Set<string>());
+  const [salvandoTudo, setSalvandoTudo] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+  // Puxar como no Excel: índices (na página) de onde começou e até onde foi.
+  const [arraste, setArraste] = useState<{ campo: Campo; valor: string | null; de: number; ate: number } | null>(null);
+  const tabela = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -119,9 +131,51 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
     };
   }, []);
 
+  function acompanhar<T>(envio: Promise<T>, chave: string): Promise<T> {
+    pendentes.current.add(envio);
+    setAviso(null);
+    return envio
+      .then((r) => {
+        falhas.current.delete(chave);
+        return r;
+      })
+      .catch((e: Error) => {
+        falhas.current.add(chave);
+        throw e;
+      })
+      .finally(() => pendentes.current.delete(envio));
+  }
+
+  function trocarItens(novos: ItemCroquiCorte[]) {
+    const m = new Map(novos.map((i) => [i.id, i]));
+    setItens((lista) => lista.map((i) => m.get(i.id) ?? i));
+  }
+
   async function salvar(item: ItemCroquiCorte, campo: string, valor: string) {
-    const atualizado = await editarItemCroquiCorte(item.id, { [campo]: valor }, editadoPor);
-    setItens((lista) => lista.map((i) => (i.id === atualizado.id ? atualizado : i)));
+    const atualizado = await acompanhar(editarItemCroquiCorte(item.id, { [campo]: valor }, editadoPor), `${item.pedido} — ${campo}`);
+    trocarItens([atualizado]);
+  }
+
+  async function salvarTudo() {
+    setSalvandoTudo(true);
+    setAviso(null);
+    (document.activeElement as HTMLElement | null)?.blur?.(); // o campo em edição salva ao perder o foco
+    await new Promise((r) => setTimeout(r, 50));
+    await Promise.allSettled([...pendentes.current]);
+    try {
+      const r = await listarCroquiCorte();
+      setItens(r.itens);
+      const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      setAviso(
+        falhas.current.size === 0
+          ? { ok: true, texto: `✓ Tudo salvo — ${hora}` }
+          : { ok: false, texto: `${falhas.current.size} campo(s) não salvaram: ${[...falhas.current].join("; ")}` },
+      );
+    } catch (e) {
+      setAviso({ ok: false, texto: `Não consegui confirmar com o servidor: ${(e as Error).message}` });
+    } finally {
+      setSalvandoTudo(false);
+    }
   }
 
   const projetistas = useMemo(
@@ -172,6 +226,33 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
   const paginaAtual = Math.min(pagina, totalPaginas - 1);
   const visiveis = filtrados.slice(paginaAtual * porPagina, (paginaAtual + 1) * porPagina);
+
+  // Soltou o mouse: grava o valor da célula de origem em todas as linhas do intervalo.
+  useEffect(() => {
+    if (!arraste) return;
+    const a = arraste;
+    function soltar() {
+      setArraste(null);
+      const [ini, fim] = a.de <= a.ate ? [a.de, a.ate] : [a.ate, a.de];
+      const alvo = visiveis.slice(ini, fim + 1).filter((_, k) => ini + k !== a.de);
+      if (!alvo.length) return;
+      const ids = alvo.map((i) => i.id);
+      // Mostra na hora; o servidor devolve as linhas (com as datas de Fazendo/Feito).
+      setItens((lista) => lista.map((i) => (ids.includes(i.id) ? { ...i, [a.campo]: a.valor } : i)));
+      acompanhar(editarLoteCroquiCorte(ids, { [a.campo]: a.valor ?? "" }, editadoPor), `${ids.length} linhas — ${a.campo}`)
+        .then(trocarItens)
+        .catch((e: Error) => setErro(e.message));
+    }
+    window.addEventListener("mouseup", soltar);
+    return () => window.removeEventListener("mouseup", soltar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só reage ao arraste
+  }, [arraste]);
+
+  function naFaixa(indice: number, campo: Campo): boolean {
+    if (!arraste || arraste.campo !== campo) return false;
+    const [ini, fim] = arraste.de <= arraste.ate ? [arraste.de, arraste.ate] : [arraste.ate, arraste.de];
+    return indice >= ini && indice <= fim;
+  }
   const temFiltro = busca || status || projetista || Object.values(filtrosColuna).some((v) => v);
 
   function celula(item: ItemCroquiCorte, col: Coluna) {
@@ -228,7 +309,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           Filha do <strong>Material de compra</strong>: pedidos ST = A novos entram sozinhos (a cada 15 min) e as colunas{" "}
           <IconeCadeado /> vêm da MACLM pelo Pedido — não são editáveis. Status, Projetista, Nº do programa e Observação: edite na
           célula, salva sozinho. Status <strong>Fazendo</strong> grava a data e hora em Dt.Fazendo; <strong>Feito</strong>, em
-          Dt.Feito.
+          Dt.Feito. Para repetir um valor em várias linhas, arraste o quadradinho do canto da célula (como no Excel).
         </p>
       </div>
 
@@ -316,6 +397,20 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         >
           Limpar filtros
         </button>
+        <button
+          type="button"
+          onClick={salvarTudo}
+          disabled={salvandoTudo}
+          title="Cada campo já salva sozinho — este botão confirma tudo: termina o campo em edição, espera os envios e recarrega do servidor"
+          className="rounded-lg bg-green-600 dark:bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
+        >
+          {salvandoTudo ? "Salvando…" : "Salvar tudo"}
+        </button>
+        {aviso && (
+          <span className={`text-sm ${aviso.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}>
+            {aviso.texto}
+          </span>
+        )}
         {/* Sininho — pedido do usuário: mesmo critério do Follow up, só pedidos ativos (ST = A) novos. */}
         <FollowUpSino
           carregar={listarNotificacoesCroquiCorte}
@@ -336,7 +431,19 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         />
       </div>
 
-      <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>
+      <div
+        ref={tabela}
+        onMouseMove={(e) => {
+          // Arrastando perto da borda: rola a tabela sozinha (como no Excel).
+          if (!arraste || !tabela.current) return;
+          const r = tabela.current.getBoundingClientRect();
+          if (e.clientY > r.bottom - 40) tabela.current.scrollTop += 18;
+          else if (e.clientY < r.top + 70) tabela.current.scrollTop -= 18;
+        }}
+        className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 ${
+          arraste ? "cursor-crosshair select-none" : ""
+        }`}
+      >
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
@@ -386,12 +493,18 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((item) => (
-              <tr key={item.id} className="text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30">
+            {visiveis.map((item, indice) => (
+              <tr
+                key={item.id}
+                onMouseEnter={() => arraste && setArraste((a) => (a ? { ...a, ate: indice } : a))}
+                className="text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30"
+              >
                 {COLUNAS.map((c, i) => (
                   <td
                     key={c.campo}
-                    className={`border-b border-stone-100 dark:border-slate-800/80 px-2 py-1 align-middle text-xs ${
+                    className={`group/celula border-b border-stone-100 dark:border-slate-800/80 px-2 py-1 align-middle text-xs ${
+                      PUXAVEIS.has(c.campo) ? "relative" : ""
+                    } ${naFaixa(indice, c.campo) ? "outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""} ${
                       i === 0 ? "sticky left-0 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
                     } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} ${
                       c.maxW ? `${c.maxW} truncate` : "whitespace-nowrap"
@@ -399,6 +512,17 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                     title={c.maxW ? exibir(item, c) : undefined}
                   >
                     {celula(item, c)}
+                    {PUXAVEIS.has(c.campo) && !arraste && (
+                      <span
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setArraste({ campo: c.campo, valor: (item[c.campo] as string | null) ?? null, de: indice, ate: indice });
+                        }}
+                        title="Arraste para copiar este valor para as linhas de baixo ou de cima (como no Excel)"
+                        className="absolute bottom-0 right-0 hidden h-2.5 w-2.5 cursor-crosshair border border-white bg-green-600 group-hover/celula:block dark:bg-cyan-400"
+                      />
+                    )}
                   </td>
                 ))}
               </tr>

@@ -48,7 +48,8 @@ _COLUNAS_PLANILHA = {
 }
 
 # Grafias da planilha → uma só (as cores/regras da planilha já tratam assim).
-STATUS = ["Fazendo", "Feito", "Sem Corte", "Estoque", "Aguardando revisão"]
+# "Terceirizado" — pedido do usuário (30/09).
+STATUS = ["Fazendo", "Feito", "Sem Corte", "Estoque", "Terceirizado", "Aguardando revisão"]
 _PROJETISTAS = {"joao": "João", "honorio": "Honório"}
 
 
@@ -299,6 +300,53 @@ def listar_notificacoes(limite: int = 200) -> list[dict]:
 
 class CampoNaoEditavel(ValueError):
     pass
+
+
+def _normalizar_alteracoes(alteracoes: dict) -> dict:
+    normal = {}
+    for campo, valor in alteracoes.items():
+        if campo not in EDITAVEIS:
+            raise CampoNaoEditavel(f"'{campo}' vem do Material de compra (PROCV) e não é editável.")
+        if campo == "status":
+            normal[campo] = normalizar_status(valor)
+        elif campo == "projetista":
+            normal[campo] = normalizar_projetista(valor)
+        else:
+            normal[campo] = _texto(valor)
+    if not normal:
+        raise ValueError("Nada para salvar.")
+    return normal
+
+
+def editar_lote(ids: list[str], alteracoes: dict, editado_por: str | None = None) -> list[dict]:
+    """Mesmo valor em várias linhas de uma vez — "puxar" como no Excel (pedido
+    do usuário). Status virando Fazendo/Feito grava a data e hora só nas
+    linhas em que o status mudou."""
+    normal = _normalizar_alteracoes(alteracoes)
+    ids = [str(i) for i in ids][:5000]
+    if not ids:
+        return []
+    sets, valores = [], []
+    for campo, valor in normal.items():
+        sets.append(f"{campo} = %s")
+        valores.append(valor)
+    novo_status = normal.get("status", "__sem")
+    if novo_status in ("Fazendo", "Feito"):
+        coluna = "dt_fazendo" if novo_status == "Fazendo" else "dt_feito"
+        sets.append(f"{coluna} = case when status is distinct from %s then now() else {coluna} end")
+        valores.append(novo_status)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"update croqui_corte_itens set {', '.join(sets)}, editado_em = now(), editado_por = %s "
+            "where id = any(%s::uuid[])",
+            (*valores, editado_por, ids),
+        )
+        conn.commit()
+        cur.execute(f"select {', '.join(_COLUNAS_LISTA)} from croqui_corte_itens where id = any(%s::uuid[])", (ids,))
+        itens = [{c: _json(v) for c, v in zip(_COLUNAS_LISTA, row)} for row in cur.fetchall()]
+    for i in itens:
+        i["id"] = str(i["id"])
+    return itens
 
 
 def editar(item_id: str, alteracoes: dict, editado_por: str | None = None) -> dict | None:
