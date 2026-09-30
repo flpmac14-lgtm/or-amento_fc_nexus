@@ -98,6 +98,7 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
+from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
 from app.corte import marcar as marcar_corte
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
@@ -432,6 +433,15 @@ def corte_programas() -> dict:
     """Aba Corte (laser): programas da Croqui de corte com as peças e as marcações."""
     try:
         return listar_corte()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/corte/historico")
+def corte_historico(dias: int = 90) -> dict:
+    """Histórico de serviço do laser (cada marcação, com quem e quando)."""
+    try:
+        return historico_corte(dias)
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

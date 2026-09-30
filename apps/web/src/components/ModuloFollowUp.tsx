@@ -193,7 +193,7 @@ export default function ModuloFollowUp({
           <CroquiCorte telaCheia={telaCheia} />
         </div>
       )}
-      {visao === "corte" && <Corte />}
+      {visao === "corte" && <Corte comHistorico={perfil !== "corte"} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

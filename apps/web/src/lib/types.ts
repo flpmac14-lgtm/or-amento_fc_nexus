@@ -739,6 +739,20 @@ export interface ProgramaCorte {
 
 export type MarcaCorte = "cortando" | "finalizado" | "falta_material";
 
+export interface HistoricoCorte {
+  id: number;
+  programa: string;
+  marca: MarcaCorte;
+  valor: boolean; // true = marcou, false = desmarcou
+  por: string | null;
+  em: string;
+  mps: string[];
+  pecas: number | null;
+  itens: number;
+  projetistas: string[];
+  minutos_corte: number | null; // só em "Finalizado": tempo desde o último "Cortando"
+}
+
 // Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.
 export interface NotificacaoFollowUp {
   id: number;

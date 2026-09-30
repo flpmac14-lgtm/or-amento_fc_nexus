@@ -102,6 +102,39 @@ def listar() -> dict:
     return {"programas": lista}
 
 
+def historico(dias: int = 90) -> dict:
+    """Histórico de serviço do laser (mais recente primeiro), com material,
+    peças e — nas linhas "Finalizado" — o tempo desde o último "Cortando"."""
+    dias = max(1, min(int(dias), 3650))
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select id, programa, marca, valor, por, em from corte_historico
+               where em >= now() - make_interval(days => %s) order by em desc, id desc""",
+            (dias,),
+        )
+        linhas = cur.fetchall()
+        # "Cortando" anterior de cada programa (pra calcular o tempo de corte).
+        cur.execute("select programa, em from corte_historico where marca = 'cortando' and valor order by em")
+        cortando: dict[str, list[datetime]] = {}
+        for p, em in cur.fetchall():
+            cortando.setdefault(p, []).append(em)
+    info = {p["programa"]: p for p in listar()["programas"]}
+    saida = []
+    for (hid, programa, marca, valor, por, em) in linhas:
+        prog = info.get(programa, {})
+        minutos = None
+        if marca == "finalizado" and valor:
+            anteriores = [c for c in cortando.get(programa, []) if c <= em]
+            if anteriores:
+                minutos = round((em - anteriores[-1]).total_seconds() / 60)
+        saida.append({
+            "id": hid, "programa": programa, "marca": marca, "valor": valor, "por": por, "em": em.isoformat(),
+            "mps": prog.get("mps", []), "pecas": prog.get("pecas"), "itens": len(prog.get("itens", [])),
+            "projetistas": prog.get("projetistas", []), "minutos_corte": minutos,
+        })
+    return {"historico": saida}
+
+
 def marcar(programa: str, marca: str, valor: bool, por: str | None) -> dict:
     """Liga/desliga uma marcação (grava quem e quando). Devolve o programa atualizado."""
     if marca not in MARCAS:
@@ -119,5 +152,8 @@ def marcar(programa: str, marca: str, valor: bool, por: str | None) -> dict:
                   atualizado_em = now()""",
             (programa, valor, valor, por, valor, valor, por),
         )
+        # Histórico de serviço (migration 0024) — pedido do usuário.
+        cur.execute("insert into corte_historico (programa, marca, valor, por) values (%s, %s, %s, %s)",
+                    (programa, marca, valor, por))
         conn.commit()
     return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})

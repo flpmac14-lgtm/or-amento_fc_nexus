@@ -12,6 +12,7 @@ import type {
   ItemFollowUpCompleto,
   NotificacaoFollowUp,
   MarcaCorte,
+  HistoricoCorte,
   ProgramaCorte,
   ItemCroquiCorte,
   RespostaCroquiCorte,
@@ -825,6 +826,12 @@ export async function listarProgramasCorte(): Promise<ProgramaCorte[]> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas`);
   if (!resposta.ok) throw new Error(`Falha ao carregar os programas de corte (${resposta.status}).`);
   return (await resposta.json()).programas;
+}
+
+export async function listarHistoricoCorte(dias = 90): Promise<HistoricoCorte[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/historico?dias=${dias}`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar o histórico (${resposta.status}).`);
+  return (await resposta.json()).historico;
 }
 
 export async function marcarProgramaCorte(
