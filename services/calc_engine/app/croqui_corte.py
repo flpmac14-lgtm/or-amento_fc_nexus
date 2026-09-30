@@ -51,6 +51,8 @@ _COLUNAS_PLANILHA = {
 # "Terceirizado" — pedido do usuário (30/09).
 STATUS = ["Fazendo", "Feito", "Sem Corte", "Estoque", "Terceirizado", "Aguardando revisão"]
 _PROJETISTAS = {"joao": "João", "honorio": "Honório"}
+# Validação de dados (pedido do usuário, como no Excel): só esses projetistas.
+PROJETISTAS = ["João", "Honório"]
 
 
 def _chave(texto) -> str:
@@ -89,6 +91,14 @@ def normalizar_status(v) -> str | None:
 def normalizar_projetista(v) -> str | None:
     s = _texto(v)
     return _PROJETISTAS.get(_chave(s), s) if s else None
+
+
+def validar_projetista(v) -> str | None:
+    """Pra gravação no app: só João ou Honório (ou vazio)."""
+    p = normalizar_projetista(v)
+    if p is not None and p not in PROJETISTAS:
+        raise ValueError(f"Projetista inválido: '{p}'. Use {' ou '.join(PROJETISTAS)}.")
+    return p
 
 
 def _serial_para_datahora(v) -> datetime | None:
@@ -280,7 +290,7 @@ def _carregar(cur, item_id: str | None = None) -> list[dict]:
 def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         itens = _carregar(cur)
-    return {"itens": itens, "status_opcoes": STATUS}
+    return {"itens": itens, "status_opcoes": STATUS, "projetista_opcoes": PROJETISTAS}
 
 
 def listar_notificacoes(limite: int = 200) -> list[dict]:
@@ -310,7 +320,7 @@ def _normalizar_alteracoes(alteracoes: dict) -> dict:
         if campo == "status":
             normal[campo] = normalizar_status(valor)
         elif campo == "projetista":
-            normal[campo] = normalizar_projetista(valor)
+            normal[campo] = validar_projetista(valor)
         else:
             normal[campo] = _texto(valor)
     if not normal:
@@ -358,7 +368,7 @@ def editar(item_id: str, alteracoes: dict, editado_por: str | None = None) -> di
         if campo == "status":
             valor = normalizar_status(valor)
         elif campo == "projetista":
-            valor = normalizar_projetista(valor)
+            valor = validar_projetista(valor)
         else:
             valor = _texto(valor)
         sets.append(f"{campo} = %s")

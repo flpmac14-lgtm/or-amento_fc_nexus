@@ -702,6 +702,7 @@ export interface ItemCroquiCorte {
 export interface RespostaCroquiCorte {
   itens: ItemCroquiCorte[];
   status_opcoes: string[];
+  projetista_opcoes?: string[];
 }
 
 // Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.

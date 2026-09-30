@@ -33,7 +33,7 @@ const COR_STATUS: Record<string, string> = {
 const PUXAVEIS = new Set<Campo>(["status", "projetista", "n_programa", "observacao"]);
 
 type Campo = keyof ItemCroquiCorte;
-type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "editavel" | "edicao";
+type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "lista" | "editavel" | "edicao";
 
 interface Coluna {
   campo: Campo;
@@ -55,7 +55,8 @@ const COLUNAS: Coluna[] = [
   { campo: "status", rotulo: "Status", tipo: "status" },
   // Pedido do usuário: Nº do programa logo depois do Status.
   { campo: "n_programa", rotulo: "Nº do programa", tipo: "editavel" },
-  { campo: "projetista", rotulo: "Projetista", tipo: "editavel" },
+  // Validação de dados (pedido do usuário): lista só com os projetistas.
+  { campo: "projetista", rotulo: "Projetista", tipo: "lista" },
   { campo: "observacao", rotulo: "Observação", tipo: "editavel", maxW: "max-w-[14rem]" },
   { campo: "dt_fazendo", rotulo: "Dt.Fazendo", tipo: "datahora" },
   { campo: "dt_feito", rotulo: "Dt.Feito", tipo: "datahora" },
@@ -89,6 +90,7 @@ function exibir(item: ItemCroquiCorte, col: Coluna): string {
 export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean }) {
   const [itens, setItens] = useState<ItemCroquiCorte[]>([]);
   const [opcoesStatus, setOpcoesStatus] = useState<string[]>([]);
+  const [opcoesProjetista, setOpcoesProjetista] = useState<string[]>(["João", "Honório"]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [editadoPor, setEditadoPor] = useState<string | null>(null);
@@ -116,6 +118,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           if (!ativo) return;
           setItens(r.itens);
           setOpcoesStatus(r.status_opcoes);
+          setOpcoesProjetista(r.projetista_opcoes ?? ["João", "Honório"]);
           setErro("");
         })
         .catch((e: Error) => ativo && setErro(e.message))
@@ -273,6 +276,24 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           {[...new Set([...opcoesStatus, ...(item.status ? [item.status] : [])])].map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (col.tipo === "lista") {
+      return (
+        <select
+          value={item.projetista ?? ""}
+          onChange={(e) => {
+            salvar(item, "projetista", e.target.value).catch((err: Error) => setErro(err.message));
+          }}
+          className="rounded border border-stone-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-1 py-0.5 text-xs text-stone-900 dark:text-slate-100"
+        >
+          <option value="">—</option>
+          {[...new Set([...opcoesProjetista, ...(item.projetista ? [item.projetista] : [])])].map((p) => (
+            <option key={p} value={p}>
+              {p}
             </option>
           ))}
         </select>
