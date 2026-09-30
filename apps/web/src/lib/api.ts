@@ -11,6 +11,8 @@ import type {
   ItemFollowUp,
   ItemFollowUpCompleto,
   NotificacaoFollowUp,
+  ItemCroquiCorte,
+  RespostaCroquiCorte,
   ItemPedidoWeir,
   ItemContingenciamento,
   MaterialCatalogo,
@@ -804,6 +806,38 @@ export async function baixarExcelFollowUp(ids: string[]): Promise<void> {
 
 export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
+}
+
+// Croqui de corte (filha do Material de compra) — ver app/croqui_corte.py.
+export async function listarCroquiCorte(): Promise<RespostaCroquiCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/croqui-corte`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar a Croqui de corte (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
+export async function editarItemCroquiCorte(
+  id: string,
+  alteracoes: Record<string, string | null>,
+  editadoPor: string | null,
+): Promise<ItemCroquiCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/croqui-corte/itens/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alteracoes, editado_por: editadoPor }),
+  });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(detalhe || `Falha ao salvar (${resposta.status}).`);
+  }
+  return resposta.json();
 }
 
 // Material de compra: mesmo formato da Controle de obras (espelho de planilha).

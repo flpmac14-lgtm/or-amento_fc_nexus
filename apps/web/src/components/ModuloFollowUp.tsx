@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
+import CroquiCorte from "@/components/CroquiCorte";
 import FollowUp from "@/components/FollowUp";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 
@@ -20,6 +21,8 @@ const VISOES = [
   { valor: "controle", rotulo: "Controle de obras" },
   // Espelho da aba MACLM do MACLM.xlsx — pedido do usuário (mãe de um projeto novo).
   { valor: "material", rotulo: "Material de compra" },
+  // Filha do Material de compra (aba Croqui 2 do Croqui de corte) — pedido do usuário.
+  { valor: "croqui", rotulo: "Croqui de corte" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
@@ -30,6 +33,7 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
   const [visao, setVisao] = useState<(typeof VISOES)[number]["valor"]>("followup");
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(false);
+  const [croquiAberto, setCroquiAberto] = useState(false);
   const visoes = VISOES.filter((v) => v.valor !== "referencia" || comReferenciaPrecos);
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
@@ -117,6 +121,7 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
               onClick={() => {
                 setVisao(v.valor);
                 if (v.valor === "material") setMaterialAberto(true);
+                if (v.valor === "croqui") setCroquiAberto(true);
               }}
               className={`rounded-md px-4 py-1.5 font-medium transition-colors ${
                 visao === v.valor
@@ -154,6 +159,11 @@ export default function ModuloFollowUp({ comReferenciaPrecos = false }: { comRef
       {materialAberto && (
         <div className={visao === "material" ? "" : "hidden"}>
           <ControleObras telaCheia={telaCheia} config={CONFIG_MATERIAL_COMPRA} />
+        </div>
+      )}
+      {croquiAberto && (
+        <div className={visao === "croqui" ? "" : "hidden"}>
+          <CroquiCorte telaCheia={telaCheia} />
         </div>
       )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}

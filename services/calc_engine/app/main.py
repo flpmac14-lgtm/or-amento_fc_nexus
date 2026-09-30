@@ -98,6 +98,9 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
+from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
+from app.croqui_corte import editar as editar_croqui_corte
+from app.croqui_corte import listar as listar_croqui_corte
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -409,6 +412,33 @@ def material_compra_listar() -> dict:
         return listar_material_compra()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/croqui-corte")
+def croqui_corte_listar() -> dict:
+    """Croqui de corte (filha do Material de compra) — ver app/croqui_corte.py."""
+    try:
+        return listar_croqui_corte()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.patch("/croqui-corte/itens/{item_id}")
+def croqui_corte_editar(item_id: str, pedido: dict) -> dict:
+    """Salva Status / Projetista / Nº programa / Observação. Status Fazendo ou
+    Feito grava a data e hora na coluna correspondente."""
+    alteracoes = pedido.get("alteracoes") or {}
+    try:
+        item = editar_croqui_corte(item_id, alteracoes, pedido.get("editado_por"))
+    except CampoNaoEditavelCorte as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return item
 
 
 @app.get("/processos-terceirizados/catalogo")

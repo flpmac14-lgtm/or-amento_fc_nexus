@@ -670,6 +670,40 @@ export interface RespostaControleObras {
 }
 
 // Registro diário de um item do Follow up (histórico do pedido).
+// Croqui de corte (migration 0021) — filha do Material de compra.
+export interface ItemCroquiCorte {
+  id: string;
+  pedido: string;
+  // fixas (PROCV pelo Pedido na MACLM)
+  mac: string | null;
+  descricao: string | null;
+  desenho: string | null;
+  mp: string | null;
+  l: string | null;
+  pos: string | null;
+  qt: number | null;
+  qt_1: number | null;
+  qtt: number | null;
+  un: string | null;
+  // editáveis
+  status: string | null;
+  projetista: string | null;
+  n_programa: string | null;
+  observacao: string | null;
+  dt_fazendo: string | null;
+  dt_feito: string | null;
+  linha_planilha: number;
+  origem: "importacao_croqui" | "material_compra";
+  editado_em: string | null;
+  editado_por: string | null;
+  created_at: string;
+}
+
+export interface RespostaCroquiCorte {
+  itens: ItemCroquiCorte[];
+  status_opcoes: string[];
+}
+
 // Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.
 export interface NotificacaoFollowUp {
   id: number;
