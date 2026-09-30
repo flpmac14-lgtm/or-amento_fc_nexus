@@ -53,8 +53,9 @@ const COLUNAS: Coluna[] = [
   { campo: "l", rotulo: "L", tipo: "texto", fixa: true },
   { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true },
   { campo: "status", rotulo: "Status", tipo: "status" },
-  { campo: "projetista", rotulo: "Projetista", tipo: "editavel" },
+  // Pedido do usuário: Nº do programa logo depois do Status.
   { campo: "n_programa", rotulo: "Nº do programa", tipo: "editavel" },
+  { campo: "projetista", rotulo: "Projetista", tipo: "editavel" },
   { campo: "observacao", rotulo: "Observação", tipo: "editavel", maxW: "max-w-[14rem]" },
   { campo: "dt_fazendo", rotulo: "Dt.Fazendo", tipo: "datahora" },
   { campo: "dt_feito", rotulo: "Dt.Feito", tipo: "datahora" },
