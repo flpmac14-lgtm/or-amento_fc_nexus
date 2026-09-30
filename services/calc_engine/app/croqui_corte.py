@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -225,18 +226,26 @@ def propagar() -> dict:
         cur.execute("select coalesce(max(linha_planilha), 1) from croqui_corte_itens")
         proxima = cur.fetchone()[0] + 1
         inseridos = []
+        notificacoes = []  # sininho (migration 0022): só pedidos novos ativos
         for chave in ordem:
             valores = mae[chave]
             if chave in pedidos or _texto(valores[ix["st"]]) != "A":
                 continue
             novos = _fixos_da_mae(valores, ix, None)
-            inseridos.append([_texto(valores[ix["po_it_pos"]])] + [novos[c] for c in FIXOS] + [proxima, agora])
+            novo_id = uuid.uuid4()
+            pedido = _texto(valores[ix["po_it_pos"]])
+            inseridos.append([novo_id, pedido] + [novos[c] for c in FIXOS] + [proxima, agora])
+            notificacoes.append((novo_id, pedido, novos["mac"], novos["descricao"]))
             proxima += 1
         if inseridos:
             cur.executemany(
-                f"""insert into croqui_corte_itens (pedido, {', '.join(FIXOS)}, linha_planilha, mae_sincronizada_em, origem)
-                    values (%s, {', '.join(['%s'] * len(FIXOS))}, %s, %s, 'material_compra')""",
+                f"""insert into croqui_corte_itens (id, pedido, {', '.join(FIXOS)}, linha_planilha, mae_sincronizada_em, origem)
+                    values (%s, %s, {', '.join(['%s'] * len(FIXOS))}, %s, %s, 'material_compra')""",
                 inseridos,
+            )
+            cur.executemany(
+                "insert into croqui_corte_notificacoes (item_id, pedido, mac, descricao) values (%s, %s, %s, %s)",
+                notificacoes,
             )
         conn.commit()
     return {"atualizados": len(atualizacoes), "novos": len(inseridos)}
@@ -271,6 +280,21 @@ def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         itens = _carregar(cur)
     return {"itens": itens, "status_opcoes": STATUS}
+
+
+def listar_notificacoes(limite: int = 200) -> list[dict]:
+    """Sininho: pedidos novos ativos que a mãe trouxe (mais recentes primeiro)."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select id, tipo, item_id, pedido, mac, descricao, criado_em from croqui_corte_notificacoes
+               order by criado_em desc, id desc limit %s""",
+            (max(1, min(limite, 1000)),),
+        )
+        return [
+            {"id": r[0], "tipo": r[1], "item_id": str(r[2]) if r[2] else None, "pedido": r[3], "mac": r[4],
+             "descricao": r[5], "criado_em": r[6].isoformat()}
+            for r in cur.fetchall()
+        ]
 
 
 class CampoNaoEditavel(ValueError):

@@ -9,13 +9,14 @@
 // (no servidor, ver services/calc_engine/app/croqui_corte.py).
 
 import { useEffect, useMemo, useState } from "react";
-import { editarItemCroquiCorte, listarCroquiCorte } from "@/lib/api";
+import { editarItemCroquiCorte, listarCroquiCorte, listarNotificacoesCroquiCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca } from "@/lib/followUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemCroquiCorte } from "@/lib/types";
 import { CelulaEditavel, IconeCadeado } from "@/components/FollowUpEdicao";
+import FollowUpSino from "@/components/FollowUpSino";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
@@ -315,6 +316,24 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         >
           Limpar filtros
         </button>
+        {/* Sininho — pedido do usuário: mesmo critério do Follow up, só pedidos ativos (ST = A) novos. */}
+        <FollowUpSino
+          carregar={listarNotificacoesCroquiCorte}
+          chaveVisto="fcnexus.croquicorte.notificacoes.vistoAte"
+          titulo="Pedidos novos do Material de compra"
+          dica="Pedidos ativos (ST = A) novos que entraram na Croqui de corte (atualiza a cada 15 min)"
+          vazio="Nenhum ainda. Aparecem aqui os pedidos ativos novos que o Material de compra trouxer (15 min)."
+          onAbrirItem={(id) => {
+            const item = itens.find((i) => i.id === id);
+            if (!item) return;
+            // Mostra só esse pedido na tabela.
+            setBusca(item.pedido);
+            setStatus("");
+            setProjetista("");
+            setFiltrosColuna({});
+            setPagina(0);
+          }}
+        />
       </div>
 
       <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>

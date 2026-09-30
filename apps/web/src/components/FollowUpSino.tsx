@@ -10,7 +10,7 @@ import { listarNotificacoesFollowUp } from "@/lib/api";
 import type { NotificacaoFollowUp } from "@/lib/types";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
-const CHAVE_VISTO = "fcnexus.followup.notificacoes.vistoAte";
+const CHAVE_VISTO_PADRAO = "fcnexus.followup.notificacoes.vistoAte";
 
 const ROTULO = {
   novo: { texto: "Novo", classe: "bg-green-600 text-white" },
@@ -18,9 +18,9 @@ const ROTULO = {
   reaberto: { texto: "Reaberto", classe: "bg-amber-500 text-white" },
 } as const;
 
-function lerVisto(): number {
+function lerVisto(chave: string): number {
   try {
-    return Number(localStorage.getItem(CHAVE_VISTO) ?? 0) || 0;
+    return Number(localStorage.getItem(chave) ?? 0) || 0;
   } catch {
     return 0;
   }
@@ -28,14 +28,26 @@ function lerVisto(): number {
 
 // semFoto/onColarFoto: pedido do usuário — o pedido novo já entra sozinho no
 // Follow up; daqui ele só cola a foto (abre a janela de colar imagem direto).
+// Também serve pra Croqui de corte (pedido do usuário: mesmo critério) —
+// carregar/chaveVisto/titulo/dica trocam a fonte e os textos.
 export default function FollowUpSino({
   onAbrirItem,
   semFoto,
   onColarFoto,
+  carregar = listarNotificacoesFollowUp,
+  chaveVisto = CHAVE_VISTO_PADRAO,
+  titulo = "Notificações da Controle de obras",
+  dica = "Pedidos novos e encerrados na Controle de obras (atualiza a cada 15 min)",
+  vazio = "Nenhuma ainda. Aparecem aqui os pedidos novos e encerrados a cada atualização (15 min).",
 }: {
   onAbrirItem: (itemId: string) => void;
-  semFoto: (itemId: string) => boolean;
-  onColarFoto: (itemId: string) => void;
+  semFoto?: (itemId: string) => boolean;
+  onColarFoto?: (itemId: string) => void;
+  carregar?: () => Promise<NotificacaoFollowUp[]>;
+  chaveVisto?: string;
+  titulo?: string;
+  dica?: string;
+  vazio?: string;
 }) {
   const [lista, setLista] = useState<NotificacaoFollowUp[]>([]);
   const [vistoAte, setVistoAte] = useState(0); // conta o número vermelho
@@ -47,10 +59,10 @@ export default function FollowUpSino({
     let ativo = true;
     let primeira = true;
     function buscar() {
-      listarNotificacoesFollowUp()
+      carregar()
         .then((l) => {
           if (!ativo) return;
-          if (primeira) setVistoAte(lerVisto()); // localStorage só existe no navegador
+          if (primeira) setVistoAte(lerVisto(chaveVisto)); // localStorage só existe no navegador
           primeira = false;
           setLista(l);
         })
@@ -62,7 +74,7 @@ export default function FollowUpSino({
       ativo = false;
       clearInterval(id);
     };
-  }, []);
+  }, [carregar, chaveVisto]);
 
   // Fecha ao clicar fora.
   useEffect(() => {
@@ -81,7 +93,7 @@ export default function FollowUpSino({
     if (!aberto && lista.length) {
       const maior = Math.max(...lista.map((n) => n.id));
       try {
-        localStorage.setItem(CHAVE_VISTO, String(maior));
+        localStorage.setItem(chaveVisto, String(maior));
       } catch {
         // sem localStorage: o número volta na próxima visita
       }
@@ -108,7 +120,7 @@ export default function FollowUpSino({
       <button
         type="button"
         onClick={alternar}
-        title="Pedidos novos e encerrados na Controle de obras (atualiza a cada 15 min)"
+        title={dica}
         aria-label="Notificações"
         className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-stone-700 dark:text-slate-200 hover:border-green-600 dark:hover:border-cyan-500"
       >
@@ -134,12 +146,11 @@ export default function FollowUpSino({
       {aberto && (
         <div className="absolute right-0 top-11 z-[58] max-h-[70vh] w-[26rem] max-w-[90vw] overflow-auto rounded-lg border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
           <p className="sticky top-0 border-b border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-bold text-stone-900 dark:text-white">
-            Notificações da Controle de obras
+            {titulo}
           </p>
           {lista.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-stone-500 dark:text-slate-400">
-              Nenhuma ainda. Aparecem aqui os pedidos novos e encerrados a cada
-              atualização (15 min).
+              {vazio}
             </p>
           ) : (
             grupos.map((g) => (
@@ -185,11 +196,11 @@ export default function FollowUpSino({
                         </span>
                       </span>
                     </button>
-                    {n.tipo === "novo" && n.item_id && semFoto(n.item_id) && (
+                    {n.tipo === "novo" && n.item_id && semFoto && onColarFoto && semFoto(n.item_id) && (
                       <button
                         type="button"
                         onClick={() => {
-                          onColarFoto(n.item_id!);
+                          onColarFoto?.(n.item_id!);
                           setAberto(false);
                         }}
                         title="Colar a foto deste pedido (Ctrl+V)"

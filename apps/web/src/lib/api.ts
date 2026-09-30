@@ -818,6 +818,27 @@ export async function listarCroquiCorte(): Promise<RespostaCroquiCorte> {
   return resposta.json();
 }
 
+// Sininho da Croqui de corte — mesmo formato do sininho do Follow up
+// (o "cliente" do aviso mostra a Mac).
+export async function listarNotificacoesCroquiCorte(): Promise<NotificacaoFollowUp[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/croqui-corte/notificacoes`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar as notificações (${resposta.status}).`);
+  const { notificacoes } = (await resposta.json()) as {
+    notificacoes: { id: number; item_id: string | null; pedido: string; mac: string | null; descricao: string | null; criado_em: string }[];
+  };
+  return notificacoes.map((n) => ({
+    id: n.id,
+    tipo: "novo" as const,
+    item_id: n.item_id,
+    po: n.pedido,
+    cliente: n.mac,
+    descricao: n.descricao,
+    st_antes: null,
+    st_depois: "A",
+    criado_em: n.criado_em,
+  }));
+}
+
 export async function editarItemCroquiCorte(
   id: string,
   alteracoes: Record<string, string | null>,

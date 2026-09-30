@@ -101,6 +101,7 @@ from app.material_compra import listar as listar_material_compra
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
 from app.croqui_corte import editar as editar_croqui_corte
 from app.croqui_corte import listar as listar_croqui_corte
+from app.croqui_corte import listar_notificacoes as listar_notificacoes_croqui
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -419,6 +420,15 @@ def croqui_corte_listar() -> dict:
     """Croqui de corte (filha do Material de compra) — ver app/croqui_corte.py."""
     try:
         return listar_croqui_corte()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/croqui-corte/notificacoes")
+def croqui_corte_notificacoes(limite: int = 200) -> dict:
+    """Sininho da Croqui de corte: pedidos ativos novos vindos do Material de compra."""
+    try:
+        return {"notificacoes": listar_notificacoes_croqui(limite)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 
