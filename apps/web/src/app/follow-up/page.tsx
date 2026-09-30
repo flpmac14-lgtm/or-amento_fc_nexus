@@ -7,13 +7,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
-import { acessoProjeto, acessoSoFollowUp } from "@/lib/acesso";
+import { acessoSoFollowUp, perfilModulo } from "@/lib/acesso";
+import type { PerfilModulo } from "@/components/ModuloFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
 export default function PaginaFollowUp() {
   const router = useRouter();
-  const [conta, setConta] = useState<{ login: string; restrita: boolean; projeto: boolean } | null>(null);
+  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo } | null>(null);
 
   useEffect(() => {
     criarClienteSupabaseNavegador()
@@ -23,7 +24,7 @@ export default function PaginaFollowUp() {
           setConta({
             login: emailParaLogin(data.user.email ?? ""),
             restrita: acessoSoFollowUp(data.user),
-            projeto: acessoProjeto(data.user),
+            perfil: perfilModulo(data.user),
           });
         }
       });
@@ -37,7 +38,7 @@ export default function PaginaFollowUp() {
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
-      <main className="mx-auto flex max-w-[100rem] flex-col gap-6 px-6 py-12">
+      <main className="mx-auto flex max-w-[100rem] flex-col gap-4 px-3 py-4 sm:gap-6 sm:px-6 sm:py-12">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/15 dark:bg-cyan-500/15 text-green-600 dark:text-cyan-400">
@@ -71,7 +72,7 @@ export default function PaginaFollowUp() {
           </div>
         </header>
         {/* Só monta depois de saber quem é: projetista não pode nem carregar o Follow up. */}
-        {conta && <ModuloFollowUp comReferenciaPrecos={conta.restrita && !conta.projeto} soProjeto={conta.projeto} />}
+        {conta && <ModuloFollowUp comReferenciaPrecos={conta.perfil === "follow_up"} perfil={conta.perfil} />}
       </main>
     </div>
   );

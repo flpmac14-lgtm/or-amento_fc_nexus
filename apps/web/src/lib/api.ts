@@ -11,6 +11,8 @@ import type {
   ItemFollowUp,
   ItemFollowUpCompleto,
   NotificacaoFollowUp,
+  MarcaCorte,
+  ProgramaCorte,
   ItemCroquiCorte,
   RespostaCroquiCorte,
   ItemPedidoWeir,
@@ -814,6 +816,31 @@ export async function listarCroquiCorte(): Promise<RespostaCroquiCorte> {
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     throw new Error(`Falha ao carregar a Croqui de corte (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
+// Aba Corte (laser).
+export async function listarProgramasCorte(): Promise<ProgramaCorte[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar os programas de corte (${resposta.status}).`);
+  return (await resposta.json()).programas;
+}
+
+export async function marcarProgramaCorte(
+  programa: string,
+  marca: MarcaCorte,
+  valor: boolean,
+  por: string | null,
+): Promise<ProgramaCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas/${encodeURIComponent(programa)}/marcar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ marca, valor, por }),
+  });
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Não salvou (${resposta.status}). ${corpo}`);
   }
   return resposta.json();
 }

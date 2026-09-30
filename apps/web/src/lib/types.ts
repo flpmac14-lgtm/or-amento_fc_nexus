@@ -705,6 +705,40 @@ export interface RespostaCroquiCorte {
   projetista_opcoes?: string[];
 }
 
+// Aba Corte (laser) — migration 0023, app/corte.py.
+export interface PecaCorte {
+  id: string;
+  pedido: string;
+  mac: string | null;
+  descricao: string | null;
+  desenho: string | null;
+  mp: string | null;
+  pos: string | null;
+  qt: number | null;
+  qtt: number | null;
+  un: string | null;
+  status: string | null;
+  projetista: string | null;
+  n_programa: string | null;
+}
+
+export interface ProgramaCorte {
+  programa: string;
+  itens: PecaCorte[];
+  liberado_em: string | null; // último "Feito" do projetista nas peças do programa
+  mps: string[];
+  pecas: number;
+  projetistas: string[];
+  cortando_em: string | null;
+  cortando_por: string | null;
+  finalizado_em: string | null;
+  finalizado_por: string | null;
+  falta_material_em: string | null;
+  falta_material_por: string | null;
+}
+
+export type MarcaCorte = "cortando" | "finalizado" | "falta_material";
+
 // Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.
 export interface NotificacaoFollowUp {
   id: number;

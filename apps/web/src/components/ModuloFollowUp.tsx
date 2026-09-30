@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
+import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
 import FollowUp from "@/components/FollowUp";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
@@ -23,26 +24,38 @@ const VISOES = [
   { valor: "material", rotulo: "Material de compra" },
   // Filha do Material de compra (aba Croqui 2 do Croqui de corte) — pedido do usuário.
   { valor: "croqui", rotulo: "Croqui de corte" },
+  // Operador do laser marca Cortando / Finalizado / Falta material por programa.
+  { valor: "corte", rotulo: "Corte" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
 // completas já têm na tela principal.
-// soProjeto: conta de projetista — só Material de compra e Croqui de corte.
+// perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
+// Croqui de corte e Corte; "corte" (operador do laser) = só Corte.
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte";
+
 export default function ModuloFollowUp({
   comReferenciaPrecos = false,
-  soProjeto = false,
+  perfil = "total",
 }: {
   comReferenciaPrecos?: boolean;
-  soProjeto?: boolean;
+  perfil?: PerfilModulo;
 }) {
-  const [visaoEscolhida, setVisao] = useState<(typeof VISOES)[number]["valor"]>(soProjeto ? "croqui" : "followup");
+  const soProjeto = perfil === "projeto" || perfil === "corte";
+  const [visaoEscolhida, setVisao] = useState<(typeof VISOES)[number]["valor"]>(
+    perfil === "corte" ? "corte" : perfil === "projeto" ? "croqui" : "followup",
+  );
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(false);
   const [croquiAberto, setCroquiAberto] = useState(false);
   const visoes = VISOES.filter((v) =>
-    soProjeto ? v.valor === "material" || v.valor === "croqui" : v.valor !== "referencia" || comReferenciaPrecos,
+    perfil === "corte"
+      ? v.valor === "corte"
+      : perfil === "projeto"
+        ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
+        : v.valor !== "referencia" || comReferenciaPrecos,
   );
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
   const [telaCheia, setTelaCheia] = useState(false);
@@ -123,7 +136,7 @@ export default function ModuloFollowUp({
             </svg>
           </button>
         )}
-        <div className="flex w-fit gap-1 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
+        <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
           {visoes.map((v) => (
             <button
               key={v.valor}
@@ -180,6 +193,7 @@ export default function ModuloFollowUp({
           <CroquiCorte telaCheia={telaCheia} />
         </div>
       )}
+      {visao === "corte" && <Corte />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

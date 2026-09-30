@@ -98,6 +98,8 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
+from app.corte import listar as listar_corte
+from app.corte import marcar as marcar_corte
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
 from app.croqui_corte import editar as editar_croqui_corte
 from app.croqui_corte import editar_lote as editar_lote_croqui_corte
@@ -421,6 +423,26 @@ def croqui_corte_listar() -> dict:
     """Croqui de corte (filha do Material de compra) — ver app/croqui_corte.py."""
     try:
         return listar_croqui_corte()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/corte/programas")
+def corte_programas() -> dict:
+    """Aba Corte (laser): programas da Croqui de corte com as peças e as marcações."""
+    try:
+        return listar_corte()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/corte/programas/{programa}/marcar")
+def corte_marcar(programa: str, pedido: dict) -> dict:
+    """Liga/desliga Cortando / Finalizado / Falta material (grava quem e quando)."""
+    try:
+        return marcar_corte(programa, str(pedido.get("marca")), bool(pedido.get("valor")), pedido.get("por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 
