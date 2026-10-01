@@ -726,6 +726,7 @@ export interface ProgramaCorte {
   programa: string;
   itens: PecaCorte[];
   liberado_em: string | null; // último "Feito" do projetista nas peças do programa
+  manual: boolean; // lançado à mão na aba Corte, ainda sem peças na Croqui de corte
   mps: string[];
   pecas: number;
   projetistas: string[];

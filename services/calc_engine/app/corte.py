@@ -82,7 +82,7 @@ def listar() -> dict:
     programas: dict[str, dict] = {}
     for (item_id, pedido, mac, descricao, desenho, mp, pos, qt, qtt, un, status, projetista, n_prog, dt_feito) in itens:
         for p in programas_de(n_prog):
-            prog = programas.setdefault(p, {"programa": p, "itens": [], "liberado_em": None})
+            prog = programas.setdefault(p, {"programa": p, "itens": [], "liberado_em": None, "manual": False})
             prog["itens"].append({
                 "id": str(item_id), "pedido": pedido, "mac": mac, "descricao": descricao, "desenho": desenho,
                 "mp": mp, "pos": pos, "qt": _num(qt), "qtt": _num(qtt), "un": un, "status": status,
@@ -90,6 +90,14 @@ def listar() -> dict:
             })
             if dt_feito and (prog["liberado_em"] is None or dt_feito > prog["liberado_em"]):
                 prog["liberado_em"] = dt_feito
+
+    # Programa lançado à mão na aba Corte (pedido do usuário): o operador
+    # recebeu o programa antes de o projetista pôr o número na Croqui de corte.
+    # Só existe em corte_programas; quando a Croqui ganhar esse número, as
+    # peças entram aqui sozinhas (mesma chave) e ele deixa de ser "manual".
+    for p in marcas:
+        if p not in programas:
+            programas[p] = {"programa": p, "itens": [], "liberado_em": None, "manual": True}
 
     lista = []
     for p, prog in programas.items():

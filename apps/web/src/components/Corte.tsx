@@ -6,6 +6,9 @@
 // Falta material. Tem que ser fácil até no celular, com o mínimo de
 // digitação: teclado numérico, botões grandes, programas recentes em
 // "cartões" pra só tocar. Quem marcou e quando fica gravado (app/corte.py).
+// Programa manual (pedido do usuário): se o número ainda não está na Croqui
+// de corte, o operador lança e marca assim mesmo; quando o projetista puser
+// o número na Croqui, as peças se juntam sozinhas (mesmo número).
 
 import { useEffect, useMemo, useState } from "react";
 import { listarProgramasCorte, marcarProgramaCorte } from "@/lib/api";
@@ -51,6 +54,24 @@ const MARCAS: {
     desligado: "border-red-500 text-red-600 dark:text-red-400",
   },
 ];
+
+function programaManual(programa: string): ProgramaCorte {
+  return {
+    programa,
+    itens: [],
+    liberado_em: null,
+    manual: true,
+    mps: [],
+    pecas: 0,
+    projetistas: [],
+    cortando_em: null,
+    cortando_por: null,
+    finalizado_em: null,
+    finalizado_por: null,
+    falta_material_em: null,
+    falta_material_por: null,
+  };
+}
 
 function situacao(p: ProgramaCorte): { texto: string; classe: string } {
   if (p.finalizado_em)
@@ -147,6 +168,7 @@ export default function Corte({
         if (
           p.cortando_em ||
           p.falta_material_em ||
+          p.manual ||
           (p.liberado_em && new Date(p.liberado_em).getTime() >= limite)
         )
           c.recentes++;
@@ -170,6 +192,7 @@ export default function Corte({
       return (
         !!p.cortando_em ||
         !!p.falta_material_em ||
+        p.manual ||
         (!!p.liberado_em && new Date(p.liberado_em).getTime() >= limite)
       );
     });
@@ -206,6 +229,12 @@ export default function Corte({
     } finally {
       setSalvando(null);
     }
+  }
+
+  // Número que ainda não existe: cria só na tela; grava no servidor ao marcar.
+  function lancarManual(n: string) {
+    if (!porNumero.has(n)) setProgramas((l) => [programaManual(n), ...l]);
+    setAbertoNum(n);
   }
 
   useLimparComF4("corte", () => {
@@ -278,8 +307,9 @@ export default function Corte({
                   value={numero}
                   onChange={(e) => digitar(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && porNumero.has(numero))
-                      setAbertoNum(numero);
+                    if (e.key === "Enter" && numero)
+                      if (porNumero.has(numero)) setAbertoNum(numero);
+                      else lancarManual(numero);
                   }}
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -346,13 +376,20 @@ export default function Corte({
                   <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
                     {p.programa}
                   </span>
-                  <span
-                    className={`w-fit rounded px-2 py-0.5 text-xs font-bold ${s.classe}`}
-                  >
-                    {s.texto}
+                  <span className="flex flex-wrap gap-1">
+                    <span
+                      className={`w-fit rounded px-2 py-0.5 text-xs font-bold ${s.classe}`}
+                    >
+                      {s.texto}
+                    </span>
+                    {p.manual && (
+                      <span className="w-fit rounded border border-sky-500 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
+                        Manual
+                      </span>
+                    )}
                   </span>
                   <span className="truncate text-xs text-stone-600 dark:text-slate-400">
-                    {p.mps.join(" · ") || "—"}
+                    {p.manual ? "ainda não está na Croqui" : p.mps.join(" · ") || "—"}
                   </span>
                   <span className="text-xs text-stone-500 dark:text-slate-500">
                     {formatarNumero(p.pecas, 0)} peça(s) · {p.itens.length}{" "}
@@ -362,6 +399,18 @@ export default function Corte({
               );
             })}
           </div>
+          {numero && !porNumero.has(numero) && !carregando && (
+            <button
+              type="button"
+              onClick={() => lancarManual(numero)}
+              className="mx-auto flex w-full max-w-md flex-col items-center gap-1 rounded-2xl border-4 border-dashed border-sky-500 bg-sky-50 px-4 py-4 text-sky-800 active:scale-[0.98] dark:bg-sky-950/40 dark:text-sky-200"
+            >
+              <span className="text-2xl font-extrabold">+ Lançar programa {numero} manualmente</span>
+              <span className="text-xs">
+                Ainda não está na Croqui de corte. Marque o status agora; as peças aparecem quando o projetista colocar o número lá.
+              </span>
+            </button>
+          )}
           {lista.length === 0 && (
             <p className="py-10 text-center text-stone-500 dark:text-slate-400">
               {carregando
@@ -391,9 +440,16 @@ export default function Corte({
                 <p className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white">
                   {aberto.programa}
                 </p>
-                <p className="mt-2 text-sm text-stone-700 dark:text-slate-300">
-                  <strong>{aberto.mps.join(" · ") || "—"}</strong>
-                </p>
+                {aberto.manual ? (
+                  <p className="mt-2 max-w-md rounded-lg border border-sky-400 bg-sky-50 px-2 py-1 text-sm text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
+                    <strong>Lançado manualmente</strong> — ainda não está na Croqui de corte. Quando o projetista colocar esse
+                    número lá, as peças aparecem aqui sozinhas.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-stone-700 dark:text-slate-300">
+                    <strong>{aberto.mps.join(" · ") || "—"}</strong>
+                  </p>
+                )}
                 <p className="text-sm text-stone-600 dark:text-slate-400">
                   {formatarNumero(aberto.pecas, 0)} peça(s) ·{" "}
                   {aberto.itens.length} item(ns)
