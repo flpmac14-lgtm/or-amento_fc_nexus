@@ -35,9 +35,11 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
     return () => window.removeEventListener("keydown", tecla);
   }, [onFechar]);
 
-  function gerar() {
+  // fracionado: o relatório já abre com a Qtd editável (coleta parcial).
+  function gerar(fracionado = false) {
     const qs = new URLSearchParams({ data: dataValida });
     if (cliente) qs.set("cliente", cliente);
+    if (fracionado) qs.set("fracionado", "1");
     window.open(`/follow-up/coleta?${qs}`, "_blank");
     onFechar();
   }
@@ -86,7 +88,16 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
             <span className="text-sm text-stone-600 dark:text-slate-400">Nenhuma data de coleta marcada para esse cliente.</span>
           )}
         </label>
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => gerar(true)}
+            disabled={!dataValida}
+            title="Abre o relatório com a quantidade de cada pedido editável, para coleta parcial"
+            className="mr-auto rounded-lg px-2 py-1.5 text-xs text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 hover:text-stone-800 dark:hover:text-slate-200 disabled:opacity-50"
+          >
+            Gerar relatório fracionado
+          </button>
           <button
             type="button"
             onClick={onFechar}
@@ -96,7 +107,7 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
           </button>
           <button
             type="button"
-            onClick={gerar}
+            onClick={() => gerar()}
             disabled={!dataValida}
             className="rounded-lg bg-green-600 dark:bg-cyan-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
           >
