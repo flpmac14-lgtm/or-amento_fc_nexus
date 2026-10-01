@@ -42,6 +42,8 @@ interface Coluna {
   tipo: Tipo;
   fixa?: boolean;
   maxW?: string;
+  // Coluna mínima (até 4 algarismos): sem cadeado no cabeçalho e menos espaço.
+  estreita?: boolean;
 }
 
 // Mesma ordem da aba Croqui 2 + quem editou por último.
@@ -53,8 +55,8 @@ const COLUNAS: Coluna[] = [
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[11rem]" },
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[8rem]" },
   { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
-  { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[3rem]" },
-  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true, maxW: "max-w-[2.5rem]" },
+  { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
+  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
   { campo: "status", rotulo: "Status", tipo: "status" },
   // Pedido do usuário: Nº do programa logo depois do Status.
   { campo: "n_programa", rotulo: "Nº do programa", tipo: "programa" },
@@ -559,7 +561,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
-                  className={`border-b border-stone-200 dark:border-slate-800 px-1.5 pt-2 pb-1 font-semibold ${
+                  className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pt-2 pb-1 font-semibold ${
                     i === 0 ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
@@ -573,7 +575,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                     className="inline-flex items-center gap-1 whitespace-nowrap uppercase hover:text-green-700 dark:hover:text-cyan-300"
                   >
                     {c.rotulo}
-                    {c.fixa && <IconeCadeado />}
+                    {c.fixa && !c.estreita && <IconeCadeado />}
                     <span className="text-[10px]">{ordem?.campo === c.campo ? (ordem.desc ? "▼" : "▲") : ""}</span>
                   </button>
                 </th>
@@ -583,7 +585,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
-                  className={`border-b border-stone-200 dark:border-slate-800 px-1.5 pb-1.5 ${
+                  className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pb-1.5 ${
                     i === 0 ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
@@ -595,7 +597,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                     }}
                     placeholder="filtrar"
                     aria-label={`Filtrar ${c.rotulo}`}
-                    className={classeFiltroColuna}
+                    className={`${classeFiltroColuna} ${c.estreita ? "!min-w-0 !px-0.5" : ""}`}
                   />
                 </th>
               ))}
@@ -611,7 +613,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                 {COLUNAS.map((c, i) => (
                   <td
                     key={c.campo}
-                    className={`group/celula border-b border-stone-100 dark:border-slate-800/80 px-2 py-1 align-middle text-xs ${
+                    className={`group/celula border-b border-stone-100 dark:border-slate-800/80 ${c.estreita ? "px-0.5 text-center" : "px-2"} py-1 align-middle text-xs ${
                       PUXAVEIS.has(c.campo) ? "relative" : ""
                     } ${naFaixa(indice, c.campo) ? "outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""} ${
                       i === 0 ? "sticky left-0 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
