@@ -48,8 +48,8 @@ _COLUNAS_PLANILHA = {
 }
 
 # Grafias da planilha → uma só (as cores/regras da planilha já tratam assim).
-# "Terceirizado" — pedido do usuário (30/09).
-STATUS = ["Fazendo", "Feito", "Sem Corte", "Estoque", "Terceirizado", "Aguardando revisão"]
+# "Terceirizado" — pedido do usuário (30/09); "Corte Manual" — pedido do usuário (01/10).
+STATUS = ["Fazendo", "Feito", "Sem Corte", "Estoque", "Terceirizado", "Corte Manual", "Aguardando revisão"]
 _PROJETISTAS = {"joao": "João", "honorio": "Honório"}
 # Validação de dados (pedido do usuário, como no Excel): só esses projetistas.
 PROJETISTAS = ["João", "Honório"]

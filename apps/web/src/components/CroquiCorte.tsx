@@ -27,6 +27,7 @@ const COR_STATUS: Record<string, string> = {
   Fazendo: "#FFFF00",
   Feito: "#DAF2D0",
   Terceirizado: "#C4A7E7",
+  "Corte Manual": "#F8CBAD",
   "Aguardando revisão": "#FF0000",
 };
 
