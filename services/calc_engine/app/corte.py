@@ -30,6 +30,10 @@ def programas_de(texto: str | None) -> list[str]:
     if not texto:
         return []
     s = str(texto).strip()
+    # Subprogramas (botão "+" na Croqui de corte) vêm separados por vírgula:
+    # cada pedaço é lido sozinho ("718 A 733, 740" → faixa + 740).
+    if "," in s:
+        return list(dict.fromkeys(p for parte in s.split(",") for p in programas_de(parte)))
     faixa = re.fullmatch(r"\s*(\d+)\s*[aA]\s*(\d+)\s*", s)
     if faixa:
         ini, fim = int(faixa.group(1)), int(faixa.group(2))

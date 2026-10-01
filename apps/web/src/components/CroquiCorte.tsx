@@ -34,7 +34,7 @@ const COR_STATUS: Record<string, string> = {
 const PUXAVEIS = new Set<Campo>(["status", "projetista", "n_programa", "observacao"]);
 
 type Campo = keyof ItemCroquiCorte;
-type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "lista" | "editavel" | "edicao";
+type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "lista" | "editavel" | "edicao" | "programa";
 
 interface Coluna {
   campo: Campo;
@@ -47,15 +47,17 @@ interface Coluna {
 // Mesma ordem da aba Croqui 2 + quem editou por último.
 const COLUNAS: Coluna[] = [
   { campo: "pedido", rotulo: "Pedido", tipo: "codigo" },
-  { campo: "mac", rotulo: "Mac", tipo: "codigo", fixa: true },
-  { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[20rem]" },
-  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[10rem]" },
-  { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true },
-  { campo: "l", rotulo: "L", tipo: "texto", fixa: true },
-  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true },
+  // Larguras enxutas (pedido do usuário): ver até o Projetista sem rolar; o
+  // texto cortado aparece inteiro ao passar o mouse.
+  { campo: "mac", rotulo: "Mac", tipo: "codigo", fixa: true, maxW: "max-w-[5.5rem]" },
+  { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[11rem]" },
+  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[8rem]" },
+  { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
+  { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[3rem]" },
+  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true, maxW: "max-w-[2.5rem]" },
   { campo: "status", rotulo: "Status", tipo: "status" },
   // Pedido do usuário: Nº do programa logo depois do Status.
-  { campo: "n_programa", rotulo: "Nº do programa", tipo: "editavel" },
+  { campo: "n_programa", rotulo: "Nº do programa", tipo: "programa" },
   // Validação de dados (pedido do usuário): lista só com os projetistas.
   { campo: "projetista", rotulo: "Projetista", tipo: "lista" },
   { campo: "observacao", rotulo: "Observação", tipo: "editavel", maxW: "max-w-[14rem]" },
@@ -71,7 +73,7 @@ const COLUNAS: Coluna[] = [
 const classeCampo =
   "w-full rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500";
 const classeFiltroColuna =
-  "w-full min-w-[3.5rem] rounded border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs font-normal normal-case tracking-normal text-stone-800 dark:text-slate-200 outline-none focus:border-green-600 dark:focus:border-cyan-500";
+  "w-full min-w-[2rem] rounded border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs font-normal normal-case tracking-normal text-stone-800 dark:text-slate-200 outline-none focus:border-green-600 dark:focus:border-cyan-500";
 
 function dataHora(iso: string | null): string {
   if (!iso) return "";
@@ -86,6 +88,77 @@ function exibir(item: ItemCroquiCorte, col: Coluna): string {
   if (col.tipo === "edicao") return `${item.editado_por ?? ""} ${dataHora(item.editado_em)}`.trim();
   if (col.tipo === "numero" && typeof v === "number") return formatarNumero(v, Number.isInteger(v) ? 0 : 2);
   return String(v);
+}
+
+// Nº do programa + subprogramas — pedido do usuário: um mesmo corte pode gerar
+// vários programas; o "+" acrescenta outro na mesma linha. Fica tudo no mesmo
+// campo separado por vírgula ("380, 381"), que a aba Corte (app/corte.py) já
+// separa em um programa por número — cada um com as peças desta linha.
+function CelulaProgramas({ valor, salvar }: { valor: string; salvar: (novo: string) => Promise<void> }) {
+  const partes = valor.split(",").map((p) => p.trim()).filter(Boolean);
+  const [novo, setNovo] = useState<string | null>(null);
+
+  function gravar(lista: string[]) {
+    return salvar(lista.map((p) => p.trim()).filter(Boolean).join(", "));
+  }
+  function confirmarNovo() {
+    const n = (novo ?? "").trim();
+    setNovo(null);
+    if (n) void gravar([...partes, n]).catch(() => {});
+  }
+
+  if (partes.length === 0) {
+    return (
+      <CelulaEditavel
+        valor=""
+        tipo="texto"
+        exibicao={<span className="text-xs text-stone-300 dark:text-slate-600">+</span>}
+        salvar={(v) => gravar([v])}
+      />
+    );
+  }
+  return (
+    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      {partes.map((p, k) => (
+        <div
+          key={`${k}-${p}`}
+          className={k === 0 ? "" : "rounded bg-stone-100 px-1 dark:bg-slate-800"}
+          title={k === 0 ? undefined : "Subprograma — apague o número para tirar"}
+        >
+          <CelulaEditavel
+            valor={p}
+            tipo="texto"
+            exibicao={<span className="text-xs">{p}</span>}
+            salvar={(v) => gravar(partes.map((x, j) => (j === k ? v : x)))}
+          />
+        </div>
+      ))}
+      {novo !== null ? (
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={novo}
+          onChange={(e) => setNovo(e.target.value.replace(/\D/g, ""))}
+          onBlur={confirmarNovo}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") confirmarNovo();
+            if (e.key === "Escape") setNovo(null);
+          }}
+          placeholder="nº"
+          className="w-14 rounded border border-green-600 bg-white px-1 py-0.5 text-xs text-stone-900 outline-none dark:border-cyan-500 dark:bg-slate-900 dark:text-slate-100"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setNovo("")}
+          title="Adicionar subprograma (mesmo corte gerou mais de um programa)"
+          className="rounded px-1 text-sm font-bold leading-none text-green-600 hover:bg-green-100 hover:text-green-700 dark:text-green-400 dark:hover:bg-green-950 dark:hover:text-green-300"
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean }) {
@@ -244,9 +317,14 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
       const ids = alvo.map((i) => i.id);
       // Mostra na hora; o servidor devolve as linhas (com as datas de Fazendo/Feito).
       setItens((lista) => lista.map((i) => (ids.includes(i.id) ? { ...i, [a.campo]: a.valor } : i)));
+      // Salva na hora ao soltar (pedido do usuário: como no Excel) e avisa.
       acompanhar(editarLoteCroquiCorte(ids, { [a.campo]: a.valor ?? "" }, editadoPor), `${ids.length} linhas — ${a.campo}`)
-        .then(trocarItens)
-        .catch((e: Error) => setErro(e.message));
+        .then((novos) => {
+          trocarItens(novos);
+          const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+          setAviso({ ok: true, texto: `✓ ${ids.length} linha(s) salvas — ${hora}` });
+        })
+        .catch((e: Error) => setAviso({ ok: false, texto: `Não salvou o arraste: ${e.message}` }));
     }
     window.addEventListener("mouseup", soltar);
     return () => window.removeEventListener("mouseup", soltar);
@@ -320,6 +398,9 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         />
       );
     }
+    if (col.tipo === "programa") {
+      return <CelulaProgramas valor={item.n_programa ?? ""} salvar={(novo) => salvar(item, "n_programa", novo)} />;
+    }
     if (col.tipo === "edicao") {
       return item.editado_em ? (
         <span className="block whitespace-nowrap text-[11px] leading-tight">
@@ -340,7 +421,8 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
           Filha do <strong>Material de compra</strong>: pedidos ST = A novos entram sozinhos (a cada 15 min) e as colunas{" "}
           <IconeCadeado /> vêm da MACLM pelo Pedido — não são editáveis. Status, Projetista, Nº do programa e Observação: edite na
-          célula, salva sozinho. Status <strong>Fazendo</strong> grava a data e hora em Dt.Fazendo; <strong>Feito</strong>, em
+          célula, salva sozinho. No Nº do programa, o <strong>+</strong> acrescenta subprogramas na mesma linha (cada um aparece
+          na aba Corte). Status <strong>Fazendo</strong> grava a data e hora em Dt.Fazendo; <strong>Feito</strong>, em
           Dt.Feito. Para repetir um valor em várias linhas, arraste o quadradinho do canto da célula (como no Excel).
         </p>
       </div>
@@ -477,7 +559,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
-                  className={`border-b border-stone-200 dark:border-slate-800 px-2 pt-2 pb-1 font-semibold ${
+                  className={`border-b border-stone-200 dark:border-slate-800 px-1.5 pt-2 pb-1 font-semibold ${
                     i === 0 ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
@@ -533,12 +615,10 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                       PUXAVEIS.has(c.campo) ? "relative" : ""
                     } ${naFaixa(indice, c.campo) ? "outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""} ${
                       i === 0 ? "sticky left-0 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
-                    } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} ${
-                      c.maxW ? `${c.maxW} truncate` : "whitespace-nowrap"
-                    }`}
+                    } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} whitespace-nowrap`}
                     title={c.maxW ? exibir(item, c) : undefined}
                   >
-                    {celula(item, c)}
+                    {c.maxW ? <div className={`${c.maxW} truncate`}>{celula(item, c)}</div> : celula(item, c)}
                     {PUXAVEIS.has(c.campo) && !arraste && (
                       <span
                         onMouseDown={(e) => {
