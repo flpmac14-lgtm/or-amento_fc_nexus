@@ -454,6 +454,12 @@ export default function Home() {
                 {salvando ? "Salvando…" : "Salvar orçamento"}
               </button>
               <Link
+                href="/visao-geral"
+                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
+              >
+                Visão Geral
+              </Link>
+              <Link
                 href="/orcamentistas"
                 className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
               >

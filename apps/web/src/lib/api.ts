@@ -702,6 +702,14 @@ export async function excluirOrcamentoSalvo(id: string): Promise<void> {
 
 // --- Aba FOLLOW UP ---------------------------------------------------------
 
+/** Um bloco da Visão Geral (GET /painel/<bloco>) — ver lib/painel.ts. */
+export async function buscarPainel<T>(bloco: string, params: Record<string, string> = {}): Promise<T> {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+  const resposta = await fetch(`${CALC_ENGINE_URL}/painel/${bloco}${qs ? `?${qs}` : ""}`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, `Falha ao carregar ${bloco}`);
+  return resposta.json();
+}
+
 export async function listarFollowUp(): Promise<RespostaFollowUp> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up`);
   if (!resposta.ok) {

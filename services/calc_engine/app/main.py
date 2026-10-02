@@ -82,6 +82,8 @@ backend do app principal (Next.js/Supabase), não aqui.
 from __future__ import annotations
 
 import os
+import re
+from datetime import date
 from typing import Annotated
 
 import httpx
@@ -124,6 +126,7 @@ from app.materiais_catalogo import listar_materiais
 from app.materiais_fixture import NORMAS_PERFIL_SUGERIDAS
 from app.orcamento import montar_orcamento, resolver_params
 from app.orcamentos_salvos import BancoNaoConfigurado
+from app import painel
 from app.orcamentos_salvos import anexar_desenho as anexar_desenho_orcamento
 from app.orcamentos_salvos import buscar as buscar_orcamento_salvo
 from app.orcamentos_salvos import excluir as excluir_orcamento_salvo
@@ -396,6 +399,58 @@ def follow_up_excel(pedido: dict) -> Response:
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=follow-up.xlsx"},
     )
+
+
+# --- Visão Geral (tela inicial) — ver app/painel.py ---------------------------
+# Cada bloco tem o seu endpoint: a tela carrega um por um, sem um bloco lento
+# travar os outros. Filtros globais: cliente, obra (MAC 2 partes), prazo de/até.
+
+def _painel(funcao, *args, **kwargs):
+    try:
+        return funcao(*args, **kwargs)
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/painel/opcoes")
+def painel_opcoes() -> dict:
+    return _painel(painel.opcoes)
+
+
+@app.get("/painel/coletas")
+def painel_coletas(cliente: str | None = None, obra: str | None = None) -> dict:
+    return _painel(painel.coletas, cliente or None, obra or None)
+
+
+@app.get("/painel/kpis")
+def painel_kpis(cliente: str | None = None, obra: str | None = None,
+                prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
+    return _painel(painel.kpis, cliente or None, obra or None, prazo_de, prazo_ate)
+
+
+@app.get("/painel/atencao")
+def painel_atencao(cliente: str | None = None, obra: str | None = None,
+                   prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
+    return _painel(painel.atencao, cliente or None, obra or None, prazo_de, prazo_ate)
+
+
+@app.get("/painel/entregas")
+def painel_entregas(mes: str | None = None, cliente: str | None = None, obra: str | None = None) -> dict:
+    mes = mes or painel.hoje().strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-\d{2}", mes):
+        raise HTTPException(status_code=422, detail="mes deve ser AAAA-MM")
+    return _painel(painel.entregas, mes, cliente or None, obra or None)
+
+
+@app.get("/painel/esteira")
+def painel_esteira(cliente: str | None = None, obra: str | None = None,
+                   prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
+    return _painel(painel.esteira, cliente or None, obra or None, prazo_de, prazo_ate)
+
+
+@app.get("/painel/registros")
+def painel_registros(data: date | None = None) -> dict:
+    return _painel(painel.registros, data)
 
 
 @app.get("/controle-obras")
