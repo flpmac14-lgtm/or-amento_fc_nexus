@@ -201,14 +201,21 @@ def _igual(a, b) -> bool:
     return a == b
 
 
-def propagar() -> dict:
+def propagar(forcar: bool = False) -> dict:
     """Leva as fixas da mãe pros itens e cria os pedidos ST = A novos (no fim)."""
     agora = datetime.now(timezone.utc)
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute("select pg_advisory_xact_lock(hashtext('croqui_corte'))")
         cur.execute("select count(*) from croqui_corte_itens")
-        if not cur.fetchone()[0]:
+        itens_antes = cur.fetchone()[0]
+        if not itens_antes:
             return {"atualizados": 0, "novos": 0, "motivo": "Croqui de corte ainda não importada"}
+        # Egress do Supabase (migration 0025): só relê a mãe (~36 MB) se ela
+        # mudou ou se entrou/saiu item da filha desde a última propagação.
+        cur.execute("select arquivo_sha256, propagado_sha256, propagado_itens from material_compra_status where id = 1")
+        st = cur.fetchone()
+        if not forcar and st and st[0] and st[0] == st[1] and itens_antes == st[2]:
+            return {"atualizados": 0, "novos": 0, "motivo": "mãe sem alteração"}
         dados = _mae(cur)
         if not dados:
             return {"atualizados": 0, "novos": 0, "motivo": "Material de compra ainda não sincronizado"}
@@ -258,6 +265,10 @@ def propagar() -> dict:
                 "insert into croqui_corte_notificacoes (item_id, pedido, mac, descricao) values (%s, %s, %s, %s)",
                 notificacoes,
             )
+        cur.execute(
+            "update material_compra_status set propagado_sha256 = %s, propagado_itens = %s where id = 1",
+            (st[0] if st else None, itens_antes + len(inseridos)),
+        )
         conn.commit()
     return {"atualizados": len(atualizacoes), "novos": len(inseridos)}
 

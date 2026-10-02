@@ -51,7 +51,7 @@ def main() -> int:
         # se uma rodada anterior falhou no meio).
         # Falha aqui não invalida a leitura da Controle de obras (já gravada).
         try:
-            p = propagar()
+            p = propagar(forcar="--forcar" in sys.argv)
             if p.get("atualizados") or p.get("novos"):
                 print(f"{agora} Follow up - {p['novos']} pedido(s) novo(s), {p['encerrados']} encerrado(s), "
                       f"{p['atualizados']} atualizado(s) pela mãe")

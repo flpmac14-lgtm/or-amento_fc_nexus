@@ -124,14 +124,20 @@ def _igual(a, b) -> bool:
 
 # --- propagação mãe → filha ---------------------------------------------------
 
-def propagar() -> dict:
+def propagar(forcar: bool = False) -> dict:
     agora = datetime.now(timezone.utc)
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute("select pg_advisory_xact_lock(hashtext('follow_up_mae'))")
-        cur.execute("select colunas from controle_obras_status where id = 1")
+        cur.execute("select colunas, arquivo_sha256, propagado_sha256, propagado_itens from controle_obras_status where id = 1")
         st = cur.fetchone()
         if not st:
             return {"atualizados": 0, "novos": 0, "motivo": "Controle de obras ainda não sincronizado"}
+        # Egress do Supabase (migration 0025): só relê a mãe (~9 MB) se ela
+        # mudou ou se entrou/saiu item da filha desde a última propagação.
+        cur.execute("select count(*) from follow_up_itens")
+        itens_antes = cur.fetchone()[0]
+        if not forcar and st[1] and st[1] == st[2] and itens_antes == st[3]:
+            return {"atualizados": 0, "novos": 0, "encerrados": 0, "motivo": "mãe sem alteração"}
         indice = {c["campo"]: i for i, c in enumerate(st[0]) if c.get("campo")}
         faltando = [m for m, _ in CAMPOS_MAE.values() if m not in indice] + ([] if "po" in indice else ["po"])
         if faltando:
@@ -211,6 +217,10 @@ def propagar() -> dict:
                    values (%s, %s, %s, %s, %s, %s, %s)""",
                 notificacoes,
             )
+        cur.execute(
+            "update controle_obras_status set propagado_sha256 = %s, propagado_itens = %s where id = 1",
+            (st[1], itens_antes + len(inseridos)),
+        )
         conn.commit()
     return {"atualizados": len(atualizacoes), "novos": len(inseridos),
             "encerrados": sum(1 for n in notificacoes if n[0] == "encerrado")}

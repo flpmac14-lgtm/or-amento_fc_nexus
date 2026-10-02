@@ -154,6 +154,15 @@ def registrar_erro(mensagem: str) -> None:
         conn.commit()
 
 
+# (hash do arquivo, linhas) da última leitura — por processo do calc_engine.
+_CACHE_LINHAS: tuple[str, list] | None = None
+
+
+def _guardar_cache(sha: str | None, linhas: list) -> None:
+    global _CACHE_LINHAS
+    _CACHE_LINHAS = (sha, linhas) if sha else None
+
+
 def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
@@ -162,8 +171,17 @@ def listar() -> dict:
                from material_compra_status where id = 1"""
         )
         st = cur.fetchone()
-        cur.execute("select linha_planilha, valores from material_compra_linhas order by linha_planilha")
-        linhas = [{"linha": r[0], "valores": r[1]} for r in cur.fetchall()]
+        cur.execute("select arquivo_sha256 from material_compra_status where id = 1")
+        sha = (cur.fetchone() or [None])[0]
+        # Egress do Supabase: as linhas só mudam junto com o hash do arquivo —
+        # a tela recarrega a cada 5 min, então reaproveita a última leitura.
+        cache = _CACHE_LINHAS
+        if sha and cache and cache[0] == sha:
+            linhas = cache[1]
+        else:
+            cur.execute("select linha_planilha, valores from material_compra_linhas order by linha_planilha")
+            linhas = [{"linha": r[0], "valores": r[1]} for r in cur.fetchall()]
+            _guardar_cache(sha, linhas)
 
     def _iso(v):
         return v.isoformat() if v else None

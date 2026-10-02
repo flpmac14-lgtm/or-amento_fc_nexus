@@ -40,7 +40,7 @@ def main() -> int:
         print(f"{agora} OK - " + (f"planilha alterada, {r['linhas']} linhas gravadas" if r["alterado"] else "sem alteração"))
         # Croqui de corte é "filha" (PROCV pelo Pedido = PO+IT+POS): leva as
         # fixas da mãe e os pedidos ST = A novos. Roda sempre (se corrige sozinho).
-        p = propagar_croqui()
+        p = propagar_croqui(forcar="--forcar" in sys.argv)
         if p.get("atualizados") or p.get("novos"):
             print(f"{agora} Croqui de corte - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
         return 0
