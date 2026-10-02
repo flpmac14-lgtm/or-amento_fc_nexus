@@ -405,8 +405,10 @@ export default function FollowUp({
         const vb = valorCampo(b, ordem.campo);
         const vazioA = va === null || va === undefined || va === "";
         const vazioB = vb === null || vb === undefined || vb === "";
-        if (vazioA || vazioB) return compararValores(va, vb); // vazios sempre no fim
-        return ordem.desc ? -compararValores(va, vb) : compararValores(va, vb);
+        const r = vazioA || vazioB ? compararValores(va, vb) // vazios sempre no fim
+          : ordem.desc ? -compararValores(va, vb) : compararValores(va, vb);
+        // Empate (ex.: mesmo cliente) → prazo, do mais próximo ao mais adiante.
+        return r || compararValores(a.prazo_contratual, b.prazo_contratual);
       });
     }
     return lista;
@@ -444,14 +446,17 @@ export default function FollowUp({
   const filtrosAlterados =
     JSON.stringify(filtros) !== JSON.stringify(FILTROS_VAZIOS) || Object.values(filtrosColuna).some((v) => v);
 
-  // Qualquer mudança de filtro/ordem volta pra 1ª página.
+  // Qualquer mudança de filtro/ordem volta pra 1ª página. Pedido do usuário:
+  // filtrou → volta pra ordem do prazo (mais próximo ao mais adiante).
   function setFiltro<K extends keyof Filtros>(chave: K, valor: Filtros[K]) {
     setFiltros((f) => ({ ...f, [chave]: valor }));
+    setOrdem(ORDEM_PADRAO);
     setPagina(0);
   }
 
   function setFiltroColuna(campo: string, valor: string) {
     setFiltrosColuna((f) => ({ ...f, [campo]: valor }));
+    setOrdem(ORDEM_PADRAO);
     setPagina(0);
   }
 
@@ -471,6 +476,7 @@ export default function FollowUp({
   function limparFiltros() {
     setFiltros(FILTROS_VAZIOS);
     setFiltrosColuna({});
+    setOrdem(ORDEM_PADRAO);
     setPagina(0);
   }
   useLimparComF4("followup", limparFiltros);
