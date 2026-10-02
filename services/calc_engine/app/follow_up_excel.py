@@ -2,6 +2,9 @@
 baixa a lista como está na tela (mesmos filtros e ordem, que o app manda
 pelos ids), com todas as colunas e a 1ª foto de cada pedido dentro da
 célula, como na aba "Gerencia" original. Só apresentação — nada é gravado.
+
+Sem fotos (botão "Excel sem foto"): tira a coluna Foto e formata como
+Tabela do Excel (cabeçalho com filtro, linhas zebradas) — pedido do usuário.
 """
 
 from __future__ import annotations
@@ -85,6 +88,9 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
     from openpyxl.formatting.rule import DataBarRule
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    colunas = COLUNAS if com_fotos else [c for c in COLUNAS if c != "imagem"]
 
     with _conectar() as conn, conn.cursor() as cur:
         por_id = {i["id"]: i for i in carregar_itens(cur)}
@@ -99,14 +105,15 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Follow up"
-    ws.append([_ROTULOS.get(c, c.upper()) for c in COLUNAS])
+    ws.append([_ROTULOS.get(c, c.upper()) for c in colunas])
     cabecalho = PatternFill("solid", fgColor="E7E5E4")
     for celula in ws[1]:
-        celula.font = Font(bold=True)
-        celula.fill = cabecalho
+        if com_fotos:  # na Tabela o estilo dela pinta o cabeçalho
+            celula.font = Font(bold=True)
+            celula.fill = cabecalho
         celula.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    col = {c: i for i, c in enumerate(COLUNAS, start=1)}
+    col = {c: i for i, c in enumerate(colunas, start=1)}
     contagem_grupo: dict[int, int] = {}
     for i in itens:
         if i.get("grupo_pintura"):
@@ -114,7 +121,7 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
     larguras = dict(_LARGURAS)
     miniaturas: dict[str, tuple[io.BytesIO, int, int] | None] = {}
     for linha, item in enumerate(itens, start=2):
-        ws.append([None if c == "imagem" else _valor(item, c) for c in COLUNAS])
+        ws.append([None if c == "imagem" else _valor(item, c) for c in colunas])
         for c in _MOEDAS:
             ws.cell(row=linha, column=col[c]).number_format = MOEDA
         for c in _PESOS:
@@ -157,8 +164,16 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
             f"{letra}2:{letra}{ultima}",
             DataBarRule(start_type="num", start_value=0, end_type="num", end_value=100, color="63C384"),
         )
-    ws.freeze_panes = "C2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUNAS))}{ultima}"
+    intervalo = f"A1:{get_column_letter(len(colunas))}{ultima}"
+    if com_fotos:
+        ws.freeze_panes = "C2"
+        ws.auto_filter.ref = intervalo
+    else:
+        ws.freeze_panes = "B2"  # PO fixo
+        tabela = Table(displayName="FollowUp", ref=intervalo)
+        tabela.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+        ws.add_table(tabela)
+        ws.row_dimensions[1].height = 30
 
     buffer = io.BytesIO()
     wb.save(buffer)

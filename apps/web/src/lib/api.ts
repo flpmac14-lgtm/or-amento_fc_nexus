@@ -785,12 +785,13 @@ export async function removerImagemFollowUp(imagemId: string, removidaPor: strin
 }
 
 /** Baixa o Follow up em Excel — só os pedidos passados (ids na ordem da
- * tela, já filtrados), com a 1ª foto de cada um na célula. */
-export async function baixarExcelFollowUp(ids: string[]): Promise<void> {
+ * tela, já filtrados), com a 1ª foto de cada um na célula. Sem fotos: tira a
+ * coluna Foto e formata como Tabela do Excel. */
+export async function baixarExcelFollowUp(ids: string[], comFotos = true): Promise<void> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/excel`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, com_fotos: comFotos }),
   });
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
@@ -800,7 +801,7 @@ export async function baixarExcelFollowUp(ids: string[]): Promise<void> {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `follow-up-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.download = `follow-up${comFotos ? "" : "-tabela"}-${new Date().toISOString().slice(0, 10)}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

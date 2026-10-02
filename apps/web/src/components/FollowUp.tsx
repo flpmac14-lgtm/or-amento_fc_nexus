@@ -200,7 +200,8 @@ export default function FollowUp({
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
-  const [exportando, setExportando] = useState(false);
+  // Qual Excel está sendo gerado: com a foto de cada pedido ou só a tabela.
+  const [exportando, setExportando] = useState<"foto" | "tabela" | null>(null);
   const [relatorioColeta, setRelatorioColeta] = useState(false);
   // Relatório por obra: aberto pela barra (vazio) ou pelo card (com o item).
   const [relatorioObra, setRelatorioObra] = useState<{ item: ItemFollowUp | null } | null>(null);
@@ -455,15 +456,15 @@ export default function FollowUp({
   }
 
   // Excel com o que está na tela: mesmos filtros e ordem (todas as páginas).
-  async function exportarExcel() {
-    setExportando(true);
+  async function exportarExcel(comFotos: boolean) {
+    setExportando(comFotos ? "foto" : "tabela");
     setErro("");
     try {
-      await baixarExcelFollowUp(filtrados.map((i) => i.id));
+      await baixarExcelFollowUp(filtrados.map((i) => i.id), comFotos);
     } catch (e) {
       setErro((e as Error).message);
     } finally {
-      setExportando(false);
+      setExportando(null);
     }
   }
 
@@ -725,12 +726,21 @@ export default function FollowUp({
           </button>
           <button
             type="button"
-            onClick={exportarExcel}
-            disabled={exportando || filtrados.length === 0}
+            onClick={() => exportarExcel(true)}
+            disabled={exportando !== null || filtrados.length === 0}
             title="Baixa em Excel os registros filtrados (todas as páginas e colunas), com a foto de cada pedido"
             className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
           >
-            {exportando ? "Gerando Excel…" : `Exportar Excel (${filtrados.length})`}
+            {exportando === "foto" ? "Gerando Excel…" : `Exportar Excel (${filtrados.length})`}
+          </button>
+          <button
+            type="button"
+            onClick={() => exportarExcel(false)}
+            disabled={exportando !== null || filtrados.length === 0}
+            title="Baixa em Excel os registros filtrados, todas as colunas menos a Foto, organizado como Tabela do Excel (filtro no cabeçalho, linhas zebradas)"
+            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+          >
+            {exportando === "tabela" ? "Gerando Excel…" : "Excel sem foto"}
           </button>
           <button
             type="button"
