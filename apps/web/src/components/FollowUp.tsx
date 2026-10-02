@@ -743,7 +743,7 @@ export default function FollowUp({
             type="button"
             onClick={() => exportarExcel(false)}
             disabled={exportando !== null || filtrados.length === 0}
-            title="Baixa em Excel os registros filtrados, todas as colunas menos a Foto, organizado como Tabela do Excel (filtro no cabeçalho, linhas zebradas)"
+            title="Baixa em Excel os registros filtrados, sem a Foto e sem as etapas (ENG a PIN), em tabela neutra (sem cores, filtro no cabeçalho)"
             className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
           >
             {exportando === "tabela" ? "Gerando Excel…" : "Excel sem foto"}

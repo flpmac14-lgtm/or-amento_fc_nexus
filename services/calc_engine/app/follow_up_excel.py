@@ -3,8 +3,9 @@ baixa a lista como está na tela (mesmos filtros e ordem, que o app manda
 pelos ids), com todas as colunas e a 1ª foto de cada pedido dentro da
 célula, como na aba "Gerencia" original. Só apresentação — nada é gravado.
 
-Sem fotos (botão "Excel sem foto"): tira a coluna Foto e formata como
-Tabela do Excel (cabeçalho com filtro, linhas zebradas) — pedido do usuário.
+Sem fotos (botão "Excel sem foto"), pedido do usuário: tira a Foto e as
+etapas (ENG..PIN) e fica neutro — sem cores, só cabeçalho em negrito com
+filtro e bordas finas.
 """
 
 from __future__ import annotations
@@ -86,11 +87,10 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
     import openpyxl
     from openpyxl.drawing.image import Image as ImagemExcel
     from openpyxl.formatting.rule import DataBarRule
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.table import Table, TableStyleInfo
 
-    colunas = COLUNAS if com_fotos else [c for c in COLUNAS if c != "imagem"]
+    colunas = COLUNAS if com_fotos else [c for c in COLUNAS if c != "imagem" and c not in ETAPAS]
 
     with _conectar() as conn, conn.cursor() as cur:
         por_id = {i["id"]: i for i in carregar_itens(cur)}
@@ -108,8 +108,8 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
     ws.append([_ROTULOS.get(c, c.upper()) for c in colunas])
     cabecalho = PatternFill("solid", fgColor="E7E5E4")
     for celula in ws[1]:
-        if com_fotos:  # na Tabela o estilo dela pinta o cabeçalho
-            celula.font = Font(bold=True)
+        celula.font = Font(bold=True)
+        if com_fotos:
             celula.fill = cabecalho
         celula.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -132,7 +132,7 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
             ws.cell(row=linha, column=col[c]).number_format = "@"
         for celula in ws[linha]:
             celula.alignment = Alignment(vertical="center", wrap_text=celula.column == col["descricao"])
-        if item.get("grupo_pintura") and contagem_grupo.get(item["grupo_pintura"], 0) >= 2:
+        if com_fotos and item.get("grupo_pintura") and contagem_grupo.get(item["grupo_pintura"], 0) >= 2:
             fundo = PatternFill("solid", fgColor=cor_grupo_pintura(item["grupo_pintura"]))
             for c in ("cor2", "cor_2", "plano_pintura"):
                 ws.cell(row=linha, column=col[c]).fill = fundo
@@ -157,7 +157,7 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
 
     ultima = max(2, len(itens) + 1)
     # Etapas em barra verde, como a formatação condicional da planilha.
-    for etapa in ETAPAS:
+    for etapa in ETAPAS if com_fotos else ():
         letra = get_column_letter(col[etapa])
         ws.column_dimensions[letra].width = 7
         ws.conditional_formatting.add(
@@ -165,15 +165,17 @@ def gerar_excel(ids: list[str], com_fotos: bool = True) -> bytes:
             DataBarRule(start_type="num", start_value=0, end_type="num", end_value=100, color="63C384"),
         )
     intervalo = f"A1:{get_column_letter(len(colunas))}{ultima}"
+    ws.auto_filter.ref = intervalo
     if com_fotos:
         ws.freeze_panes = "C2"
-        ws.auto_filter.ref = intervalo
     else:
         ws.freeze_panes = "B2"  # PO fixo
-        tabela = Table(displayName="FollowUp", ref=intervalo)
-        tabela.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
-        ws.add_table(tabela)
         ws.row_dimensions[1].height = 30
+        fina = Side(style="thin", color="BFBFBF")
+        borda = Border(left=fina, right=fina, top=fina, bottom=fina)
+        for linha_celulas in ws.iter_rows(min_row=1, max_row=ultima, max_col=len(colunas)):
+            for celula in linha_celulas:
+                celula.border = borda
 
     buffer = io.BytesIO()
     wb.save(buffer)
