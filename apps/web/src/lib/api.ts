@@ -816,6 +816,57 @@ export async function baixarExcelFollowUp(ids: string[], comFotos = true): Promi
   URL.revokeObjectURL(url);
 }
 
+// --- Apontamento por setor (ex.: Usinagem) — ver app/apontamentos_setor.py ---
+
+export type StatusApontamento = "em_andamento" | "finalizado" | "falta_material";
+
+export interface Apontamento {
+  id: number;
+  item_id: string;
+  status: StatusApontamento;
+  operador: string | null;
+  observacao: string | null;
+  por: string | null;
+  em: string;
+}
+
+export async function buscarApontamentos(
+  setor: string,
+): Promise<{ operadores: string[]; atuais: Record<string, Apontamento> }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar os apontamentos");
+  return resposta.json();
+}
+
+export async function buscarHistoricoApontamento(setor: string, itemId: string): Promise<Apontamento[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o histórico");
+  return (await resposta.json()).historico;
+}
+
+export async function buscarHistoricoSetor(setor: string, dias: number): Promise<Apontamento[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/historico?dias=${dias}`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o histórico");
+  return (await resposta.json()).historico;
+}
+
+export async function apontarItem(
+  setor: string,
+  itemId: string,
+  status: StatusApontamento,
+  operador: string,
+  observacao: string,
+  por: string | null,
+): Promise<Apontamento> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, operador, observacao, por }),
+  });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao salvar o apontamento");
+  return resposta.json();
+}
+
 export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
 }

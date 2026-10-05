@@ -100,6 +100,7 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
+from app import apontamentos_setor
 from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
 from app.corte import marcar as marcar_corte
@@ -490,6 +491,53 @@ def croqui_corte_listar() -> dict:
         return listar_croqui_corte()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/apontamentos/{setor}")
+def apontamentos_situacao(setor: str) -> dict:
+    """Apontamento por setor (ex.: Usinagem): último status de cada pedido do
+    Follow up + os mais recentes — ver app/apontamentos_setor.py."""
+    try:
+        return apontamentos_setor.situacao(setor)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/apontamentos/{setor}/historico")
+def apontamentos_historico(setor: str, dias: int = 7) -> dict:
+    """Aba Histórico do setor: todos os apontamentos dos últimos `dias`."""
+    try:
+        return {"historico": apontamentos_setor.historico(setor, dias)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/apontamentos/{setor}/itens/{item_id}")
+def apontamentos_historico_item(setor: str, item_id: str) -> dict:
+    try:
+        return {"historico": apontamentos_setor.historico_item(setor, item_id)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/apontamentos/{setor}/itens/{item_id}")
+def apontamentos_apontar(setor: str, item_id: str, pedido: dict) -> dict:
+    try:
+        linha = apontamentos_setor.apontar(setor, item_id, pedido.get("status", ""), pedido.get("operador"),
+                                          pedido.get("observacao"), pedido.get("por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not linha:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado no Follow up")
+    return linha
 
 
 @app.get("/corte/programas")

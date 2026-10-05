@@ -15,7 +15,9 @@ import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObra
 import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
 import FollowUp from "@/components/FollowUp";
+import ApontamentoSetor from "@/components/ApontamentoSetor";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
+import { CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
 
 const VISOES = [
@@ -27,6 +29,8 @@ const VISOES = [
   { valor: "croqui", rotulo: "Croqui de corte" },
   // Operador do laser marca Cortando / Finalizado / Falta material por programa.
   { valor: "corte", rotulo: "Corte" },
+  // Líder da Usinagem aponta por pedido do Follow up (pedido do usuário).
+  { valor: "usinagem", rotulo: "Usinagem" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
@@ -34,8 +38,9 @@ const VISOES = [
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
 // completas já têm na tela principal.
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
-// Croqui de corte e Corte; "corte" (operador do laser) = só Corte.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte";
+// Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
+// "usinagem" (líder da Usinagem, saymon) = só Usinagem.
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem";
 
 export default function ModuloFollowUp({
   comReferenciaPrecos = false,
@@ -44,9 +49,9 @@ export default function ModuloFollowUp({
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
 }) {
-  const soProjeto = perfil === "projeto" || perfil === "corte";
+  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem";
   const [visaoEscolhida, setVisao] = useState<(typeof VISOES)[number]["valor"]>(
-    perfil === "corte" ? "corte" : perfil === "projeto" ? "croqui" : "followup",
+    perfil === "corte" ? "corte" : perfil === "usinagem" ? "usinagem" : perfil === "projeto" ? "croqui" : "followup",
   );
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(false);
@@ -54,9 +59,13 @@ export default function ModuloFollowUp({
   const visoes = VISOES.filter((v) =>
     perfil === "corte"
       ? v.valor === "corte"
-      : perfil === "projeto"
-        ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-        : v.valor !== "referencia" || comReferenciaPrecos,
+      : perfil === "usinagem"
+        ? v.valor === "usinagem"
+        : perfil === "projeto"
+          ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
+          : v.valor === "usinagem"
+            ? perfil === "total"
+            : v.valor !== "referencia" || comReferenciaPrecos,
   );
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
   const [telaCheia, setTelaCheia] = useState(false);
@@ -206,6 +215,7 @@ export default function ModuloFollowUp({
         </div>
       )}
       {visao === "corte" && <Corte comHistorico={perfil !== "corte"} />}
+      {visao === "usinagem" && <ApontamentoSetor config={CONFIG_USINAGEM} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );
