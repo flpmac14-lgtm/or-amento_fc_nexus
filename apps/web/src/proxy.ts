@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, acessoSoFollowUp } from "@/lib/acesso";
+import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp } from "@/lib/acesso";
+import { ehEmailAdmin } from "@/lib/admin";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 const ROTAS_PUBLICAS = ["/login"];
@@ -21,6 +22,16 @@ export async function proxy(request: NextRequest) {
   const soFollowUp = acessoSoFollowUp(user);
 
   if (user && rotaPublica) {
+    const url = request.nextUrl.clone();
+    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Visão Geral: só o admin (ADMIN_EMAILS) e a conta marcelo (acesso
+  // "follow_up") — pedido do usuário. Os demais voltam pra sua tela inicial.
+  if (user && request.nextUrl.pathname.startsWith(ROTA_VISAO_GERAL)) {
+    if (ehEmailAdmin(user.email) || user.app_metadata?.acesso === ACESSO_SO_FOLLOW_UP) return response;
     const url = request.nextUrl.clone();
     url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
     url.search = "";

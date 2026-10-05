@@ -62,6 +62,14 @@ export default function PaginaFollowUp() {
                 Voltar ao orçamento
               </Link>
             )}
+            {conta?.perfil === "follow_up" && (
+              <Link
+                href="/visao-geral"
+                className="rounded-lg bg-green-600 dark:bg-cyan-500 px-4 py-2 font-bold text-white dark:text-slate-950 hover:bg-green-500 dark:hover:bg-cyan-400"
+              >
+                Visão Geral
+              </Link>
+            )}
             <button
               type="button"
               onClick={sair}

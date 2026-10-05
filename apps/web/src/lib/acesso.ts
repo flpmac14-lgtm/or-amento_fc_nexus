@@ -12,6 +12,9 @@ export const ACESSO_PROJETO = "projeto";
 // Operador do corte a laser — pedido explícito do usuário: só a aba Corte.
 export const ACESSO_CORTE = "corte";
 export const ROTA_FOLLOW_UP = "/follow-up";
+// Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,
+// conferido no proxy) e o marcelo (acesso "follow_up") abrem.
+export const ROTA_VISAO_GERAL = "/visao-geral";
 
 // Conta presa à rota /follow-up (Follow up ou Projeto).
 export function acessoSoFollowUp(user: Pick<User, "app_metadata"> | null | undefined): boolean {

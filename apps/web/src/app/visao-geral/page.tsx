@@ -4,7 +4,7 @@
 // usuário). Cada bloco busca o seu endpoint /painel/... (app/painel.py) e tem
 // o seu próprio carregamento/erro. Atualiza sozinha a cada 5 min + botão.
 // Em telas ≥ 1280px (TV 1920×1080) cabe sem rolagem; menor, rola normal.
-// Contas restritas nem chegam aqui (proxy.ts manda pra /follow-up).
+// Só o admin e a conta marcelo chegam aqui (proxy.ts); o marcelo não vê o link de Orçamentos.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -14,6 +14,8 @@ import VisaoGeralCorte from "@/components/VisaoGeralCorte";
 import { Janela, useBloco, type ListaAberta } from "@/components/VisaoGeralComum";
 import VisaoGeralProjeto from "@/components/VisaoGeralProjeto";
 import VisaoGeralRegistros from "@/components/VisaoGeralRegistros";
+import { acessoSoFollowUp } from "@/lib/acesso";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import {
   FILTROS_PAINEL_VAZIOS,
   horaMinuto,
@@ -36,6 +38,12 @@ export default function PaginaVisaoGeral() {
   const [lista, setLista] = useState<ListaAberta | null>(null);
   const [registrosAbertos, setRegistrosAbertos] = useState(false);
   const [dataRegistros, setDataRegistros] = useState(hojeIso);
+  const [restrita, setRestrita] = useState(true);
+  useEffect(() => {
+    criarClienteSupabaseNavegador()
+      .auth.getUser()
+      .then(({ data }) => setRestrita(acessoSoFollowUp(data.user)));
+  }, []);
 
   const atualizar = useCallback(() => {
     setTick((t) => t + 1);
@@ -108,9 +116,11 @@ export default function PaginaVisaoGeral() {
           >
             📋 Registros do dia{registros.dados ? ` · ${registros.dados.eventos.length}` : ""}
           </button>
-          <Link href="/" className={`${campo} hover:border-green-600 dark:hover:border-cyan-400`}>
-            Orçamentos
-          </Link>
+          {!restrita && (
+            <Link href="/" className={`${campo} hover:border-green-600 dark:hover:border-cyan-400`}>
+              Orçamentos
+            </Link>
+          )}
           <Link href="/follow-up" className={`${campo} hover:border-green-600 dark:hover:border-cyan-400`}>
             Follow up
           </Link>
