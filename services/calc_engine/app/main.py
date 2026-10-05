@@ -422,10 +422,9 @@ def painel_coletas(cliente: str | None = None, obra: str | None = None) -> dict:
     return _painel(painel.coletas, cliente or None, obra or None)
 
 
-@app.get("/painel/kpis")
-def painel_kpis(cliente: str | None = None, obra: str | None = None,
-                prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
-    return _painel(painel.kpis, cliente or None, obra or None, prazo_de, prazo_ate)
+@app.get("/painel/corte")
+def painel_corte() -> dict:
+    return _painel(painel.corte_recente)
 
 
 @app.get("/painel/atencao")
@@ -446,6 +445,16 @@ def painel_entregas(mes: str | None = None, cliente: str | None = None, obra: st
 def painel_esteira(cliente: str | None = None, obra: str | None = None,
                    prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
     return _painel(painel.esteira, cliente or None, obra or None, prazo_de, prazo_ate)
+
+
+@app.get("/painel/projeto")
+def painel_projeto() -> dict:
+    return _painel(painel.projeto)
+
+
+@app.get("/painel/compras")
+def painel_compras(dias: int = 15) -> dict:
+    return _painel(painel.compras, max(1, min(dias, 120)))
 
 
 @app.get("/painel/registros")

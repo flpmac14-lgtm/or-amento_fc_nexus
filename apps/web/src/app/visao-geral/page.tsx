@@ -8,9 +8,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BlocoAtencao, BlocoColetas, BlocoEsteira, BlocoKpis } from "@/components/VisaoGeralBlocos";
+import { BlocoAtencao, BlocoEsteira } from "@/components/VisaoGeralBlocos";
+import VisaoGeralCompras from "@/components/VisaoGeralCompras";
+import VisaoGeralCorte from "@/components/VisaoGeralCorte";
 import { Janela, useBloco, type ListaAberta } from "@/components/VisaoGeralComum";
-import VisaoGeralEntregas from "@/components/VisaoGeralEntregas";
+import VisaoGeralProjeto from "@/components/VisaoGeralProjeto";
 import VisaoGeralRegistros from "@/components/VisaoGeralRegistros";
 import {
   FILTROS_PAINEL_VAZIOS,
@@ -115,14 +117,16 @@ export default function PaginaVisaoGeral() {
         </div>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 xl:grid-rows-[auto_auto_minmax(0,1fr)_minmax(0,1.15fr)]">
-        <BlocoColetas params={params} tick={tick} abrir={setLista} />
-        <BlocoKpis params={params} tick={tick} abrir={setLista} />
-        <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-2">
+      <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 xl:grid-rows-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div className="grid min-h-[22rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
           <BlocoAtencao params={params} tick={tick} abrir={setLista} />
-          <VisaoGeralEntregas params={params} tick={tick} abrir={setLista} />
+          <VisaoGeralCorte tick={tick} />
+          <VisaoGeralCompras tick={tick} />
         </div>
-        <BlocoEsteira params={params} tick={tick} />
+        <div className="grid min-h-[24rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <BlocoEsteira params={params} tick={tick} />
+          <VisaoGeralProjeto tick={tick} />
+        </div>
       </main>
 
       {lista && <Janela lista={lista} fechar={fecharLista} />}

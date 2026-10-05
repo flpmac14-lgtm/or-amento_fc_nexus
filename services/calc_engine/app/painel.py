@@ -33,7 +33,6 @@ ETAPAS = [("eng", "Engenharia"), ("cor", "Corte"), ("mon", "Montagem"), ("sol", 
           ("usi", "Usinagem"), ("dob", "Dobra"), ("jat", "Jato"), ("pin", "Pintura")]
 
 PENDENCIAS = {
-    "kg_corte": "Kg cortados e meta semanal de corte não são registrados (o Corte marca programas, sem peso).",
     "materiais": "Data prometida e recebimento de material não existem na Material de compra.",
     "pecas_paradas": "Peças cortadas aguardando a próxima operação: falta ligar o pedido da Croqui (PO+IT+POS) à etapa do Follow up.",
     "horario_coleta": "Horário e transportadora da coleta não são cadastrados.",
@@ -175,7 +174,11 @@ def coletas(cliente: str | None = None, obra: str | None = None) -> dict:
     # Coleta digitada como texto (não é data) não entra no painel — aviso na tela.
     sem_data = sum(1 for i in _filtrar(_itens(), cliente, obra)
                    if i["st"] == "A" and not i["coleta_data"] and (i["coleta"] or "").strip())
-    return {"dias": saida, "coletas_em_texto": sem_data}
+    ini, fim = _semana(h)
+    filtrados = _filtrar(_itens(), cliente, obra)
+    semana = {"valor": _n_coletas(filtrados, ini, fim),
+              "anterior": _n_coletas(filtrados, ini - timedelta(days=7), fim - timedelta(days=7))}
+    return {"dias": saida, "coletas_em_texto": sem_data, "semana": semana}
 
 
 # --- 3. Atenção hoje (regras usadas também no semáforo da esteira e nos KPIs) -
@@ -262,71 +265,95 @@ def atencao(cliente: str | None = None, obra: str | None = None,
     }
 
 
-# --- 2. KPIs ------------------------------------------------------------------
+# --- semana das coletas (vai no cabeçalho do bloco de Coletas) --------------
 
 def _semana(d: date) -> tuple[date, date]:
     inicio = d - timedelta(days=d.weekday())
     return inicio, inicio + timedelta(days=6)
 
 
-def _otd(itens: list[dict], de: date, ate: date) -> dict:
-    base = [i for i in itens if i["st"] == "E" and i["coleta_data"] and de <= i["coleta_data"] <= ate
-            and i["prazo_contratual"]]
-    no_prazo = [i for i in base if i["coleta_data"] <= i["prazo_contratual"]]
-    return {
-        "base": len(base), "no_prazo": len(no_prazo),
-        "percentual": round(100 * len(no_prazo) / len(base), 1) if base else None,
-        "atrasados": [_resumo_pedido(i) for i in base if i["coleta_data"] > i["prazo_contratual"]],
-    }
+def _n_coletas(itens: list[dict], a: date, b: date) -> int:
+    """Uma coleta = um cliente num dia."""
+    return len({(i["coleta_data"], i["cliente"]) for i in itens if i["coleta_data"] and a <= i["coleta_data"] <= b})
 
 
-def kpis(cliente: str | None = None, obra: str | None = None,
-         prazo_de: date | None = None, prazo_ate: date | None = None) -> dict:
+# --- Corte a laser recente (pedido do usuário: "painel bonito do histórico") --
+
+def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
+    """Situação do laser a partir do que o operador marca na aba Corte
+    (corte_programas + corte_historico) e das peças da Croqui (app/corte.py)."""
+    from app.corte import listar as listar_corte
+
     h = hoje()
-    todos = _filtrar(_itens(), cliente, obra)
-    no_periodo = _filtrar(todos, None, None, prazo_de, prazo_ate)
-    ativos = [i for i in no_periodo if i["st"] == "A"]
+    ini_hoje = datetime(h.year, h.month, h.day, tzinfo=FUSO)
+    ini_semana = ini_hoje - timedelta(days=h.weekday())
+    programas = listar_corte()["programas"]
 
-    obras_ativas: dict[str, list[dict]] = {}
-    for i in ativos:
-        obras_ativas.setdefault(i["obra"] or i["po"], []).append(i)
-    em_atraso = {o: ps for o, ps in obras_ativas.items()
-                 if any(r in ("atraso_projetado", "prazo_vencido") for p in ps for _, r, _, _ in _alertas_pedido(p, h))}
+    def resumo(p: dict) -> dict:
+        obras = sorted({obra_de(i["mac"]) for i in p["itens"] if i.get("mac")} - {""})
+        minutos = None
+        if p["cortando_em"] and p["finalizado_em"] and p["cortando_em"] <= p["finalizado_em"]:
+            minutos = round((datetime.fromisoformat(p["finalizado_em"]) - datetime.fromisoformat(p["cortando_em"])).total_seconds() / 60)
+        return {
+            "programa": p["programa"], "obras": obras, "mps": p["mps"], "pecas": p["pecas"], "itens": len(p["itens"]),
+            "cortando_em": p["cortando_em"], "cortando_por": p["cortando_por"],
+            "finalizado_em": p["finalizado_em"], "finalizado_por": p["finalizado_por"],
+            "falta_material_em": p["falta_material_em"], "falta_material_por": p["falta_material_por"],
+            "minutos": minutos,
+        }
 
-    ini, fim = _semana(h)
-    ini_ant, fim_ant = ini - timedelta(days=7), fim - timedelta(days=7)
+    def finalizado(p: dict) -> bool:
+        return bool(p["finalizado_em"]) and not (p["cortando_em"] and p["cortando_em"] > p["finalizado_em"])
 
-    def coletas_entre(a: date, b: date) -> list[dict]:
-        # uma coleta = um cliente num dia
-        grupos: dict[tuple[date, str], list[dict]] = {}
-        for i in todos:
-            if i["coleta_data"] and a <= i["coleta_data"] <= b:
-                grupos.setdefault((i["coleta_data"], i["cliente"] or ""), []).append(i)
-        return [{"data": d.isoformat(), "cliente": c, "n_pedidos": len(ps), "kg": sum(p["peso_total"] or 0 for p in ps),
-                 "obras": sorted({p["obra"] for p in ps if p["obra"]})} for (d, c), ps in sorted(grupos.items())]
+    cortando = [resumo(p) for p in programas if p["cortando_em"] and not finalizado(p) and not p["falta_material_em"]]
+    falta = [resumo(p) for p in programas if p["falta_material_em"] and not finalizado(p)]
+    finalizados = sorted((p for p in programas if finalizado(p)), key=lambda p: p["finalizado_em"], reverse=True)
 
-    semana, semana_ant = coletas_entre(ini, fim), coletas_entre(ini_ant, fim_ant)
-    janela = PAINEL_CONFIG["otd_dias"]
-    otd = _otd(todos, h - timedelta(days=janela), h)
-    otd_ant = _otd(todos, h - timedelta(days=2 * janela), h - timedelta(days=janela + 1))
+    def desde(p: dict, t: datetime) -> bool:
+        return datetime.fromisoformat(p["finalizado_em"]) >= t
 
-    def lista_obras(obras: dict[str, list[dict]]) -> list[dict]:
-        out = []
-        for o, ps in obras.items():
-            prazos = [p["prazo_contratual"] for p in ps if p["prazo_contratual"]]
-            out.append({"obra": o, "cliente": ", ".join(sorted({p["cliente"] or "" for p in ps} - {""})),
-                        "n_pedidos": len(ps), "prazo": _iso(min(prazos)) if prazos else None,
-                        "kg": sum(p["peso_total"] or 0 for p in ps)})
-        return sorted(out, key=lambda x: x["prazo"] or "9999")
+    # Finalizados por dia (últimos 7 dias) — barrinhas do painel.
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select (em at time zone 'America/Sao_Paulo')::date, count(distinct programa) from corte_historico
+               where marca = 'finalizado' and valor and em >= %s group by 1""",
+            (ini_hoje - timedelta(days=6),),
+        )
+        por_dia = dict(cur.fetchall())
+    dias = [h - timedelta(days=k) for k in range(6, -1, -1)]
 
+    # Cortados por operador (quem marcou Finalizado) — bloco "Cortados" do painel,
+    # no mesmo formato do Projeto: hoje, semana, barrinhas de 7 dias e os últimos.
+    operadores: dict[str, dict] = {}
+    for p in finalizados:
+        nome = p["finalizado_por"] or "Sem nome"
+        o = operadores.setdefault(nome, {"operador": nome, "hoje": 0, "semana": 0, "minutos_hoje": 0,
+                                          "por_dia": {d: 0 for d in dias}, "recentes": []})
+        em = datetime.fromisoformat(p["finalizado_em"])
+        r = resumo(p)
+        if em >= ini_hoje:
+            o["hoje"] += 1
+            o["minutos_hoje"] += r["minutos"] or 0
+        if em >= ini_semana:
+            o["semana"] += 1
+        dia = em.astimezone(FUSO).date()
+        if dia in o["por_dia"]:
+            o["por_dia"][dia] += 1
+        if len(o["recentes"]) < limite_operador:
+            o["recentes"].append(r)
+    for o in operadores.values():
+        o["por_dia"] = [{"data": d.isoformat(), "programas": n} for d, n in o["por_dia"].items()]
     return {
-        "obras": {"ativas": len(obras_ativas), "em_atraso": len(em_atraso),
-                  "lista_atraso": lista_obras(em_atraso), "lista_ativas": lista_obras(obras_ativas)},
-        "coletas_semana": {"valor": len(semana), "anterior": len(semana_ant), "de": ini.isoformat(),
-                           "ate": fim.isoformat(), "lista": semana},
-        "kg_corte": {"valor": None, "pendencia": PENDENCIAS["kg_corte"]},
-        "materiais_criticos": {"valor": None, "pendencia": PENDENCIAS["materiais"]},
-        "otd": {**otd, "anterior": otd_ant["percentual"], "dias": janela},
+        "cortando": cortando,
+        "falta_material": falta,
+        "hoje": {"programas": sum(1 for p in finalizados if desde(p, ini_hoje)),
+                 "pecas": sum(p["pecas"] or 0 for p in finalizados if desde(p, ini_hoje))},
+        "semana": {"programas": sum(1 for p in finalizados if desde(p, ini_semana)),
+                   "pecas": sum(p["pecas"] or 0 for p in finalizados if desde(p, ini_semana))},
+        "por_dia": [{"data": d.isoformat(), "programas": por_dia.get(d, 0)} for d in dias],
+        "recentes": [resumo(p) for p in finalizados[:limite]],
+        # Quem cortou mais recentemente primeiro.
+        "operadores": sorted(operadores.values(), key=lambda o: o["recentes"][0]["finalizado_em"], reverse=True),
     }
 
 
@@ -358,6 +385,13 @@ def entregas(mes: str, cliente: str | None = None, obra: str | None = None) -> d
             "clientes": list(por_cliente.values())}
 
 
+def _fotos() -> dict[str, str]:
+    """1ª foto de cada pedido (item_id → sha256 da mídia)."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select distinct on (item_id) item_id, midia_sha256 from follow_up_imagens order by item_id, ordem")
+        return {str(i): sha for i, sha in cur.fetchall()}
+
+
 # --- 5. Esteira das obras -----------------------------------------------------
 
 def esteira(cliente: str | None = None, obra: str | None = None,
@@ -369,8 +403,11 @@ def esteira(cliente: str | None = None, obra: str | None = None,
     for i in _filtrar(_itens(), cliente, obra, prazo_de, prazo_ate):
         if i["st"] == "A":
             obras.setdefault(i["obra"] or i["po"], []).append(i)
+    foto_do_item = _fotos()
     linhas = []
     for o, ps in obras.items():
+        com_foto = sorted((p for p in ps if p["id"] in foto_do_item),
+                          key=lambda p: (p["prazo_contratual"] or date.max, p["po"]))
         pesos = [p["peso_total"] if p["peso_total"] and p["peso_total"] > 0 else 1.0 for p in ps]
         total = sum(pesos)
         etapas = {e: round(sum((p[e] or 0) * w for p, w in zip(ps, pesos)) / total, 1) for e, _ in ETAPAS}
@@ -386,6 +423,8 @@ def esteira(cliente: str | None = None, obra: str | None = None,
             "prazo": _iso(min(prazos)) if prazos else None,
             "proxima_coleta": _iso(min(coletas_fut)) if coletas_fut else None,
             "etapas": etapas, "semaforo": semaforo,
+            "foto": foto_do_item[com_foto[0]["id"]] if com_foto else None,
+            "dias_prazo": (min(prazos) - h).days if prazos else None,
         })
     linhas.sort(key=lambda l: (l["prazo"] or "9999", l["obra"]))
     return {"etapas": [{"campo": e, "nome": n} for e, n in ETAPAS], "linhas": linhas,
@@ -465,3 +504,120 @@ def registros(dia: date | None = None) -> dict:
 
     ev.sort(key=lambda e: e["em"], reverse=True)
     return {"data": dia.isoformat(), "eventos": ev, "aviso": PENDENCIAS["auditoria"]}
+
+
+# --- Compras recentes (pedido do usuário: "o que foi comprado recentemente") --
+
+def _obra_da_compra(obra: str | None) -> str | None:
+    """'MAC.618.25' / '0723.26' → '618.25' / '723.26'; 'EMPRESA' etc. → None."""
+    import re
+
+    m = re.fullmatch(r"(?:MAC\.?)?0*(\d+\.\d{2})", (obra or "").strip().upper())
+    return m.group(1) if m else None
+
+
+def compras(dias: int = 15) -> dict:
+    """Compras lançadas no ERP (notas de entrada), copiadas todo dia para
+    historico_compras_geral por scripts/importar_precos_erp.py. Atenção: essa
+    tabela guarda só a ÚLTIMA compra de cada material+unidade (é a base da
+    Referência de preços) e não tem quantidade. Datas no futuro são erro de
+    digitação no ERP e ficam de fora."""
+    h = hoje()
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select data_compra, nfe_codigo, fornecedor, codigo_item, descricao, preco_unitario, unidade, obra
+               from historico_compras_geral where data_compra between %s and %s
+               order by data_compra desc, nfe_codigo desc, descricao""",
+            (h - timedelta(days=dias), h),
+        )
+        linhas = cur.fetchall()
+        cur.execute("select max(created_at) from historico_compras_geral")
+        atualizado = cur.fetchone()[0]
+    notas: dict[tuple, dict] = {}
+    for data, nfe, fornecedor, codigo, descricao, preco, unidade, obra in linhas:
+        n = notas.setdefault((data, nfe), {"data": data.isoformat(), "nfe": nfe, "fornecedor": fornecedor or "—", "itens": []})
+        n["itens"].append({
+            "codigo": codigo, "descricao": descricao, "preco": float(preco) if preco is not None else None,
+            "unidade": unidade, "obra": obra, "obra_mac": _obra_da_compra(obra),
+        })
+    return {"dias": dias, "notas": list(notas.values()), "n_itens": len(linhas),
+            "atualizado_em": atualizado.isoformat() if atualizado else None}
+
+
+# --- Projeto: o que os projetistas apontaram na Croqui de corte ---------------
+
+def _agrupar_apontamentos(linhas: list[tuple], maximo: int = 8) -> list[dict]:
+    """Últimos apontamentos (já em ordem do mais novo) juntados por obra + dia."""
+    grupos: dict[tuple, dict] = {}
+    for p, m, ds, np_, st, em in linhas:
+        dia = em.astimezone(FUSO).date()
+        g = grupos.get((obra_de(m), dia))
+        if g is None:
+            if len(grupos) >= maximo:
+                continue
+            g = grupos[(obra_de(m), dia)] = {"obra": obra_de(m), "descricao": ds, "em": _iso(em), "n": 0,
+                                             "programas": [], "status": {}}
+        g["n"] += 1
+        g["status"][st or "—"] = g["status"].get(st or "—", 0) + 1
+        for prog in (np_ or "").replace(";", ",").split(","):
+            if prog.strip() and prog.strip() not in g["programas"]:
+                g["programas"].append(prog.strip())
+    return list(grupos.values())
+
+
+def projeto(limite: int = 80) -> dict:
+    """Por projetista (coluna Projetista da Croqui): pedidos em "Fazendo" agora,
+    apontados (dt_feito com status Feito / Sem Corte / Estoque) hoje, na semana,
+    por dia nos últimos 7 dias e os últimos apontamentos. Fonte: croqui_corte_itens
+    (Status Fazendo grava dt_fazendo, Feito grava dt_feito — app/croqui_corte.py)."""
+    h = hoje()
+    ini_hoje = datetime(h.year, h.month, h.day, tzinfo=FUSO)
+    ini_semana = ini_hoje - timedelta(days=h.weekday())
+    ini_7 = ini_hoje - timedelta(days=6)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select projetista, pedido, mac, descricao, n_programa, dt_fazendo from croqui_corte_itens
+               where status = 'Fazendo' and projetista is not null order by dt_fazendo nulls last"""
+        )
+        fazendo = cur.fetchall()
+        cur.execute(
+            """select projetista, status, (dt_feito at time zone 'America/Sao_Paulo')::date, count(*)
+               from croqui_corte_itens where projetista is not null and dt_feito >= %s
+               group by 1, 2, 3""",
+            (min(ini_7, ini_semana),),
+        )
+        contagens = cur.fetchall()
+        cur.execute(
+            """select projetista, pedido, mac, descricao, n_programa, status, dt_feito from (
+                   select *, row_number() over (partition by projetista order by dt_feito desc) n
+                   from croqui_corte_itens where projetista is not null and dt_feito is not null) x
+               where n <= %s order by dt_feito desc""",
+            (limite,),
+        )
+        recentes = cur.fetchall()
+        cur.execute("select distinct projetista from croqui_corte_itens where projetista is not null")
+        nomes = sorted(r[0] for r in cur.fetchall())
+
+    def item(pedido, mac, descricao, n_programa):
+        return {"pedido": pedido, "obra": obra_de(mac), "descricao": descricao, "programa": n_programa}
+
+    saida = []
+    dias = [h - timedelta(days=k) for k in range(6, -1, -1)]
+    for nome in nomes:
+        cs = [c for c in contagens if c[0] == nome]
+        hoje_por_status: dict[str, int] = {}
+        for _, status, d, n in cs:
+            if d == h:
+                hoje_por_status[status or "—"] = hoje_por_status.get(status or "—", 0) + n
+        saida.append({
+            "projetista": nome,
+            "fazendo": [{**item(p, m, ds, np_), "desde": _iso(df)} for (pj, p, m, ds, np_, df) in fazendo if pj == nome],
+            "hoje": sum(hoje_por_status.values()),
+            "hoje_por_status": hoje_por_status,
+            "semana": sum(n for _, _, d, n in cs if d >= ini_semana.date()),
+            "por_dia": [{"data": d.isoformat(), "n": sum(n for _, _, dd, n in cs if dd == d)} for d in dias],
+            "recentes": _agrupar_apontamentos([r[1:] for r in recentes if r[0] == nome]),
+        })
+    # quem apontou mais hoje primeiro
+    saida.sort(key=lambda x: (-x["hoje"], -x["semana"], x["projetista"]))
+    return {"projetistas": saida}

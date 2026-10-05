@@ -42,11 +42,11 @@ export function Bloco({
 }) {
   return (
     <section
-      className={`flex min-h-0 flex-col rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 ${className}`}
+      className={`flex min-h-0 min-w-0 flex-col rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 ${className}`}
     >
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-slate-300">{titulo}</h2>
-        <div className="flex items-center gap-2 text-xs">
+        <h2 className="min-w-0 truncate text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-slate-300">{titulo}</h2>
+        <div className="flex shrink-0 items-center gap-2 text-xs">
           {carregando && <span className="text-stone-400 dark:text-slate-500">atualizando…</span>}
           {extra}
         </div>
@@ -63,6 +63,17 @@ export function Bloco({
 }
 
 /** Estado vazio claro — dado que não existe hoje (nunca inventar). */
+/** Número grande dos blocos de Corte e Projeto (Hoje / Semana). */
+export function Numero({ rotulo, valor, sub }: { rotulo: string; valor: number; sub: string }) {
+  return (
+    <div className="rounded-lg bg-stone-50 dark:bg-slate-800/60 px-3 py-1.5">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">{rotulo}</p>
+      <p className="text-2xl font-black leading-none text-stone-900 dark:text-white">{valor}</p>
+      <p className="text-xs text-stone-500 dark:text-slate-400">{sub}</p>
+    </div>
+  );
+}
+
 export function Vazio({ children }: { children: React.ReactNode }) {
   return <p className="text-sm italic text-stone-500 dark:text-slate-400">{children}</p>;
 }

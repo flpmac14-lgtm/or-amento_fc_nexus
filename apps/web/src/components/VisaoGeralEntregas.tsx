@@ -84,7 +84,7 @@ export default function VisaoGeralEntregas({
     "rounded-md border border-stone-300 dark:border-slate-700 px-2 py-0.5 text-stone-700 dark:text-slate-300 hover:border-green-600 dark:hover:border-cyan-400";
   return (
     <Bloco
-      titulo="Entregas do mês por cliente"
+      titulo="📦 Entregas"
       carregando={carregando}
       erro={erro}
       extra={

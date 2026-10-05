@@ -49,37 +49,42 @@ export interface ClienteColeta {
 export interface RespostaColetas {
   dias: { data: string; hoje: boolean; clientes: ClienteColeta[] }[];
   coletas_em_texto: number;
+  /** Uma coleta = um cliente num dia. */
+  semana: { valor: number; anterior: number };
 }
 
-export interface ObraResumo {
-  obra: string;
-  cliente: string;
-  n_pedidos: number;
-  prazo: string | null;
-  kg: number;
-}
-
-export interface ColetaResumo {
-  data: string;
-  cliente: string;
-  n_pedidos: number;
-  kg: number;
+export interface ProgramaCorte {
+  programa: string;
   obras: string[];
+  mps: string[];
+  pecas: number | null;
+  itens: number;
+  cortando_em: string | null;
+  cortando_por: string | null;
+  finalizado_em: string | null;
+  finalizado_por: string | null;
+  falta_material_em: string | null;
+  falta_material_por: string | null;
+  minutos: number | null;
 }
 
-export interface RespostaKpis {
-  obras: { ativas: number; em_atraso: number; lista_atraso: ObraResumo[]; lista_ativas: ObraResumo[] };
-  coletas_semana: { valor: number; anterior: number; de: string; ate: string; lista: ColetaResumo[] };
-  kg_corte: { valor: null; pendencia: string };
-  materiais_criticos: { valor: null; pendencia: string };
-  otd: {
-    percentual: number | null;
-    base: number;
-    no_prazo: number;
-    anterior: number | null;
-    dias: number;
-    atrasados: PedidoPainel[];
-  };
+export interface RespostaCorte {
+  cortando: ProgramaCorte[];
+  falta_material: ProgramaCorte[];
+  hoje: { programas: number; pecas: number };
+  semana: { programas: number; pecas: number };
+  por_dia: { data: string; programas: number }[];
+  recentes: ProgramaCorte[];
+  operadores: OperadorCorte[];
+}
+
+export interface OperadorCorte {
+  operador: string;
+  hoje: number;
+  semana: number;
+  minutos_hoje: number;
+  por_dia: { data: string; programas: number }[];
+  recentes: ProgramaCorte[];
 }
 
 export interface LinhaAtencao {
@@ -129,6 +134,9 @@ export interface LinhaEsteira {
   proxima_coleta: string | null;
   etapas: Record<string, number>;
   semaforo: Semaforo;
+  /** sha256 da 1ª foto do pedido de prazo mais próximo (null = sem foto) */
+  foto: string | null;
+  dias_prazo: number | null;
 }
 
 export interface RespostaEsteira {
@@ -173,6 +181,13 @@ export function horaMinuto(iso: string | Date): string {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** 95 → "1h35"; 40 → "40 min" */
+export function duracao(minutos: number | null): string {
+  if (minutos === null) return "—";
+  if (minutos < 60) return `${minutos} min`;
+  return `${Math.floor(minutos / 60)}h${String(minutos % 60).padStart(2, "0")}`;
+}
+
 export function linkObra(obra: string): string {
   return `/follow-up/obra?tipo=mac&valor=${encodeURIComponent(obra)}`;
 }
@@ -182,3 +197,43 @@ export const COR_SEVERIDADE: Record<Semaforo, string> = {
   amarelo: "bg-amber-400",
   verde: "bg-green-500",
 };
+
+export interface ItemCompra {
+  codigo: string | null;
+  descricao: string | null;
+  preco: number | null;
+  unidade: string | null;
+  obra: string | null;
+  /** obra no formato do app (MAC 2 partes) quando a compra é de uma obra */
+  obra_mac: string | null;
+}
+
+export interface RespostaCompras {
+  dias: number;
+  notas: { data: string; nfe: number; fornecedor: string; itens: ItemCompra[] }[];
+  n_itens: number;
+  atualizado_em: string | null;
+}
+
+export interface GrupoApontamento {
+  obra: string;
+  descricao: string | null;
+  em: string;
+  n: number;
+  programas: string[];
+  status: Record<string, number>;
+}
+
+export interface Projetista {
+  projetista: string;
+  fazendo: { pedido: string; obra: string; descricao: string | null; programa: string | null; desde: string | null }[];
+  hoje: number;
+  hoje_por_status: Record<string, number>;
+  semana: number;
+  por_dia: { data: string; n: number }[];
+  recentes: GrupoApontamento[];
+}
+
+export interface RespostaProjeto {
+  projetistas: Projetista[];
+}

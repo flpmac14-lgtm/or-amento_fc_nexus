@@ -26,6 +26,7 @@ def com_itens(monkeypatch):
     def usar(itens):
         monkeypatch.setattr(painel, "_itens", lambda: itens)
         monkeypatch.setattr(painel, "hoje", lambda: HOJE)
+        monkeypatch.setattr(painel, "_fotos", lambda: {"1": "sha-do-1"})
     return usar
 
 
@@ -92,10 +93,43 @@ def test_esteira_pondera_etapa_pelo_peso(com_itens):
     assert linha["obra"] == "690.25" and linha["etapas"]["cor"] == 75.0 and linha["semaforo"] == "verde"
 
 
-def test_otd(com_itens):
+def test_esteira_foto_e_dias_ate_o_prazo(com_itens):
     com_itens([
-        _item("1", st="E", prazo=HOJE, coleta=HOJE - timedelta(days=1)),
-        _item("2", st="E", prazo=HOJE - timedelta(days=5), coleta=HOJE - timedelta(days=2)),
+        _item("2", prazo=HOJE + timedelta(days=5)),
+        _item("1", prazo=HOJE + timedelta(days=9)),
     ])
-    otd = painel.kpis()["otd"]
-    assert (otd["base"], otd["no_prazo"], otd["percentual"]) == (2, 1, 50.0)
+    linha = painel.esteira()["linhas"][0]
+    assert linha["foto"] == "sha-do-1" and linha["dias_prazo"] == 5
+
+
+def test_coletas_da_semana(com_itens):
+    com_itens([
+        _item("1", coleta=HOJE, cliente="A1"),
+        _item("2", coleta=HOJE, cliente="A1"),  # mesmo cliente e dia = 1 coleta
+        _item("3", coleta=HOJE - timedelta(days=1), cliente="W1"),
+        _item("4", coleta=HOJE - timedelta(days=7), cliente="W1"),  # semana passada
+    ])
+    assert painel.coletas()["semana"] == {"valor": 2, "anterior": 1}
+
+
+def test_obra_da_compra():
+    assert painel._obra_da_compra("MAC.618.25") == "618.25"
+    assert painel._obra_da_compra("0723.26") == "723.26"
+    assert painel._obra_da_compra("EMPRESA") is None
+    assert painel._obra_da_compra(None) is None
+
+
+def test_agrupar_apontamentos_por_obra_e_dia():
+    from datetime import datetime, timezone
+    t = datetime(2026, 10, 2, 17, 0, tzinfo=timezone.utc)
+    linhas = [
+        ("P1.001", "957.26.01", "PEDESTAL", "323", "Feito", t),
+        ("P1.002", "957.26.01", "PEDESTAL", "322", "Feito", t),
+        ("P1.003", "957.26.02", "PEDESTAL", "323", "Sem Corte", t),
+        ("P2.001", "886.26.01", "BASE", "1377", "Feito", t),
+    ]
+    g = painel._agrupar_apontamentos(linhas)
+    assert [(x["obra"], x["n"], x["programas"], x["status"]) for x in g] == [
+        ("957.26", 3, ["323", "322"], {"Feito": 2, "Sem Corte": 1}),
+        ("886.26", 1, ["1377"], {"Feito": 1}),
+    ]

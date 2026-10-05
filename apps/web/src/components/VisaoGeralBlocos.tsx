@@ -1,20 +1,18 @@
 "use client";
 
-// Blocos 1, 2, 3 e 5 da Visão Geral (Coletas, KPIs, Atenção hoje, Esteira das
-// obras). Regras e cálculos ficam no servidor (app/painel.py); aqui só exibe.
+// Blocos da Visão Geral: Coletas, Atenção hoje e Esteira das obras. Regras e cálculos ficam no servidor (app/painel.py); aqui só exibe.
 
 import { useState } from "react";
 import { Bloco, TabelaPedidos, Vazio, useBloco, type ListaAberta } from "@/components/VisaoGeralComum";
+import { urlImagemFollowUp } from "@/lib/api";
 import {
   COR_SEVERIDADE,
   ddmm,
   kg,
   linkObra,
-  type ObraResumo,
   type RespostaAtencao,
   type RespostaColetas,
   type RespostaEsteira,
-  type RespostaKpis,
 } from "@/lib/painel";
 
 type Props = { params: Record<string, string>; tick: number; abrir: (l: ListaAberta) => void };
@@ -24,6 +22,16 @@ const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 function diaSemana(iso: string): string {
   const [a, m, d] = iso.split("-").map(Number);
   return DIAS_SEMANA[new Date(a, m - 1, d).getDay()];
+}
+
+function Comparacao({ atual, anterior }: { atual: number; anterior: number }) {
+  const diff = atual - anterior;
+  if (diff === 0) return <span className="text-stone-500 dark:text-slate-400">= semana passada</span>;
+  return (
+    <span className={diff > 0 ? "text-green-700 dark:text-green-400" : "text-stone-500 dark:text-slate-400"}>
+      {diff > 0 ? "▲" : "▼"} {Math.abs(diff)} vs semana passada ({anterior})
+    </span>
+  );
 }
 
 function Ponto({ cor, titulo }: { cor: string; titulo?: string }) {
@@ -41,14 +49,22 @@ export function BlocoColetas({ params, tick, abrir }: Props) {
       carregando={carregando}
       erro={erro}
       extra={
-        dados && dados.coletas_em_texto > 0 ? (
+        <>
+          {dados && (
+            <span className="flex items-center gap-2 text-sm">
+              <span className="font-bold text-stone-800 dark:text-slate-200">{dados.semana.valor} coleta(s) nesta semana</span>
+              <Comparacao atual={dados.semana.valor} anterior={dados.semana.anterior} />
+            </span>
+          )}
+          {dados && dados.coletas_em_texto > 0 ? (
           <span
             className="text-amber-700 dark:text-amber-300"
             title="Esses pedidos têm a Coleta escrita como texto (ex.: 'Permanece prazo contratual', '3009/2026') — só datas entram no painel."
           >
             {dados.coletas_em_texto} pedido(s) com coleta em texto não entram
           </span>
-        ) : null
+          ) : null}
+        </>
       }
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -97,172 +113,6 @@ export function BlocoColetas({ params, tick, abrir }: Props) {
         ))}
       </div>
     </Bloco>
-  );
-}
-
-// --- 2. KPIs ------------------------------------------------------------------
-
-function Comparacao({ atual, anterior, rotulo, melhorMaior = true }: { atual: number | null; anterior: number | null; rotulo: string; melhorMaior?: boolean }) {
-  if (atual === null || anterior === null) return <span className="text-stone-400 dark:text-slate-500">sem {rotulo} para comparar</span>;
-  const diff = Math.round((atual - anterior) * 10) / 10;
-  if (diff === 0) return <span className="text-stone-500 dark:text-slate-400">= {rotulo}</span>;
-  const bom = diff > 0 === melhorMaior;
-  return (
-    <span className={bom ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-      {diff > 0 ? "▲" : "▼"} {Math.abs(diff).toLocaleString("pt-BR")} vs {rotulo} ({anterior.toLocaleString("pt-BR")})
-    </span>
-  );
-}
-
-function Cartao({ titulo, valor, detalhe, onClick, pendencia }: {
-  titulo: string;
-  valor: React.ReactNode;
-  detalhe?: React.ReactNode;
-  onClick?: () => void;
-  pendencia?: string;
-}) {
-  const classe =
-    "flex flex-col rounded-xl border p-3 text-left min-w-0 " +
-    (pendencia
-      ? "border-dashed border-stone-300 dark:border-slate-700 bg-stone-50 dark:bg-slate-900/50"
-      : "border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:ring-2 hover:ring-green-500 dark:hover:ring-cyan-400");
-  const corpo = (
-    <>
-      <span className="text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">{titulo}</span>
-      {pendencia ? (
-        <>
-          <span className="text-4xl font-black text-stone-300 dark:text-slate-700">—</span>
-          <span className="text-xs italic text-stone-500 dark:text-slate-400">{pendencia}</span>
-        </>
-      ) : (
-        <>
-          <span className="text-4xl font-black text-stone-900 dark:text-white xl:text-5xl">{valor}</span>
-          <span className="text-xs">{detalhe}</span>
-        </>
-      )}
-    </>
-  );
-  return pendencia || !onClick ? (
-    <div className={classe}>{corpo}</div>
-  ) : (
-    <button type="button" onClick={onClick} className={classe}>
-      {corpo}
-    </button>
-  );
-}
-
-function TabelaObras({ obras }: { obras: ObraResumo[] }) {
-  if (obras.length === 0) return <Vazio>Nenhuma obra.</Vazio>;
-  return (
-    <table className="w-full text-sm text-stone-800 dark:text-slate-200">
-      <thead className="text-left text-xs uppercase text-stone-500 dark:text-slate-400">
-        <tr>
-          <th className="py-1">Obra</th>
-          <th>Cliente</th>
-          <th>Pedidos</th>
-          <th>Prazo mais próximo</th>
-          <th className="text-right">Peso</th>
-        </tr>
-      </thead>
-      <tbody>
-        {obras.map((o) => (
-          <tr key={o.obra} className="border-t border-stone-100 dark:border-slate-800">
-            <td className="py-1">
-              <a href={linkObra(o.obra)} target="_blank" rel="noreferrer" className="font-semibold text-green-700 dark:text-cyan-300 hover:underline">
-                {o.obra}
-              </a>
-            </td>
-            <td>{o.cliente || "—"}</td>
-            <td>{o.n_pedidos}</td>
-            <td>{ddmm(o.prazo)}</td>
-            <td className="text-right">{kg(o.kg)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-export function BlocoKpis({ params, tick, abrir }: Props) {
-  const { dados, erro, carregando } = useBloco<RespostaKpis>("kpis", params, tick);
-  if (erro) return <Bloco titulo="Indicadores" erro={erro}>{null}</Bloco>;
-  if (!dados) return <Bloco titulo="Indicadores" carregando={carregando}>{null}</Bloco>;
-  const { obras, coletas_semana: cs, otd } = dados;
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-      <Cartao
-        titulo="Obras ativas / em atraso"
-        valor={
-          <>
-            {obras.ativas}
-            <span className="text-2xl text-red-600 dark:text-red-400"> / {obras.em_atraso}</span>
-          </>
-        }
-        detalhe={<span className="text-stone-500 dark:text-slate-400">atraso = coleta depois do prazo ou prazo vencido sem coleta</span>}
-        onClick={() =>
-          abrir({
-            titulo: `Obras em atraso (${obras.em_atraso})`,
-            subtitulo: `De ${obras.ativas} obras ativas. Atraso = coleta marcada depois do prazo contratual, ou prazo vencido sem coleta.`,
-            conteudo: <TabelaObras obras={obras.lista_atraso} />,
-          })
-        }
-      />
-      <Cartao
-        titulo="Coletas da semana"
-        valor={cs.valor}
-        detalhe={<Comparacao atual={cs.valor} anterior={cs.anterior} rotulo="semana passada" />}
-        onClick={() =>
-          abrir({
-            titulo: `Coletas da semana ${ddmm(cs.de)} a ${ddmm(cs.ate)}`,
-            subtitulo: "Uma coleta = um cliente num dia.",
-            conteudo:
-              cs.lista.length === 0 ? (
-                <Vazio>Nenhuma coleta marcada na semana.</Vazio>
-              ) : (
-                <table className="w-full text-sm text-stone-800 dark:text-slate-200">
-                  <thead className="text-left text-xs uppercase text-stone-500 dark:text-slate-400">
-                    <tr><th className="py-1">Dia</th><th>Cliente</th><th>Pedidos</th><th>Obras</th><th className="text-right">Peso</th></tr>
-                  </thead>
-                  <tbody>
-                    {cs.lista.map((c) => (
-                      <tr key={c.data + c.cliente} className="border-t border-stone-100 dark:border-slate-800">
-                        <td className="py-1">{ddmm(c.data)}</td>
-                        <td className="font-semibold">{c.cliente}</td>
-                        <td>{c.n_pedidos}</td>
-                        <td className="text-xs">{c.obras.join(", ")}</td>
-                        <td className="text-right">{kg(c.kg)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ),
-          })
-        }
-      />
-      <Cartao titulo="Kg cortados na semana x meta" valor={null} pendencia={dados.kg_corte.pendencia} />
-      <Cartao titulo="Materiais críticos" valor={null} pendencia={dados.materiais_criticos.pendencia} />
-      <Cartao
-        titulo={`OTD ${otd.dias} dias`}
-        valor={otd.percentual === null ? "—" : `${otd.percentual.toLocaleString("pt-BR")}%`}
-        detalhe={
-          otd.base === 0 ? (
-            <span className="text-stone-500 dark:text-slate-400">sem entregas (ST=E com coleta) no período</span>
-          ) : (
-            <span className="flex flex-col">
-              <span className="text-stone-500 dark:text-slate-400">{otd.no_prazo} de {otd.base} pedidos entregues até o prazo</span>
-              <Comparacao atual={otd.percentual} anterior={otd.anterior} rotulo={`${otd.dias} dias anteriores`} />
-            </span>
-          )
-        }
-        onClick={() =>
-          abrir({
-            titulo: `Entregas fora do prazo — últimos ${otd.dias} dias (${otd.atrasados.length})`,
-            subtitulo: "Entregue = ST E; data da entrega = Coleta; comparada ao prazo contratual.",
-            conteudo: <TabelaPedidos pedidos={otd.atrasados} />,
-          })
-        }
-      />
-    </div>
   );
 }
 
@@ -327,72 +177,115 @@ export function BlocoAtencao({ params, tick, abrir }: Props) {
 }
 
 // --- 5. Esteira das obras -----------------------------------------------------
+// Uma linha por obra ativa, do prazo mais próximo ao mais adiante, com a foto
+// do pedido mais urgente que tiver foto (pedido do usuário).
+
+const BORDA_SEMAFORO: Record<string, string> = {
+  vermelho: "border-l-red-500",
+  amarelo: "border-l-amber-400",
+  verde: "border-l-green-500",
+};
+
+const PILULA_PRAZO: Record<string, string> = {
+  vermelho: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
+  amarelo: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+  verde: "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300",
+};
+
+function textoPrazo(dias: number | null): string {
+  if (dias === null) return "sem prazo";
+  if (dias < 0) return `vencido ${-dias}d`;
+  if (dias === 0) return "vence hoje";
+  return `em ${dias}d`;
+}
 
 function CelulaEtapa({ valor, nome }: { valor: number; nome: string }) {
   const titulo = `${nome}: ${valor.toLocaleString("pt-BR")}%`;
-  if (valor >= 100) return <div title={titulo} className="h-5 rounded bg-green-600 dark:bg-cyan-500" />;
-  if (valor <= 0) return <div title={titulo} className="h-5 rounded border border-stone-300 dark:border-slate-600" />;
+  if (valor >= 100) {
+    return (
+      <div title={titulo} className="flex h-6 items-center justify-center rounded-md bg-green-600 text-xs font-bold text-white dark:bg-cyan-500 dark:text-slate-950">
+        ✓
+      </div>
+    );
+  }
+  if (valor <= 0) return <div title={titulo} className="h-6 rounded-md border border-dashed border-stone-300 dark:border-slate-600" />;
   return (
-    <div title={titulo} className="relative h-5 overflow-hidden rounded border border-green-600/60 dark:border-cyan-500/60">
-      <div className="h-full bg-green-600/40 dark:bg-cyan-500/40" style={{ width: `${valor}%` }} />
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-stone-800 dark:text-white">
+    <div title={titulo} className="relative h-6 overflow-hidden rounded-md bg-stone-100 dark:bg-slate-800">
+      <div className="h-full bg-green-500/50 dark:bg-cyan-500/50" style={{ width: `${valor}%` }} />
+      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-stone-800 dark:text-white">
         {Math.round(valor)}%
       </span>
     </div>
   );
 }
 
+const GRADE_ESTEIRA = "grid grid-cols-[4rem_10rem_repeat(8,minmax(0,1fr))_6.5rem_4rem] items-center gap-x-1.5";
+
 export function BlocoEsteira({ params, tick }: Omit<Props, "abrir">) {
   const { dados, erro, carregando } = useBloco<RespostaEsteira>("esteira", params, tick);
   const etapas = dados?.etapas ?? [];
   return (
     <Bloco
-      titulo={`Esteira das obras${dados ? ` · ${dados.linhas.length} ativas` : ""}`}
+      titulo={`🏭 Esteira das obras${dados ? ` · ${dados.linhas.length} ativas · prazo mais próximo primeiro` : ""}`}
       carregando={carregando}
       erro={erro}
       extra={
         <span className="flex items-center gap-2 text-stone-500 dark:text-slate-400" title={dados?.pendencias.join("\n")}>
-          <span className="inline-block h-3 w-5 rounded bg-green-600 dark:bg-cyan-500" /> concluída
-          <span className="inline-block h-3 w-5 rounded border border-green-600/60 bg-green-600/40 dark:border-cyan-500/60 dark:bg-cyan-500/40" /> em andamento (% por kg)
-          <span className="inline-block h-3 w-5 rounded border border-stone-300 dark:border-slate-600" /> não iniciada
+          <span className="inline-flex h-4 w-5 items-center justify-center rounded bg-green-600 text-[9px] text-white dark:bg-cyan-500 dark:text-slate-950">✓</span> concluída
+          <span className="inline-block h-4 w-5 rounded bg-green-500/50 dark:bg-cyan-500/50" /> em andamento (% por kg)
+          <span className="inline-block h-4 w-5 rounded border border-dashed border-stone-300 dark:border-slate-600" /> não iniciada
         </span>
       }
     >
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-separate border-spacing-y-1 text-sm">
-          <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900 text-left text-xs uppercase text-stone-500 dark:text-slate-400">
-            <tr>
-              <th className="pl-2">Obra</th>
-              <th>Cliente</th>
+      <div className="min-h-0 flex-1 overflow-auto pr-1">
+        <div className={`${GRADE_ESTEIRA} sticky top-0 z-10 bg-white pb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:bg-slate-900 dark:text-slate-400`}>
+          <span className="pl-2">Foto</span>
+          <span>Obra</span>
+          {etapas.map((e) => (
+            <span key={e.campo} className="truncate text-center">
+              {e.nome}
+            </span>
+          ))}
+          <span className="text-center">Prazo</span>
+          <span className="text-center">Coleta</span>
+        </div>
+        <ul className="flex flex-col gap-1.5">
+          {dados?.linhas.map((l) => (
+            <li
+              key={l.obra}
+              className={`${GRADE_ESTEIRA} rounded-lg border border-l-4 border-stone-200 bg-stone-50/60 py-1 pr-1 dark:border-slate-800 dark:bg-slate-800/30 ${BORDA_SEMAFORO[l.semaforo]}`}
+            >
+              <a
+                href={linkObra(l.obra)}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-1 block h-12 w-14 overflow-hidden rounded-md bg-white dark:bg-slate-950"
+                title="Abrir o relatório da obra"
+              >
+                {l.foto ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- imagem servida pelo calc_engine (cache imutável)
+                  <img src={urlImagemFollowUp(l.foto)} alt="" loading="lazy" className="h-full w-full object-contain" />
+                ) : (
+                  <span className="flex h-full items-center justify-center text-[10px] text-stone-400">sem foto</span>
+                )}
+              </a>
+              <a href={linkObra(l.obra)} target="_blank" rel="noreferrer" className="min-w-0 leading-tight hover:underline">
+                <span className="block text-base font-black text-stone-900 dark:text-white">{l.obra}</span>
+                <span className="block truncate text-[11px] text-stone-500 dark:text-slate-400">
+                  <span className="font-semibold text-stone-700 dark:text-slate-300">{l.cliente}</span> · {l.n_pedidos} ped. · {l.n_prontos} pronto(s) · {kg(l.kg)}
+                </span>
+              </a>
               {etapas.map((e) => (
-                <th key={e.campo} className="px-1 text-center">{e.nome}</th>
+                <CelulaEtapa key={e.campo} valor={l.etapas[e.campo] ?? 0} nome={e.nome} />
               ))}
-              <th className="px-1">Prazo</th>
-              <th className="px-1">Coleta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dados?.linhas.map((l) => (
-              <tr key={l.obra} className="text-stone-800 dark:text-slate-200">
-                <td className={`border-l-4 pl-2 ${l.semaforo === "vermelho" ? "border-red-500" : l.semaforo === "amarelo" ? "border-amber-400" : "border-green-500"}`}>
-                  <a href={linkObra(l.obra)} target="_blank" rel="noreferrer" className="font-bold text-stone-900 dark:text-white hover:underline" title={`${l.n_pedidos} pedido(s), ${l.n_prontos} pronto(s) · ${kg(l.kg)}`}>
-                    {l.obra}
-                  </a>
-                </td>
-                <td className="text-xs">{l.cliente}</td>
-                {etapas.map((e) => (
-                  <td key={e.campo} className="min-w-[4.5rem] px-1">
-                    <CelulaEtapa valor={l.etapas[e.campo] ?? 0} nome={e.nome} />
-                  </td>
-                ))}
-                <td className={`px-1 font-semibold ${l.semaforo === "vermelho" ? "text-red-600 dark:text-red-400" : l.semaforo === "amarelo" ? "text-amber-700 dark:text-amber-300" : ""}`}>
-                  {ddmm(l.prazo)}
-                </td>
-                <td className="px-1 text-stone-500 dark:text-slate-400">{ddmm(l.proxima_coleta)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              <span className={`mx-auto flex flex-col items-center rounded-md px-2 py-0.5 leading-tight ${PILULA_PRAZO[l.semaforo]}`}>
+                <span className="text-sm font-bold">{ddmm(l.prazo)}</span>
+                <span className="text-[10px] font-semibold">{textoPrazo(l.dias_prazo)}</span>
+              </span>
+              <span className="text-center text-sm text-stone-600 dark:text-slate-300">{ddmm(l.proxima_coleta)}</span>
+            </li>
+          ))}
+        </ul>
         {dados && dados.linhas.length === 0 && <Vazio>Nenhuma obra ativa com esses filtros.</Vazio>}
       </div>
     </Bloco>
