@@ -12,6 +12,7 @@ const COR_MODULO: Record<string, string> = {
   "Follow up": "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
   Croqui: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300",
   Corte: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  Usinagem: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   Obras: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
 };
 

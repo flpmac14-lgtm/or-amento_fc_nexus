@@ -24,6 +24,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from app import apontamentos_setor
 from app.orcamentos_salvos import _conectar
 from app.painel_config import PAINEL_CONFIG
 
@@ -440,6 +441,9 @@ def registros(dia: date | None = None) -> dict:
       pedido (editado_em/por — edição anterior do mesmo pedido é sobrescrita).
     Croqui: última edição, Fazendo/Feito (dt_fazendo/dt_feito) e pedidos novos.
     Obras (sincronização da planilha): pedido novo, encerrado (entregue), reaberto.
+    Usinagem: cada apontamento do saymon (apontamentos_setor — Usinando, Pausado,
+      Fim, Falta material, inclusive serviço interno Macfab). O Registro diário
+      "Usinagem: ..." que ele também gera fica de fora pra não duplicar.
     """
     dia = dia or hoje()
     ini = datetime(dia.year, dia.month, dia.day, tzinfo=FUSO)
@@ -462,9 +466,21 @@ def registros(dia: date | None = None) -> dict:
             acao = "concluiu" if (marca == "finalizado" and valor) else "alterou"
             add(em, "Corte", acao, f"Programa {prog} — {'marcou' if valor else 'desmarcou'} {nomes.get(marca, marca)}", por)
 
+        cur.execute("""select a.em, a.por, a.status, a.operador, a.observacao, i.po, i.mac, i.desenho, s.descricao
+                       from apontamentos_setor a
+                       left join follow_up_itens i on i.id = a.item_id
+                       left join servicos_internos s on s.id = a.servico_id
+                       where a.setor = 'usinagem' and a.em >= %s and a.em < %s""", (ini, fim))
+        status_usi = apontamentos_setor.SETORES["usinagem"]["status"]
+        for em, por, status, operador, obs, po, mac, desenho, servico in cur.fetchall():
+            alvo = f"Serviço interno Macfab — {servico}" if servico else f"{desenho or '—'} · PO {po or '—'}"
+            acao = "concluiu" if status == "finalizado" else "alterou"
+            add(em, "Usinagem", acao, f"{status_usi.get(status, status)} ({operador or '—'}) — {alvo}"
+                + (f": {obs[:60]}" if obs else ""), por, None if servico else link_obra(mac))
+
         cur.execute("""select r.created_at, r.autor, r.texto, i.po, i.mac from follow_up_registros r
                        left join follow_up_itens i on i.id = r.item_id
-                       where r.created_at >= %s and r.created_at < %s""", (ini, fim))
+                       where r.created_at >= %s and r.created_at < %s and r.texto not like 'Usinagem:%%'""", (ini, fim))
         for em, autor, texto, po, mac in cur.fetchall():
             add(em, "Follow up", "criou", f"Registro diário — {po or ''}: {(texto or '')[:90]}", autor, link_obra(mac))
 
@@ -621,3 +637,42 @@ def projeto(limite: int = 80) -> dict:
     # quem apontou mais hoje primeiro
     saida.sort(key=lambda x: (-x["hoje"], -x["semana"], x["projetista"]))
     return {"projetistas": saida}
+
+
+# --- Usinagem (pedido do usuário: no lugar do "Atenção hoje") ----------------
+
+def usinagem() -> dict:
+    """Apontamentos da Usinagem (líder saymon, app/apontamentos_setor.py): o que
+    cada operador está usinando agora / pausou, quantos estão com falta de
+    material e todos os apontamentos de hoje (Usinando, Pausado, Fim, Falta
+    material — pedidos do Follow up e serviços internos Macfab)."""
+    cfg = apontamentos_setor.SETORES["usinagem"]
+    ini = datetime.combine(hoje(), datetime.min.time(), tzinfo=FUSO)
+    sel = """a.em, a.status, a.operador, a.observacao, a.por, i.po, i.mac, i.desenho, i.descricao, s.descricao
+             from apontamentos_setor a
+             left join follow_up_itens i on i.id = a.item_id
+             left join servicos_internos s on s.id = a.servico_id"""
+
+    def linha(r) -> dict:
+        em, status, operador, obs, por, po, mac, desenho, descricao, servico = r
+        return {"em": em.isoformat(), "status": status, "rotulo": cfg["status"].get(status, status),
+                "operador": operador, "observacao": obs, "por": por, "po": po, "obra_mac": obra_de(mac) or None,
+                "desenho": desenho, "descricao": descricao, "servico": servico}
+
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""select * from (select distinct on (coalesce(a.item_id, a.servico_id)) {sel}
+                where a.setor = 'usinagem' order by coalesce(a.item_id, a.servico_id), a.em desc, a.id desc) u
+                where u.status in ('em_andamento', 'pausado', 'falta_material')"""
+        )
+        atuais = [linha(r) for r in cur.fetchall()]
+        cur.execute(f"select {sel} where a.setor = 'usinagem' and a.em >= %s order by a.em desc, a.id desc", (ini,))
+        hoje_ = [linha(r) for r in cur.fetchall()]
+    operadores = [
+        {"nome": op,
+         "usinando": [a for a in atuais if a["operador"] == op and a["status"] == "em_andamento"],
+         "pausados": [a for a in atuais if a["operador"] == op and a["status"] == "pausado"]}
+        for op in cfg["operadores"]
+    ]
+    return {"operadores": operadores, "falta_material": [a for a in atuais if a["status"] == "falta_material"],
+            "hoje": hoje_}

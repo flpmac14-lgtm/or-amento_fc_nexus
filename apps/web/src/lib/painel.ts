@@ -237,3 +237,24 @@ export interface Projetista {
 export interface RespostaProjeto {
   projetistas: Projetista[];
 }
+
+// Usinagem (GET /painel/usinagem — app/painel.py::usinagem).
+export interface ApontamentoUsinagem {
+  em: string;
+  status: "em_andamento" | "pausado" | "finalizado" | "falta_material";
+  rotulo: string;
+  operador: string | null;
+  observacao: string | null;
+  por: string | null;
+  po: string | null;
+  obra_mac: string | null;
+  desenho: string | null;
+  descricao: string | null;
+  servico: string | null; // serviço interno Macfab (sem pedido)
+}
+
+export interface RespostaUsinagem {
+  operadores: { nome: string; usinando: ApontamentoUsinagem[]; pausados: ApontamentoUsinagem[] }[];
+  falta_material: ApontamentoUsinagem[];
+  hoje: ApontamentoUsinagem[];
+}

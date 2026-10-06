@@ -453,6 +453,11 @@ def painel_projeto() -> dict:
     return _painel(painel.projeto)
 
 
+@app.get("/painel/usinagem")
+def painel_usinagem() -> dict:
+    return _painel(painel.usinagem)
+
+
 @app.get("/painel/compras")
 def painel_compras(dias: int = 15) -> dict:
     return _painel(painel.compras, max(1, min(dias, 120)))

@@ -8,12 +8,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BlocoAtencao, BlocoEsteira } from "@/components/VisaoGeralBlocos";
+import { BlocoEsteira } from "@/components/VisaoGeralBlocos";
 import VisaoGeralCompras from "@/components/VisaoGeralCompras";
 import VisaoGeralCorte from "@/components/VisaoGeralCorte";
 import { Janela, useBloco, type ListaAberta } from "@/components/VisaoGeralComum";
 import VisaoGeralProjeto from "@/components/VisaoGeralProjeto";
 import VisaoGeralRegistros from "@/components/VisaoGeralRegistros";
+import VisaoGeralUsinagem from "@/components/VisaoGeralUsinagem";
 import { acessoSoFollowUp } from "@/lib/acesso";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import {
@@ -98,7 +99,7 @@ export default function PaginaVisaoGeral() {
           <datalist id="painel-obras">
             {opcoes?.obras.map((o) => <option key={o} value={o} />)}
           </datalist>
-          <label className="flex items-center gap-1 text-xs text-stone-500 dark:text-slate-400" title="Filtra pelo prazo contratual (KPIs de obras, Atenção e Esteira)">
+          <label className="flex items-center gap-1 text-xs text-stone-500 dark:text-slate-400" title="Filtra pelo prazo contratual (KPIs de obras e Esteira)">
             Prazo
             <input type="date" value={filtros.prazoDe} onChange={(e) => setFiltros((f) => ({ ...f, prazoDe: e.target.value }))} className={campo} />
             até
@@ -129,7 +130,8 @@ export default function PaginaVisaoGeral() {
 
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 xl:grid-rows-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="grid min-h-[22rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
-          <BlocoAtencao params={params} tick={tick} abrir={setLista} />
+          {/* Pedido do usuário: Usinagem no lugar do "Atenção hoje" (BlocoAtencao segue em VisaoGeralBlocos). */}
+          <VisaoGeralUsinagem tick={tick} />
           <VisaoGeralCorte tick={tick} />
           <VisaoGeralCompras tick={tick} />
         </div>
