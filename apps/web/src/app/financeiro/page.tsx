@@ -1,15 +1,16 @@
 "use client";
 
 // Financeiro — pedido explícito do usuário: os números do DashboardIndustrial
-// (faturamento, custos e despesas, entrada de pedidos, carteira aberta e o
+// (faturamento, custos e despesas, entrada de pedidos, NFs faturadas e o
 // budget) dentro do app, SÓ pra conta flpmac14 (proxy.ts bloqueia a página;
 // /api/financeiro confere de novo antes de mandar os dados).
 // Fonte: resumo do ERP gravado a cada 15 min por
 // services/calc_engine/scripts/sincronizar_financeiro.py.
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
+import FinanceiroNotas from "@/components/FinanceiroNotas";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
 import type { BudgetFinanceiro, RespostaFinanceiro } from "@/lib/financeiro";
 
@@ -39,36 +40,10 @@ function Secao({ titulo, sub, children }: { titulo: string; sub?: string; childr
   );
 }
 
-// Faixa de entrega de um pedido em aberto (mesma regra do DashboardIndustrial).
-function faixa(entrega: string | null, hoje: Date): "atrasado" | "semana" | "proxima" | "futuro" {
-  if (!entrega) return "futuro";
-  const [a, m, d] = entrega.split("-").map(Number);
-  const dt = new Date(a, m - 1, d);
-  const h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  const iniSemana = new Date(h);
-  iniSemana.setDate(h.getDate() - ((h.getDay() + 6) % 7)); // segunda
-  const fimSemana = new Date(iniSemana);
-  fimSemana.setDate(iniSemana.getDate() + 6);
-  const fimProx = new Date(fimSemana);
-  fimProx.setDate(fimSemana.getDate() + 7);
-  if (dt < h) return "atrasado";
-  if (dt <= fimSemana) return "semana";
-  if (dt <= fimProx) return "proxima";
-  return "futuro";
-}
-
-const FAIXAS = [
-  { id: "atrasado", rotulo: "Atrasado", classe: "border-red-300 dark:border-red-800" },
-  { id: "semana", rotulo: "Semana atual", classe: "border-stone-200 dark:border-slate-700" },
-  { id: "proxima", rotulo: "Próxima semana", classe: "border-stone-200 dark:border-slate-700" },
-  { id: "futuro", rotulo: "Futuro", classe: "border-stone-200 dark:border-slate-700" },
-] as const;
-
 export default function PaginaFinanceiro() {
   const [dados, setDados] = useState<RespostaFinanceiro | null>(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
-  const [faixaAberta, setFaixaAberta] = useState<string | null>(null);
 
   const buscar = useCallback(() => {
     fetch("/api/financeiro", { cache: "no-store" })
@@ -95,18 +70,11 @@ export default function PaginaFinanceiro() {
 
   const resumo = dados?.resumo ?? null;
   const budget = dados?.budget ?? { faturamento: {}, custos_pct: {} };
-  const hoje = useMemo(() => new Date(), []);
 
   const fat = useCallback((m: string | undefined) => {
     const f = m ? resumo?.faturamento[m] : undefined;
     return f ? f.producao + f.servico : 0;
   }, [resumo]);
-
-  const carteira = useMemo(() => {
-    const grupos: Record<string, NonNullable<typeof resumo>["carteira"]> = { atrasado: [], semana: [], proxima: [], futuro: [] };
-    for (const p of resumo?.carteira ?? []) grupos[faixa(p.entrega, hoje)].push(p);
-    return grupos;
-  }, [resumo, hoje]);
 
   function salvouBudget(b: BudgetFinanceiro) {
     setDados((d) => (d ? { ...d, budget: b } : d));
@@ -248,55 +216,7 @@ export default function PaginaFinanceiro() {
               <GraficoBarras meses={meses} series={[SERIE_PEDIDOS]} valores={(m) => [resumo.entrada_pedidos[m] ?? 0]} altura={200} />
             </Secao>
 
-            <Secao titulo="Pedidos de venda em aberto" sub="Só ABERTO/VÁLIDO, pela data de entrega · clique numa faixa pra ver os pedidos">
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                {FAIXAS.map((f) => {
-                  const lista = carteira[f.id];
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setFaixaAberta(faixaAberta === f.id ? null : f.id)}
-                      className={`rounded-lg border-2 p-3 text-left ${f.classe} ${faixaAberta === f.id ? "ring-2 ring-green-600 dark:ring-cyan-500" : ""}`}
-                    >
-                      <p className="text-xs font-semibold uppercase text-stone-500 dark:text-slate-400">
-                        {f.id === "atrasado" && "⚠ "}
-                        {f.rotulo}
-                      </p>
-                      <p className="text-lg font-black text-stone-900 dark:text-white">{moeda(lista.reduce((s, p) => s + p.valor, 0))}</p>
-                      <p className="text-xs text-stone-500 dark:text-slate-400">{lista.length} pedido(s)</p>
-                    </button>
-                  );
-                })}
-                <div className="rounded-lg border-2 border-green-600 bg-green-50 p-3 dark:border-cyan-600 dark:bg-cyan-950/30">
-                  <p className="text-xs font-semibold uppercase text-stone-600 dark:text-slate-300">Carteira total</p>
-                  <p className="text-lg font-black text-stone-900 dark:text-white">{moeda(resumo.carteira.reduce((s, p) => s + p.valor, 0))}</p>
-                  <p className="text-xs text-stone-500 dark:text-slate-400">{resumo.carteira.length} pedido(s)</p>
-                </div>
-              </div>
-              {faixaAberta && (
-                <table className="mt-3 w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-stone-200 text-left text-xs uppercase text-stone-500 dark:border-slate-700 dark:text-slate-400">
-                      <th className="py-1">Pedido</th>
-                      <th>Entrega</th>
-                      <th>Tipo</th>
-                      <th className="text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {carteira[faixaAberta].map((p, i) => (
-                      <tr key={`${p.pedido}-${i}`} className="border-b border-stone-100 dark:border-slate-800">
-                        <td className="py-1 font-mono text-stone-900 dark:text-white">{p.pedido}</td>
-                        <td className="text-stone-700 dark:text-slate-300">{p.entrega ? p.entrega.split("-").reverse().join("/") : "—"}</td>
-                        <td className="text-stone-500 dark:text-slate-400">{p.tipo}</td>
-                        <td className="text-right font-semibold text-stone-900 dark:text-white">{moeda(p.valor)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </Secao>
+            <FinanceiroNotas notas={resumo.notas ?? []} />
 
             <FinanceiroBudget budget={budget} grupos={resumo.grupos} salvou={salvouBudget} />
           </>

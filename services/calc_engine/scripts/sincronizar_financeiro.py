@@ -2,7 +2,9 @@
 os números do "DashboardIndustrial" (app Streamlit em
 Desktop\\all\\DashboardIndustrial), com as MESMAS consultas dele no ERP:
 faturamento (notas de saída, Produção x Serviço pelo CFOP), custos e
-despesas por grupo de conta de custo, entrada de pedidos e carteira aberta.
+despesas por grupo de conta de custo e entrada de pedidos. Depois, a pedido
+do usuário, a carteira aberta saiu e entrou a tabela de NFs faturadas (mesmo
+filtro do faturamento, então a soma da tabela bate com os cartões).
 
 O ERP (SQL Server 192.168.2.100, login só leitura) só existe na rede da
 fábrica, então este script roda nesta máquina (a cada 15 min, dentro de
@@ -81,6 +83,27 @@ GROUP BY LEFT(I.CFOP, 4), F.NRONOTA, F.DTEMISSAO
 """
 
 
+# Uma linha por nota + CFOP (pra separar Produção x Serviço), mesmo filtro do faturamento.
+SQL_NOTAS = """
+SELECT F.CODIGO, F.NRONOTA, F.DTEMISSAO,
+  (SELECT TOP 1 E.RAZAO FROM VW_FN_CLIENTEENDERECO E WHERE E.CLIENTE = F.CLIENTE) AS CLIENTE,
+  F.VEPEDIDO, LEFT(I.CFOP, 4) AS CFOP, SUM(I.VLRTOTAL) AS VALOR
+FROM FN_NFSITENS I
+INNER JOIN FN_NFS F ON I.NFS = F.CODIGO
+WHERE F.DTEMISSAO >= ?
+  AND F.ENTSAIDA = 'S'
+  AND F.STATUSNF = 'F'
+  AND F.FILIAL = ?
+  AND F.TPDOCUMENTO IN ('NF', 'NFS', 'LOC', 'REC')
+  AND I.CFOP IN (
+        '5101', '5102', '6101', '6102',
+        '5101A', '5102A', '6101A', '6102A',
+        '5933', '5933A', '6933', '6933A', '5124', '5124A', '6124', '9999'
+  )
+GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4)
+"""
+
+
 def _conectar_erp():
     import pyodbc
 
@@ -116,7 +139,7 @@ def montar(hoje: date | None = None) -> dict:
     faturamento = {m: {"producao": 0.0, "servico": 0.0} for m in meses}
     custos = {m: {nome: 0.0 for _, nome in GRUPOS} for m in meses}
     entrada = {m: 0.0 for m in meses}
-    carteira = []
+    notas: dict[int, dict] = {}
     with _conectar_erp() as erp:
         cur = erp.cursor()
         cur.execute(SQL_FATURAMENTO, inicio, FILIAL)
@@ -130,17 +153,20 @@ def montar(hoje: date | None = None) -> dict:
             if m in custos and g:
                 custos[m][g] += float(valor or 0)
         cur.execute(SQL_CARTEIRA, FILIAL, inicio)
-        for codigo, dt_pedido, status, valor, dt_entrega, tipo in cur.fetchall():
+        for _codigo, dt_pedido, _status, valor, _dt_entrega, _tipo in cur.fetchall():
             m = dt_pedido.strftime("%Y-%m")
             if m in entrada:
                 entrada[m] += float(valor or 0)
-            if status == "V":  # ABERTO/VÁLIDO
-                carteira.append({
-                    "pedido": str(int(codigo)) if codigo is not None else None,
-                    "entrega": dt_entrega.date().isoformat() if dt_entrega else None,
-                    "valor": round(float(valor or 0), 2),
-                    "tipo": {"1": "PRODUÇÃO", "2": "ESTOQUE"}.get(str(tipo).strip(), "OUTROS"),
-                })
+        cur.execute(SQL_NOTAS, inicio, FILIAL)
+        for codigo, nronota, emissao, cliente, pedido, cfop, valor in cur.fetchall():
+            n = notas.setdefault(int(codigo), {
+                "nota": (nronota or "").strip().lstrip("0") or (nronota or ""),
+                "emissao": emissao.date().isoformat(),
+                "cliente": (cliente or "").strip() or None,
+                "pedido": str(int(pedido)) if pedido is not None else None,
+                "producao": 0.0, "servico": 0.0,
+            })
+            n["servico" if cfop in CFOP_SERVICO else "producao"] += float(valor or 0)
     r2 = lambda d: {k: round(v, 2) for k, v in d.items()}  # noqa: E731
     return {
         "meses": meses,
@@ -148,7 +174,12 @@ def montar(hoje: date | None = None) -> dict:
         "custos": {m: r2(v) for m, v in custos.items()},
         "grupos": [nome for _, nome in GRUPOS],
         "entrada_pedidos": r2(entrada),
-        "carteira": sorted(carteira, key=lambda p: p["entrega"] or "9999"),
+        # Mais recente primeiro (pedido do usuário: "conforme vai saindo").
+        "notas": [
+            {**n, "producao": round(n["producao"], 2), "servico": round(n["servico"], 2),
+             "total": round(n["producao"] + n["servico"], 2)}
+            for _, n in sorted(notas.items(), key=lambda kv: (kv[1]["emissao"], kv[0]), reverse=True)
+        ],
     }
 
 
@@ -157,7 +188,7 @@ def sincronizar(simular: bool = False) -> str | None:
     dados = montar()
     texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
     assinatura = hashlib.sha256(texto.encode()).hexdigest()
-    resumo = (f"{len(dados['carteira'])} pedidos em aberto · faturamento {dados['meses'][-1]}: "
+    resumo = (f"{len(dados['notas'])} NFs · faturamento {dados['meses'][-1]}: "
               f"R$ {sum(dados['faturamento'][dados['meses'][-1]].values()):,.2f}")
     if simular:
         return resumo

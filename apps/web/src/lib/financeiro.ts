@@ -18,7 +18,18 @@ export interface ResumoFinanceiro {
   custos: Record<string, Record<string, number>>; // mês → grupo → R$
   grupos: string[];
   entrada_pedidos: Record<string, number>;
-  carteira: { pedido: string | null; entrega: string | null; valor: number; tipo: string }[];
+  // NFs faturadas (mesmo filtro do faturamento), a mais recente primeiro.
+  notas: NotaFiscal[];
+}
+
+export interface NotaFiscal {
+  nota: string;
+  emissao: string; // AAAA-MM-DD
+  cliente: string | null;
+  pedido: string | null; // pedido de venda
+  producao: number;
+  servico: number;
+  total: number;
 }
 
 export interface BudgetFinanceiro {
