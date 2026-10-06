@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { rotuloMes } from "@/components/FinanceiroGraficos";
+import { linkObra } from "@/lib/painel";
 import type { NotaFiscal } from "@/lib/financeiro";
 
 const POR_PAGINA = 50;
@@ -39,7 +40,7 @@ export default function FinanceiroNotas({
       notas.filter(
         (n) =>
           (!mes || n.emissao.startsWith(mes)) &&
-          (!termo || [n.nota, n.cliente, n.pedido].some((v) => (v ?? "").toLowerCase().includes(termo))),
+          (!termo || [n.nota, n.cliente, n.pedido, n.mac, n.po].some((v) => (v ?? "").toLowerCase().includes(termo))),
       ),
     [notas, mes, termo],
   );
@@ -79,7 +80,7 @@ export default function FinanceiroNotas({
             setLimite(POR_PAGINA);
           }}
           type="search"
-          placeholder="Nota, cliente ou pedido…"
+          placeholder="Nota, cliente, MAC, PO…"
           className={`${campo} w-56`}
         />
       </div>
@@ -89,13 +90,15 @@ export default function FinanceiroNotas({
       </p>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
+        <table className="w-full min-w-[56rem] text-sm">
           <thead>
             <tr className="border-b border-stone-200 text-left text-xs uppercase text-stone-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-1.5 pr-2">NF</th>
               <th className="pr-2">Emissão</th>
               <th className="pr-2">Cliente</th>
-              <th className="pr-2">Pedido</th>
+              <th className="pr-2">MAC</th>
+              <th className="pr-2">PO cliente</th>
+              <th className="pr-2" title="Pedido de venda (ERP)">Ped. venda</th>
               <th className="pr-2 text-right">Produção</th>
               <th className="pr-2 text-right">Serviço</th>
               <th className="text-right">Total</th>
@@ -114,7 +117,23 @@ export default function FinanceiroNotas({
                 <td className="max-w-[18rem] truncate pr-2 text-stone-800 dark:text-slate-200" title={n.cliente ?? ""}>
                   {n.cliente ?? "—"}
                 </td>
-                <td className="pr-2 font-mono text-stone-600 dark:text-slate-400">{n.pedido ?? "—"}</td>
+                <td className="whitespace-nowrap pr-2">
+                  {n.mac && /^\d+\.\d{2}$/.test(n.mac) ? (
+                    <a
+                      href={linkObra(n.mac)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded bg-stone-100 px-1.5 font-semibold text-stone-700 hover:underline dark:bg-slate-800 dark:text-slate-300"
+                      title="Abrir a obra no Follow up"
+                    >
+                      {n.mac}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-stone-500 dark:text-slate-400">{n.mac ?? "—"}</span>
+                  )}
+                </td>
+                <td className="pr-2 font-mono text-stone-800 dark:text-slate-200">{n.po ?? "—"}</td>
+                <td className="pr-2 font-mono text-stone-500 dark:text-slate-400">{n.pedido ?? "—"}</td>
                 <td className="pr-2 text-right text-stone-700 dark:text-slate-300">{n.producao ? moeda(n.producao) : "—"}</td>
                 <td className="pr-2 text-right text-stone-700 dark:text-slate-300">{n.servico ? moeda(n.servico) : "—"}</td>
                 <td className="text-right font-semibold text-stone-900 dark:text-white">{moeda(n.total)}</td>

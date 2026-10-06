@@ -26,7 +26,9 @@ export interface NotaFiscal {
   nota: string;
   emissao: string; // AAAA-MM-DD
   cliente: string | null;
-  pedido: string | null; // pedido de venda
+  pedido: string | null; // pedido de venda (interno)
+  mac: string | null; // obra (ex.: 924.26), do pedido de venda
+  po: string | null; // pedido do cliente (PO)
   producao: number;
   servico: number;
   total: number;

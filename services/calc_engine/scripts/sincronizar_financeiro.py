@@ -18,6 +18,7 @@ Uso: python scripts/sincronizar_financeiro.py [--simular]
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -87,9 +88,11 @@ GROUP BY LEFT(I.CFOP, 4), F.NRONOTA, F.DTEMISSAO
 SQL_NOTAS = """
 SELECT F.CODIGO, F.NRONOTA, F.DTEMISSAO,
   (SELECT TOP 1 E.RAZAO FROM VW_FN_CLIENTEENDERECO E WHERE E.CLIENTE = F.CLIENTE) AS CLIENTE,
-  F.VEPEDIDO, LEFT(I.CFOP, 4) AS CFOP, SUM(I.VLRTOTAL) AS VALOR
+  F.VEPEDIDO, LEFT(I.CFOP, 4) AS CFOP, SUM(I.VLRTOTAL) AS VALOR,
+  P.OBRA AS MAC, P.PEDIDOCLI AS PO, MAX(I.OBRA) AS MAC_ITEM, MAX(I.PEDCOMPRA) AS PO_ITEM
 FROM FN_NFSITENS I
 INNER JOIN FN_NFS F ON I.NFS = F.CODIGO
+LEFT JOIN VE_PEDIDO P ON P.CODIGO = F.VEPEDIDO
 WHERE F.DTEMISSAO >= ?
   AND F.ENTSAIDA = 'S'
   AND F.STATUSNF = 'F'
@@ -100,8 +103,19 @@ WHERE F.DTEMISSAO >= ?
         '5101A', '5102A', '6101A', '6102A',
         '5933', '5933A', '6933', '6933A', '5124', '5124A', '6124', '9999'
   )
-GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4)
+GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4), P.OBRA, P.PEDIDOCLI
 """
+
+
+def _mac(obra: str | None) -> str | None:
+    """Obra no formato do Follow up (MAC com 2 partes): '0924.26' / 'MAC.251.25' /
+    'MAC.1131.25.10.03' → '924.26' / '251.25' / '1131.25'. Sem número (ex.:
+    'EMPRESA') fica como veio."""
+    obra = (obra or "").strip()
+    if not obra:
+        return None
+    m = re.match(r"(?:MAC\.?)?0*(\d+)\.(\d{2})(?!\d)", obra, re.IGNORECASE)
+    return f"{m.group(1)}.{m.group(2)}" if m else obra
 
 
 def _conectar_erp():
@@ -158,8 +172,11 @@ def montar(hoje: date | None = None) -> dict:
             if m in entrada:
                 entrada[m] += float(valor or 0)
         cur.execute(SQL_NOTAS, inicio, FILIAL)
-        for codigo, nronota, emissao, cliente, pedido, cfop, valor in cur.fetchall():
+        for codigo, nronota, emissao, cliente, pedido, cfop, valor, mac, po, mac_item, po_item in cur.fetchall():
             n = notas.setdefault(int(codigo), {
+                # MAC e PO do cliente vêm do pedido de venda; se faltar, dos itens da nota.
+                "mac": _mac(mac) or _mac(mac_item),
+                "po": (po or po_item or "").strip() or None,
                 "nota": (nronota or "").strip().lstrip("0") or (nronota or ""),
                 "emissao": emissao.date().isoformat(),
                 "cliente": (cliente or "").strip() or None,
