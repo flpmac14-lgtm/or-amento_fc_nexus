@@ -10,7 +10,7 @@
 // de corte, o operador lança e marca assim mesmo; quando o projetista puser
 // o número na Croqui, as peças se juntam sozinhas (mesmo número).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listarProgramasCorte, marcarProgramaCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -107,6 +107,24 @@ export default function Corte({
 }) {
   // PDF do programa na pasta de corte (pedido do usuário) — components/PdfPrograma.tsx.
   const { pdfsDe, abrir: abrirPdf } = usePdfsCorte();
+  // Pedido do usuário: quem está apontando dá duplo clique no programa pra ver
+  // o PDF. Com PDF, 1 clique abre o programa só depois de um instante (dá
+  // tempo do 2º clique); sem PDF, abre na hora como antes.
+  const esperaClique = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function cliqueCartao(programa: string, detalhe: number) {
+    if (!pdfsDe(programa).length) return setAbertoNum(programa);
+    if (esperaClique.current) clearTimeout(esperaClique.current);
+    if (detalhe > 1) return; // 2º clique: quem age é o onDoubleClick
+    esperaClique.current = setTimeout(() => {
+      esperaClique.current = null;
+      setAbertoNum(programa);
+    }, 280);
+  }
+  function duploCliqueCartao(programa: string) {
+    if (esperaClique.current) clearTimeout(esperaClique.current);
+    esperaClique.current = null;
+    abrirPdf(programa);
+  }
   const [tela, setTela] = useState<"programas" | "historico">("programas");
   const [salvo, setSalvo] = useState("");
   const [programas, setProgramas] = useState<ProgramaCorte[]>([]);
@@ -373,7 +391,9 @@ export default function Corte({
                 <button
                   key={p.programa}
                   type="button"
-                  onClick={() => setAbertoNum(p.programa)}
+                  onClick={(e) => cliqueCartao(p.programa, e.detail)}
+                  onDoubleClick={() => duploCliqueCartao(p.programa)}
+                  title={pdfsDe(p.programa).length ? "Toque para apontar · duplo clique abre o PDF" : undefined}
                   className="flex flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
                 >
                   <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
@@ -440,8 +460,12 @@ export default function Corte({
                 <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">
                   Programa
                 </p>
-                <p className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white">
-                  {aberto.programa}
+                <p
+                  className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white"
+                  onDoubleClick={() => abrirPdf(aberto.programa)}
+                  title={pdfsDe(aberto.programa).length ? "Duplo clique abre o PDF" : undefined}
+                >
+                  <NumeroPrograma programa={aberto.programa} />
                 </p>
                 {pdfsDe(aberto.programa).length > 0 && (
                   <button
