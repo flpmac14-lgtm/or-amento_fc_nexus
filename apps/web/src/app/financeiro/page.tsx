@@ -7,8 +7,8 @@
 // Fonte: resumo do ERP gravado a cada 15 min por
 // services/calc_engine/scripts/sincronizar_financeiro.py.
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
 import FinanceiroNotas from "@/components/FinanceiroNotas";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
@@ -94,65 +94,49 @@ export default function PaginaFinanceiro() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-stone-200 bg-white py-2 pl-16 pr-4 dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-xl font-bold text-stone-900 dark:text-white">
-          FC Nexus <span className="text-green-600 dark:text-cyan-400">·</span> Financeiro
-        </h1>
-        <span className="text-sm text-stone-500 dark:text-slate-400">
-          {dados?.gerado_em
-            ? `ERP lido às ${new Date(dados.gerado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · atualiza a cada 15 min`
-            : carregando
-              ? "carregando…"
-              : ""}
-        </span>
-        <button
-          type="button"
-          onClick={carregar}
-          className="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm text-stone-800 hover:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-cyan-400"
-        >
-          ⟳ Atualizar
-        </button>
-        {meses.length > 2 && (
-          <label className="flex items-center gap-1 text-sm text-stone-600 dark:text-slate-300">
-            Mês:
-            <select
-              value={m0}
-              onChange={(e) => escolherMes(e.target.value === meses[n - 1] ? null : e.target.value)}
-              className="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm font-semibold text-stone-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              {meses
-                .slice(2)
-                .reverse()
-                .map((m) => (
-                  <option key={m} value={m}>
-                    {rotuloMes(m)}
-                    {m === meses[n - 1] ? " (atual)" : ""}
-                  </option>
-                ))}
-            </select>
-          </label>
-        )}
-        {mesSel && (
-          <button
-            type="button"
-            onClick={() => escolherMes(null)}
-            className="rounded-md border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            ✕ voltar pro mês atual
+    <AppShell
+      titulo="Financeiro"
+      subtitulo={
+        dados?.gerado_em
+          ? `ERP lido às ${new Date(dados.gerado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · atualiza a cada 15 min`
+          : carregando
+            ? "carregando…"
+            : undefined
+      }
+      acoes={
+        <>
+          {meses.length > 2 && (
+            <label className="flex items-center gap-1 text-sm text-stone-600 dark:text-slate-300">
+              <span className="hidden sm:inline">Mês:</span>
+              <select
+                value={m0}
+                onChange={(e) => escolherMes(e.target.value === meses[n - 1] ? null : e.target.value)}
+                className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm font-semibold text-stone-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                {meses
+                  .slice(2)
+                  .reverse()
+                  .map((m) => (
+                    <option key={m} value={m}>
+                      {rotuloMes(m)}
+                      {m === meses[n - 1] ? " (atual)" : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          {mesSel && (
+            <button type="button" onClick={() => escolherMes(null)} className={classeBotaoCabecalho} title="Voltar pro mês atual">
+              ✕<span className="hidden sm:inline"> mês atual</span>
+            </button>
+          )}
+          <button type="button" onClick={carregar} className={classeBotaoCabecalho} title="Atualizar">
+            ⟳<span className="hidden sm:inline"> Atualizar</span>
           </button>
-        )}
-        <div className="flex gap-2 lg:ml-auto">
-          <Link href="/visao-geral" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-            Visão Geral
-          </Link>
-          <Link href="/" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-            Orçamentos
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
+        </>
+      }
+    >
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-3 sm:p-5">
         {erro && (
           <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">{erro}</div>
         )}
@@ -262,6 +246,6 @@ export default function PaginaFinanceiro() {
           </>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

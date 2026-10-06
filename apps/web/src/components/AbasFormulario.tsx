@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { classeAbaSublinhada } from "@/components/AppShell";
 import type { ModoFormulario } from "@/components/FormularioUpload";
 
 interface Props {
@@ -25,11 +26,13 @@ const GRUPOS: { valor: "vendas" | ModoFormulario; rotulo: string }[] = [
   { valor: "followup", rotulo: "Follow up" },
 ];
 
-const classeAba = (ativa: boolean) =>
-  `flex-1 shrink-0 rounded-md py-2 px-3 font-medium transition-colors ${
+// Subabas de Vendas: "pílulas" pequenas, abaixo das abas sublinhadas dos
+// grupos (padrão do FC Nexus ERP — components/AppShell.tsx).
+const classeSubaba = (ativa: boolean) =>
+  `shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
     ativa
-      ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950"
-      : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
+      ? "bg-green-600 text-white dark:bg-cyan-500 dark:text-slate-950"
+      : "text-stone-600 hover:bg-white hover:text-stone-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
   }`;
 
 // Pedido explícito do usuário: essa barra de abas sobe pro cabeçalho fixo
@@ -43,8 +46,8 @@ export default function AbasFormulario({ modo, setModo }: Props) {
   const vendasAtual = emVendas ? modo : ultimaVendas;
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex gap-1 overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
+    <div className="flex flex-col">
+      <div className="-mb-px flex overflow-x-auto">
         {GRUPOS.map((g) => {
           const ativa = g.valor === "vendas" ? emVendas : modo === g.valor;
           return (
@@ -56,7 +59,7 @@ export default function AbasFormulario({ modo, setModo }: Props) {
                 if (emVendas) setUltimaVendas(modo); // lembra onde estava em Vendas
                 setModo(g.valor);
               }}
-              className={classeAba(ativa)}
+              className={classeAbaSublinhada(ativa)}
             >
               {g.rotulo}
             </button>
@@ -64,7 +67,7 @@ export default function AbasFormulario({ modo, setModo }: Props) {
         })}
       </div>
       {emVendas && (
-        <div className="flex gap-1 overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900/60 p-1 text-sm">
+        <div className="flex gap-1 overflow-x-auto border-t border-stone-200 py-2 dark:border-slate-800">
           {VENDAS.map((aba) => (
             <button
               key={aba.valor}
@@ -73,7 +76,7 @@ export default function AbasFormulario({ modo, setModo }: Props) {
                 setUltimaVendas(aba.valor);
                 setModo(aba.valor);
               }}
-              className={classeAba(modo === aba.valor)}
+              className={classeSubaba(modo === aba.valor)}
             >
               {aba.rotulo}
             </button>

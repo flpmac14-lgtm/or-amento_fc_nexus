@@ -308,7 +308,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       {salvo && (
-        <div className="sticky top-2 z-20 rounded-xl border-2 border-green-600 bg-green-50 p-3 text-center text-lg font-bold text-green-700 shadow-lg dark:bg-green-950/90 dark:text-green-300">
+        <div className="sticky top-16 z-20 rounded-xl border-2 border-green-600 bg-green-50 p-3 text-center text-lg font-bold text-green-700 shadow-lg dark:bg-green-950/90 dark:text-green-300">
           {salvo}
         </div>
       )}

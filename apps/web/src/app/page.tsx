@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { podeVerFinanceiro } from "@/lib/financeiro";
-import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import AbasFormulario from "@/components/AbasFormulario";
+import AppShell from "@/components/AppShell";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
 import ResultadoOrcamento from "@/components/ResultadoOrcamento";
@@ -54,15 +51,7 @@ function nomeOrcamentoPadrao(): string {
 }
 
 export default function Home() {
-  const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
-  // Link "Financeiro" só pra conta flpmac14 (o bloqueio de verdade é no proxy.ts e na /api/financeiro).
-  const [verFinanceiro, setVerFinanceiro] = useState(false);
-  useEffect(() => {
-    criarClienteSupabaseNavegador()
-      .auth.getUser()
-      .then(({ data }) => setVerFinanceiro(podeVerFinanceiro(data.user?.email)));
-  }, []);
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -108,12 +97,7 @@ export default function Home() {
     setAlvoImpressao(null);
   }, [alvoImpressao]);
 
-  async function handleSair() {
-    const supabase = criarClienteSupabaseNavegador();
-    await supabase.auth.signOut();
-    router.replace("/login");
-    router.refresh();
-  }
+
 
   async function handleAnalisar(arquivo: File, estimativas: EstimativasOrcamento) {
     setCarregando(true);
@@ -416,80 +400,40 @@ export default function Home() {
       : null;
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
+    <AppShell
+      titulo="Orçamentos"
+      subtitulo="Arraste um desenho técnico em PDF e receba a análise de fabricação e o orçamento calculado automaticamente."
+      acoes={
+        // Pedido explícito do usuário: sempre visível em qualquer aba, pra
+        // poder salvar a qualquer momento durante a edição. Fica desabilitado
+        // até existir algo pra salvar (ver handleSalvarOrcamento).
+        <button
+          type="button"
+          onClick={() => handleSalvarOrcamento()}
+          disabled={salvando || !resultado || !origemAtual}
+          className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-cyan-500 dark:text-slate-950 dark:hover:bg-cyan-400 sm:px-5"
+        >
+          {salvando ? "Salvando…" : (
+            <>
+              <span className="sm:hidden">Salvar</span>
+              <span className="hidden sm:inline">Salvar orçamento</span>
+            </>
+          )}
+        </button>
+      }
+    >
       {/* max-w maior na aba "Itens do orçamento" — pedido explícito do
           usuário pra ter mais espaço revisando muitos itens de uma vez;
           nas outras abas continua no mesmo max-w-6xl de sempre. */}
       <main
-        className={`print:hidden mx-auto flex flex-col gap-8 px-6 py-12 ${
+        className={`print:hidden mx-auto flex w-full flex-col gap-6 px-3 pb-10 sm:px-6 ${
           modo === "itens" || modo === "followup" ? "max-w-[100rem]" : "max-w-6xl"
         }`}
       >
-        {/* Sticky: fica visível no canto superior mesmo rolando a página —
-            pedido explícito do usuário pra não precisar voltar ao topo toda
-            vez que salvar depois de editar uma linha de custo. */}
-        <header className="sticky top-0 z-20 -mx-6 flex flex-col gap-4 border-b border-stone-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 px-6 pb-6 pt-6 backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/15 dark:bg-cyan-500/15 text-green-600 dark:text-cyan-400">
-                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 19V5a1 1 0 0 1 1-1h9l6 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" strokeLinejoin="round" />
-                  <path d="M14 4v5a1 1 0 0 0 1 1h5" strokeLinejoin="round" />
-                  <path d="M8 13h8M8 16.5h5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
-                  FC Nexus <span className="text-green-600 dark:text-cyan-400">—</span> MACFAB
-                </h1>
-                <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">
-                  Arraste um desenho técnico em PDF e receba a análise de fabricação e o
-                  orçamento calculado automaticamente.
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {/* Pedido explícito do usuário: sempre visível em qualquer aba,
-                  pra poder salvar a qualquer momento durante a edição — antes
-                  só aparecia depois de um resultado calculado. Fica desabilitado
-                  até existir algo pra salvar (ver handleSalvarOrcamento). */}
-              <button
-                type="button"
-                onClick={() => handleSalvarOrcamento()}
-                disabled={salvando || !resultado || !origemAtual}
-                className="rounded-lg bg-green-600 dark:bg-cyan-500 px-6 py-3 text-base font-bold text-white dark:text-slate-950 shadow-[0_0_25px_-6px_rgba(34,211,238,0.7)] transition-colors hover:bg-green-500 dark:hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {salvando ? "Salvando…" : "Salvar orçamento"}
-              </button>
-              <Link
-                href="/visao-geral"
-                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
-              >
-                Visão Geral
-              </Link>
-              {verFinanceiro && (
-                <Link
-                  href="/financeiro"
-                  className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
-                >
-                  Financeiro
-                </Link>
-              )}
-              <Link
-                href="/orcamentistas"
-                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
-              >
-                Orçamentistas
-              </Link>
-              <button
-                type="button"
-                onClick={handleSair}
-                className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
-              >
-                Sair
-              </button>
-            </div>
-          </div>
+        {/* Barra do orçamento (nome, novo, relatório, Excel) + abas — fica
+            presa logo abaixo do cabeçalho, visível mesmo rolando a página
+            (pedido explícito do usuário: não precisar voltar ao topo). */}
+        <div className="sticky top-14 z-20 -mx-3 flex flex-col gap-3 border-b border-stone-200 bg-stone-100/95 px-3 pb-0 pt-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 sm:-mx-6 sm:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
@@ -531,7 +475,7 @@ export default function Home() {
               orçamento" — fica visível mesmo rolando a página, em vez de
               rolar junto com "Identificação do cliente" e o conteúdo. */}
           <AbasFormulario modo={modo} setModo={setModo} />
-        </header>
+        </div>
 
         {/* Aba "Follow up" é um módulo à parte (obras em andamento, não um
             orçamento): esconde identificação do cliente e o formulário do
@@ -612,6 +556,6 @@ export default function Home() {
           proposta={propostaConfig}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

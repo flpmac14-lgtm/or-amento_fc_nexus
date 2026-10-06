@@ -12,7 +12,9 @@ const CHAVE_LOCALSTORAGE = "fcnexus-theme";
 // (ver layout.tsx) — aqui só lemos o que já está no atributo (o script
 // inline do layout já aplicou "light" antes do primeiro paint, se for o
 // caso) pra manter o estado do botão em sincronia, sem flash.
-export default function ThemeToggle() {
+// embutido: versão dentro do cabeçalho da casca (components/AppShell.tsx).
+// A versão fixa (layout.tsx) some sozinha nas páginas com a casca (globals.css).
+export default function ThemeToggle({ embutido = false }: { embutido?: boolean }) {
   const [tema, setTema] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -37,7 +39,11 @@ export default function ThemeToggle() {
       type="button"
       onClick={alternar}
       title={tema === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-      className="fixed left-4 top-4 z-50 flex h-10 print:hidden w-10 items-center justify-center rounded-full border border-stone-300 bg-white/90 text-stone-700 shadow-lg backdrop-blur-sm transition-colors hover:border-green-600/50 hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-cyan-500/50 dark:hover:bg-slate-800"
+      className={
+        embutido
+          ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-stone-100 dark:text-slate-300 dark:hover:bg-slate-800 print:hidden"
+          : "tema-fixo fixed left-4 top-4 z-50 flex h-10 print:hidden w-10 items-center justify-center rounded-full border border-stone-300 bg-white/90 text-stone-700 shadow-lg backdrop-blur-sm transition-colors hover:border-green-600/50 hover:bg-stone-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-cyan-500/50 dark:hover:bg-slate-800"
+      }
     >
       {tema === "dark" ? (
         // Sol — clique pra ir pro tema claro

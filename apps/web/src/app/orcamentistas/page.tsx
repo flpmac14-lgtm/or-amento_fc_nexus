@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AppShell from "@/components/AppShell";
 import { useEffect, useState } from "react";
 
 interface Usuario {
@@ -91,13 +92,8 @@ export default function PaginaOrcamentistas() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-stone-900 dark:text-white">Orçamentistas</h1>
-        <Link href="/" className="text-sm text-green-700 dark:text-cyan-300 hover:underline">
-          Voltar
-        </Link>
-      </div>
+    <AppShell titulo="Orçamentistas" subtitulo="Contas de acesso ao app (só o administrador cadastra)">
+    <div className="mx-auto w-full max-w-2xl px-3 py-5 sm:px-6">
 
       <section className="rounded-xl border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
         <h2 className="mb-3 font-semibold text-stone-900 dark:text-white">Cadastrar novo orçamentista</h2>
@@ -165,5 +161,6 @@ export default function PaginaOrcamentistas() {
         )}
       </section>
     </div>
+    </AppShell>
   );
 }

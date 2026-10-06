@@ -17,6 +17,7 @@ import CroquiCorte from "@/components/CroquiCorte";
 import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
+import { classeAbaSublinhada } from "@/components/AppShell";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
@@ -144,7 +145,7 @@ export default function ModuloFollowUp({
           : "flex flex-col gap-4"
       }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 border-b border-stone-200 dark:border-slate-800">
         {telaCheia && (
           <button
             type="button"
@@ -158,7 +159,8 @@ export default function ModuloFollowUp({
             </svg>
           </button>
         )}
-        <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-1 text-sm">
+        {/* Abas sublinhadas (padrão do FC Nexus ERP) — rolam na horizontal no celular. */}
+        <div className="-mb-px flex min-w-0 max-w-full overflow-x-auto">
           {visoes.map((v) => (
             <button
               key={v.valor}
@@ -168,11 +170,7 @@ export default function ModuloFollowUp({
                 if (v.valor === "material") setMaterialAberto(true);
                 if (v.valor === "croqui") setCroquiAberto(true);
               }}
-              className={`rounded-md px-4 py-1.5 font-medium transition-colors ${
-                visao === v.valor
-                  ? "bg-green-600 dark:bg-cyan-500 text-white dark:text-slate-950"
-                  : "text-stone-600 dark:text-slate-400 hover:text-stone-800 dark:hover:text-slate-200"
-              }`}
+              className={classeAbaSublinhada(visao === v.valor)}
             >
               {v.rotulo}
             </button>
@@ -184,15 +182,15 @@ export default function ModuloFollowUp({
             type="button"
             onClick={entrar}
             title="Expandir para tela cheia — só os dados (atalho: F2)"
-            className="ml-auto inline-flex items-center gap-2 rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50"
+            className="ml-auto mb-1 shrink-0 items-center gap-2 rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50 inline-flex"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Tela cheia <kbd className="rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F2</kbd>
+            <span className="hidden sm:inline">Tela cheia</span> <kbd className="hidden rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400 sm:inline">F2</kbd>
           </button>
         )}
-        <div ref={setAlvoSino} className="shrink-0" />
+        <div ref={setAlvoSino} className="mb-1 shrink-0" />
       </div>
       {/* As duas ficam montadas (só escondidas) pra não recarregar/perder filtros ao alternar. */}
       {!soProjeto && (
