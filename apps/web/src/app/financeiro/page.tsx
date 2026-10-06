@@ -44,6 +44,8 @@ export default function PaginaFinanceiro() {
   const [dados, setDados] = useState<RespostaFinanceiro | null>(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [mesSel, setMesSel] = useState<string | null>(null);
+  const [mesNotas, setMesNotas] = useState("");
 
   const buscar = useCallback(() => {
     fetch("/api/financeiro", { cache: "no-store" })
@@ -82,7 +84,14 @@ export default function PaginaFinanceiro() {
 
   const meses = resumo?.meses ?? [];
   const n = meses.length;
-  const [m0, m1, m2, m3] = [meses[n - 1], meses[n - 2], meses[n - 3], meses[n - 4]]; // atual, anterior, retrasado, 4º
+  // Filtro de mês (pedido do usuário): cartões, custos e NFs passam a ser do
+  // mês escolhido (e dos 2 anteriores). Sem escolha = mês atual.
+  const i = mesSel && meses.includes(mesSel) ? meses.indexOf(mesSel) : n - 1;
+  const [m0, m1, m2, m3] = [meses[i], meses[i - 1], meses[i - 2], meses[i - 3]]; // escolhido, anterior, retrasado, 4º
+  const escolherMes = (m: string | null) => {
+    setMesSel(m);
+    setMesNotas(m ?? "");
+  };
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-slate-950">
@@ -104,6 +113,35 @@ export default function PaginaFinanceiro() {
         >
           ⟳ Atualizar
         </button>
+        {meses.length > 2 && (
+          <label className="flex items-center gap-1 text-sm text-stone-600 dark:text-slate-300">
+            Mês:
+            <select
+              value={m0}
+              onChange={(e) => escolherMes(e.target.value === meses[n - 1] ? null : e.target.value)}
+              className="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm font-semibold text-stone-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              {meses
+                .slice(2)
+                .reverse()
+                .map((m) => (
+                  <option key={m} value={m}>
+                    {rotuloMes(m)}
+                    {m === meses[n - 1] ? " (atual)" : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
+        {mesSel && (
+          <button
+            type="button"
+            onClick={() => escolherMes(null)}
+            className="rounded-md border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            ✕ voltar pro mês atual
+          </button>
+        )}
         <div className="flex gap-2 lg:ml-auto">
           <Link href="/visao-geral" className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
             Visão Geral
@@ -138,7 +176,7 @@ export default function PaginaFinanceiro() {
                   <div key={m} className="rounded-xl border border-stone-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                     <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">
                       Faturamento {rotuloMes(m)}
-                      {m === m0 && " (mês atual)"}
+                      {m === meses[n - 1] ? " (mês atual)" : m === m0 ? " (escolhido)" : ""}
                     </p>
                     <p className="text-2xl font-black text-stone-900 dark:text-white">{moeda(total)}</p>
                     <p className="text-sm text-stone-600 dark:text-slate-400">
@@ -158,16 +196,18 @@ export default function PaginaFinanceiro() {
               })}
             </div>
 
-            <Secao titulo="Evolução do faturamento" sub="Últimos 13 meses · Produção + Serviço empilhados · linha tracejada = budget · passe o mouse nas barras">
+            <Secao titulo="Evolução do faturamento" sub="Últimos 13 meses · Produção + Serviço empilhados · linha tracejada = budget · clique numa barra pra filtrar o mês">
               <GraficoBarras
                 meses={meses}
                 series={[SERIE_PRODUCAO, SERIE_SERVICO]}
                 valores={(m) => [resumo.faturamento[m]?.producao ?? 0, resumo.faturamento[m]?.servico ?? 0]}
                 meta={(m) => budget.faturamento[m]}
+                selecionado={m0}
+                selecionar={(m) => meses.indexOf(m) >= 2 && escolherMes(m === meses[n - 1] ? null : m)}
               />
             </Secao>
 
-            <Secao titulo="Custos e despesas" sub="Três meses recentes · % sobre o faturamento do mês · budget do mês atual calculado sobre o faturamento realizado">
+            <Secao titulo="Custos e despesas" sub="Mês escolhido e os 2 anteriores · % sobre o faturamento do mês · budget do mês escolhido calculado sobre o faturamento realizado">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {resumo.grupos.map((g) => {
                   const v = (m: string | undefined) => (m ? (resumo.custos[m]?.[g] ?? 0) : 0);
@@ -216,7 +256,7 @@ export default function PaginaFinanceiro() {
               <GraficoBarras meses={meses} series={[SERIE_PEDIDOS]} valores={(m) => [resumo.entrada_pedidos[m] ?? 0]} altura={200} />
             </Secao>
 
-            <FinanceiroNotas notas={resumo.notas ?? []} />
+            <FinanceiroNotas notas={resumo.notas ?? []} mes={mesNotas} setMes={setMesNotas} />
 
             <FinanceiroBudget budget={budget} grupos={resumo.grupos} salvou={salvouBudget} />
           </>

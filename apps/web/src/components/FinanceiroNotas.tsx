@@ -19,8 +19,16 @@ function dataBr(iso: string): string {
   return iso.split("-").reverse().join("/");
 }
 
-export default function FinanceiroNotas({ notas }: { notas: NotaFiscal[] }) {
-  const [mes, setMes] = useState("");
+// mes/setMes vêm da página: o filtro de mês do topo também filtra as NFs.
+export default function FinanceiroNotas({
+  notas,
+  mes,
+  setMes,
+}: {
+  notas: NotaFiscal[];
+  mes: string; // "" = últimos 13 meses
+  setMes: (m: string) => void;
+}) {
   const [busca, setBusca] = useState("");
   const [limite, setLimite] = useState(POR_PAGINA);
 

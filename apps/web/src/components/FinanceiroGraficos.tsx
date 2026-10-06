@@ -33,12 +33,16 @@ export function GraficoBarras({
   valores,
   meta,
   altura = 240,
+  selecionado,
+  selecionar,
 }: {
   meses: string[];
   series: Serie[];
   valores: (mes: string) => number[]; // um valor por série
   meta?: (mes: string) => number | undefined;
   altura?: number;
+  selecionado?: string; // mês destacado (filtro da página)
+  selecionar?: (mes: string) => void; // clique na barra
 }) {
   const [foco, setFoco] = useState<number | null>(null);
   const L = 720;
@@ -68,8 +72,26 @@ export function GraficoBarras({
           let acumulado = 0;
           const vs = valores(m);
           return (
-            <g key={m} onMouseEnter={() => setFoco(i)} onMouseLeave={() => setFoco(null)}>
-              <rect x={passo * i} y={0} width={passo} height={altura} className={foco === i ? "fill-stone-100 dark:fill-slate-800/60" : "fill-transparent"} />
+            <g
+              key={m}
+              onMouseEnter={() => setFoco(i)}
+              onMouseLeave={() => setFoco(null)}
+              onClick={() => selecionar?.(m)}
+              className={selecionar ? "cursor-pointer" : undefined}
+            >
+              <rect
+                x={passo * i}
+                y={0}
+                width={passo}
+                height={altura}
+                className={
+                  m === selecionado
+                    ? "fill-green-50 dark:fill-cyan-950/50"
+                    : foco === i
+                      ? "fill-stone-100 dark:fill-slate-800/60"
+                      : "fill-transparent"
+                }
+              />
               {vs.map((v, k) => {
                 if (v <= 0) return null;
                 const y0 = y(acumulado);
@@ -94,7 +116,12 @@ export function GraficoBarras({
                   {compacto(totais[i])}
                 </text>
               )}
-              <text x={cx} y={altura - 6} textAnchor="middle" className="fill-stone-500 text-[10px] dark:fill-slate-400">
+              <text
+                x={cx}
+                y={altura - 6}
+                textAnchor="middle"
+                className={m === selecionado ? "fill-stone-900 text-[10px] font-bold dark:fill-white" : "fill-stone-500 text-[10px] dark:fill-slate-400"}
+              >
                 {rotuloMes(m)}
               </text>
             </g>
