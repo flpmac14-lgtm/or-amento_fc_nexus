@@ -7,6 +7,7 @@
 
 import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
 import { ddmm, duracao, horaMinuto, linkObra, type OperadorCorte, type ProgramaCorte, type RespostaCorte } from "@/lib/painel";
+import { minutosUteis } from "@/lib/jornada";
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
@@ -15,8 +16,9 @@ function diaLocal(v: string | Date): string {
   return new Date(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
+// Só a jornada da fábrica (lib/jornada.ts), não relógio corrido.
 function minutosDesde(iso: string | null): number | null {
-  return iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
+  return iso ? minutosUteis(iso) : null;
 }
 
 function Obras({ obras }: { obras: string[] }) {

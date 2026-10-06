@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from app.jornada import minutos_uteis
 from app.orcamentos_salvos import _conectar
 
 MARCAS = {"cortando", "finalizado", "falta_material"}
@@ -138,7 +139,7 @@ def historico(dias: int = 90) -> dict:
         if marca == "finalizado" and valor:
             anteriores = [c for c in cortando.get(programa, []) if c <= em]
             if anteriores:
-                minutos = round((em - anteriores[-1]).total_seconds() / 60)
+                minutos = minutos_uteis(anteriores[-1], em)  # só a jornada (app/jornada.py)
         saida.append({
             "id": hid, "programa": programa, "marca": marca, "valor": valor, "por": por, "em": em.isoformat(),
             "mps": prog.get("mps", []), "pecas": prog.get("pecas"), "itens": len(prog.get("itens", [])),

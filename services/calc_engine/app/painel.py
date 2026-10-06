@@ -25,6 +25,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from app import apontamentos_setor
+from app.jornada import minutos_uteis
 from app.orcamentos_salvos import _conectar
 from app.painel_config import PAINEL_CONFIG
 
@@ -294,7 +295,8 @@ def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
         obras = sorted({obra_de(i["mac"]) for i in p["itens"] if i.get("mac")} - {""})
         minutos = None
         if p["cortando_em"] and p["finalizado_em"] and p["cortando_em"] <= p["finalizado_em"]:
-            minutos = round((datetime.fromisoformat(p["finalizado_em"]) - datetime.fromisoformat(p["cortando_em"])).total_seconds() / 60)
+            # Só a jornada da fábrica (app/jornada.py), não relógio corrido.
+            minutos = minutos_uteis(datetime.fromisoformat(p["cortando_em"]), datetime.fromisoformat(p["finalizado_em"]))
         return {
             "programa": p["programa"], "obras": obras, "mps": p["mps"], "pecas": p["pecas"], "itens": len(p["itens"]),
             "cortando_em": p["cortando_em"], "cortando_por": p["cortando_por"],

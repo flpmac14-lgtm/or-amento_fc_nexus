@@ -6,6 +6,7 @@
 // (uma busca só), como o Corte: o que cada um está fazendo agora e os apontamentos.
 
 import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
+import { minutosUteis } from "@/lib/jornada";
 import { ddmm, duracao, horaMinuto, linkObra, type Projetista, type RespostaProjeto } from "@/lib/painel";
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -92,7 +93,7 @@ function hoje(v: string): boolean {
 function desde(v: string | null): string {
   if (!v) return "";
   if (!hoje(v)) return `desde ${diaLocal(v)} ${horaMinuto(v)}`;
-  return `há ${duracao(Math.max(0, Math.round((Date.now() - new Date(v).getTime()) / 60000)))}`;
+  return `há ${duracao(minutosUteis(v))}`; // só a jornada (lib/jornada.ts)
 }
 
 /** Linha de um projetista no bloco "agora": o que está em "Fazendo". */

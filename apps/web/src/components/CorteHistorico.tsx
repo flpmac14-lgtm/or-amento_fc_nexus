@@ -26,12 +26,12 @@ function dataHora(iso: string): string {
   });
 }
 
+// Minutos de jornada (o backend já desconta noite, almoço e fim de semana —
+// app/jornada.py), então não converte em "dias" de 24 h.
 function duracao(min: number | null): string {
   if (min === null) return "";
   if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ${min % 60} min`;
-  return `${Math.floor(h / 24)} d ${h % 24} h`;
+  return `${Math.floor(min / 60)} h ${min % 60} min`;
 }
 
 export default function CorteHistorico() {
