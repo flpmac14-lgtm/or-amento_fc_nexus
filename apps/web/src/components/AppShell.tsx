@@ -67,27 +67,36 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
   );
 }
 
-// Marca do FC Nexus — mesma identidade do ícone do app (app/brand-icon.tsx):
-// degradê ciano→verde, "N" em traço contínuo e o ponto de conexão ("rede").
+// Marca do FC Nexus — pedido do usuário: "FC" e mais futurista. Monograma
+// geométrico em neon ciano→verde (as cores de destaque do app) com brilho,
+// moldura octogonal chanfrada e o ponto de conexão ("rede").
 function MarcaNexus() {
   return (
-    <svg viewBox="0 0 40 40" className="h-10 w-10 shrink-0 drop-shadow-[0_4px_10px_rgba(8,145,178,0.35)] transition-transform group-hover:scale-105" aria-hidden="true">
+    <svg viewBox="0 0 40 40" className="h-10 w-10 shrink-0 transition-transform group-hover:scale-105" aria-hidden="true">
       <defs>
-        <linearGradient id="marca-nexus" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#0e7490" />
-          <stop offset="0.5" stopColor="#0891b2" />
-          <stop offset="1" stopColor="#16a34a" />
+        <linearGradient id="marca-fundo" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#0b1626" />
+          <stop offset="1" stopColor="#0d2b3e" />
         </linearGradient>
-        <linearGradient id="marca-brilho" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.22" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        <linearGradient id="marca-neon" x1="6" y1="8" x2="34" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#67e8f9" />
+          <stop offset="0.5" stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#4ade80" />
         </linearGradient>
+        <filter id="marca-brilho" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="0.9" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <rect width="40" height="40" rx="11" fill="url(#marca-nexus)" />
-      <rect x="0.75" y="0.75" width="38.5" height="20" rx="10.5" fill="url(#marca-brilho)" />
-      <path d="M12.5 28V13.5a1 1 0 0 1 1.75-.66L25.75 26.2a1 1 0 0 0 1.75-.66V12" fill="none" stroke="#f8fafc" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="30.5" cy="9.5" r="2.6" fill="#f8fafc" />
-      <circle cx="30.5" cy="9.5" r="4.6" fill="none" stroke="#f8fafc" strokeOpacity="0.35" strokeWidth="1" />
+      <path d="M8 1.5H32L38.5 8V32L32 38.5H8L1.5 32V8Z" fill="url(#marca-fundo)" stroke="url(#marca-neon)" strokeWidth="1.2" />
+      <g filter="url(#marca-brilho)" fill="none" stroke="url(#marca-neon)" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 29.5V13.5L11.5 11H19M9 20H17" />
+        <path d="M31.5 11H25.5L22.5 14V26.5L25.5 29.5H31.5" />
+      </g>
+      <circle cx="31.5" cy="20.2" r="1.8" fill="#4ade80" filter="url(#marca-brilho)" />
     </svg>
   );
 }
