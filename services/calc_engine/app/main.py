@@ -519,7 +519,7 @@ def apontamentos_historico(setor: str, dias: int = 7) -> dict:
 @app.get("/apontamentos/{setor}/itens/{item_id}")
 def apontamentos_historico_item(setor: str, item_id: str) -> dict:
     try:
-        return {"historico": apontamentos_setor.historico_item(setor, item_id)}
+        return {"historico": apontamentos_setor.historico_alvo(setor, item_id)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BancoNaoConfigurado as e:
@@ -528,16 +528,58 @@ def apontamentos_historico_item(setor: str, item_id: str) -> dict:
 
 @app.post("/apontamentos/{setor}/itens/{item_id}")
 def apontamentos_apontar(setor: str, item_id: str, pedido: dict) -> dict:
+    """Aponta o pedido (+ `outros_itens` do mesmo desenho; `pausar_outros`
+    pausa o que o operador estava usinando). Devolve as linhas gravadas."""
     try:
-        linha = apontamentos_setor.apontar(setor, item_id, pedido.get("status", ""), pedido.get("operador"),
-                                          pedido.get("observacao"), pedido.get("por"))
+        linhas = apontamentos_setor.apontar(setor, item_id, pedido.get("status", ""), pedido.get("operador"),
+                                            pedido.get("observacao"), pedido.get("por"),
+                                            pedido.get("outros_itens") or [], bool(pedido.get("pausar_outros")))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
-    if not linha:
+    if not linhas:
         raise HTTPException(status_code=404, detail="Pedido não encontrado no Follow up")
-    return linha
+    return {"apontamentos": linhas}
+
+
+@app.post("/apontamentos/{setor}/servicos")
+def apontamentos_criar_servico(setor: str, pedido: dict) -> dict:
+    """Novo serviço interno Macfab (usinagem pra uso próprio) + 1º apontamento."""
+    try:
+        return apontamentos_setor.criar_servico(setor, pedido.get("descricao"), pedido.get("quantidade"),
+                                                pedido.get("status", ""), pedido.get("operador"),
+                                                pedido.get("observacao"), pedido.get("por"),
+                                                bool(pedido.get("pausar_outros")))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/apontamentos/{setor}/servicos/{servico_id}")
+def apontamentos_historico_servico(setor: str, servico_id: str) -> dict:
+    try:
+        return {"historico": apontamentos_setor.historico_alvo(setor, servico_id, servico=True)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/apontamentos/{setor}/servicos/{servico_id}")
+def apontamentos_apontar_servico(setor: str, servico_id: str, pedido: dict) -> dict:
+    try:
+        linhas = apontamentos_setor.apontar_servico(setor, servico_id, pedido.get("status", ""),
+                                                    pedido.get("operador"), pedido.get("observacao"),
+                                                    pedido.get("por"), bool(pedido.get("pausar_outros")))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not linhas:
+        raise HTTPException(status_code=404, detail="Serviço interno não encontrado")
+    return {"apontamentos": linhas}
 
 
 @app.get("/corte/programas")

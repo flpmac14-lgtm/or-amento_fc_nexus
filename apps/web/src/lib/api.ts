@@ -818,11 +818,14 @@ export async function baixarExcelFollowUp(ids: string[], comFotos = true): Promi
 
 // --- Apontamento por setor (ex.: Usinagem) — ver app/apontamentos_setor.py ---
 
-export type StatusApontamento = "em_andamento" | "finalizado" | "falta_material";
+export type StatusApontamento = "em_andamento" | "pausado" | "finalizado" | "falta_material";
 
+/** Cada apontamento é de um pedido do Follow up (item_id) OU de um serviço interno (servico_id). */
 export interface Apontamento {
   id: number;
-  item_id: string;
+  item_id: string | null;
+  servico_id: string | null;
+  servico: string | null; // descrição do serviço interno
   status: StatusApontamento;
   operador: string | null;
   observacao: string | null;
@@ -830,16 +833,33 @@ export interface Apontamento {
   em: string;
 }
 
+/** Serviço interno Macfab: usinagem pra uso próprio, sem pedido no Follow up. */
+export interface ServicoInterno {
+  id: string;
+  descricao: string;
+  quantidade: number | null;
+  por: string | null;
+  em: string;
+}
+
+export interface DadosApontamento {
+  status: StatusApontamento;
+  operador: string;
+  observacao: string;
+  por: string | null;
+  pausar_outros: boolean; // Usinando: pausa o que o operador estava usinando
+}
+
 export async function buscarApontamentos(
   setor: string,
-): Promise<{ operadores: string[]; atuais: Record<string, Apontamento> }> {
+): Promise<{ operadores: string[]; atuais: Record<string, Apontamento>; servicos: ServicoInterno[] }> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar os apontamentos");
   return resposta.json();
 }
 
-export async function buscarHistoricoApontamento(setor: string, itemId: string): Promise<Apontamento[]> {
-  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}`);
+export async function buscarHistoricoApontamento(setor: string, alvoId: string, servico = false): Promise<Apontamento[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/${servico ? "servicos" : "itens"}/${alvoId}`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o histórico");
   return (await resposta.json()).historico;
 }
@@ -850,21 +870,43 @@ export async function buscarHistoricoSetor(setor: string, dias: number): Promise
   return (await resposta.json()).historico;
 }
 
+async function postarApontamento(url: string, corpo: object): Promise<Response> {
+  const resposta = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(corpo),
+  });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao salvar o apontamento");
+  return resposta;
+}
+
+/** Aponta o pedido (+ outros pedidos ativos do mesmo desenho). Devolve as linhas gravadas. */
 export async function apontarItem(
   setor: string,
   itemId: string,
-  status: StatusApontamento,
-  operador: string,
-  observacao: string,
-  por: string | null,
-): Promise<Apontamento> {
-  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status, operador, observacao, por }),
+  dados: DadosApontamento,
+  outrosItens: string[] = [],
+): Promise<Apontamento[]> {
+  const r = await postarApontamento(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}`, {
+    ...dados,
+    outros_itens: outrosItens,
   });
-  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao salvar o apontamento");
-  return resposta.json();
+  return (await r.json()).apontamentos;
+}
+
+export async function apontarServico(setor: string, servicoId: string, dados: DadosApontamento): Promise<Apontamento[]> {
+  const r = await postarApontamento(`${CALC_ENGINE_URL}/apontamentos/${setor}/servicos/${servicoId}`, dados);
+  return (await r.json()).apontamentos;
+}
+
+export async function criarServicoInterno(
+  setor: string,
+  descricao: string,
+  quantidade: number | null,
+  dados: DadosApontamento,
+): Promise<{ servico: ServicoInterno; apontamentos: Apontamento[] }> {
+  const r = await postarApontamento(`${CALC_ENGINE_URL}/apontamentos/${setor}/servicos`, { ...dados, descricao, quantidade });
+  return r.json();
 }
 
 export function urlImagemFollowUp(sha256: string): string {

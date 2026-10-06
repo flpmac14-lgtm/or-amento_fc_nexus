@@ -7,7 +7,7 @@
 // Pedidos). GET /apontamentos/<setor>/historico (app/apontamentos_setor.py).
 
 import { useEffect, useMemo, useState } from "react";
-import { Foto, quando } from "@/components/ApontamentoComum";
+import { Foto, FotoServico, quando, type Alvo } from "@/components/ApontamentoComum";
 import { buscarHistoricoSetor, type Apontamento } from "@/lib/api";
 import type { ConfigSetor } from "@/lib/apontamento";
 import type { ItemFollowUp } from "@/lib/types";
@@ -47,7 +47,7 @@ export default function ApontamentoHistorico({
   atuais: Record<string, Apontamento>;
   operadores: string[];
   versao: number; // muda a cada apontamento salvo → recarrega
-  abrir: (i: ItemFollowUp) => void;
+  abrir: (alvo: Alvo) => void;
 }) {
   const [dias, setDias] = useState<number>(1);
   const [filtroOp, setFiltroOp] = useState<string | null>(null);
@@ -73,15 +73,28 @@ export default function ApontamentoHistorico({
   const porId = useMemo(() => new Map(itens.map((i) => [i.id, i])), [itens]);
   const opcao = useMemo(() => new Map(config.opcoes.map((o) => [o.status, o])), [config]);
 
-  // Agora: pedidos cujo último apontamento é "em andamento", por operador.
+  // Agora: pedidos/serviços cujo último apontamento é "em andamento" (ou
+  // "pausado", logo abaixo), por operador.
   const agora = useMemo(() => {
     const m = new Map<string, Apontamento[]>();
     for (const a of Object.values(atuais)) {
-      if (a.status !== "em_andamento" || !a.operador) continue;
+      if ((a.status !== "em_andamento" && a.status !== "pausado") || !a.operador) continue;
       m.set(a.operador, [...(m.get(a.operador) ?? []), a]);
     }
+    for (const l of m.values()) l.sort((x, y) => (x.status === y.status ? y.em.localeCompare(x.em) : x.status === "em_andamento" ? -1 : 1));
     return m;
   }, [atuais]);
+
+  function nome(a: Apontamento): string {
+    if (a.servico_id) return `🔧 ${a.servico ?? "serviço interno"}`;
+    const i = a.item_id ? porId.get(a.item_id) : undefined;
+    return i ? (i.desenho ?? i.po) : "pedido";
+  }
+
+  function abrirLinha(a: Apontamento) {
+    if (a.servico_id) abrir({ tipo: "servico", id: a.servico_id });
+    else if (a.item_id && porId.has(a.item_id)) abrir({ tipo: "pedido", id: a.item_id });
+  }
   const faltando = useMemo(() => Object.values(atuais).filter((a) => a.status === "falta_material").length, [atuais]);
 
   const grupos = useMemo(() => {
@@ -109,19 +122,18 @@ export default function ApontamentoHistorico({
                   <span className="py-1 text-sm text-stone-400 dark:text-slate-500">nada usinando</span>
                 ) : (
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    {lista.map((a) => {
-                      const i = porId.get(a.item_id);
-                      return (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => i && abrir(i)}
-                          className="truncate rounded bg-amber-400 px-2 py-1 text-left text-sm font-semibold text-stone-900 active:scale-[0.98]"
-                        >
-                          ▶ {i ? (i.desenho ?? i.po) : "pedido"} · desde {quando(a.em)}
-                        </button>
-                      );
-                    })}
+                    {lista.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => abrirLinha(a)}
+                        className={`truncate rounded px-2 py-1 text-left text-sm font-semibold active:scale-[0.98] ${
+                          a.status === "pausado" ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" : "bg-amber-400 text-stone-900"
+                        }`}
+                      >
+                        {a.status === "pausado" ? "⏸" : "▶"} {nome(a)} · {a.status === "pausado" ? "pausado" : "desde"} {quando(a.em)}
+                      </button>
+                    ))}
                   </span>
                 )}
               </div>
@@ -163,16 +175,22 @@ export default function ApontamentoHistorico({
             {g.titulo} · {g.linhas.length}
           </p>
           {g.linhas.map((l) => {
-            const i = porId.get(l.item_id);
+            const i = l.item_id ? porId.get(l.item_id) : undefined;
             const o = opcao.get(l.status);
             return (
               <button
                 key={l.id}
                 type="button"
-                onClick={() => i && abrir(i)}
+                onClick={() => abrirLinha(l)}
                 className="flex gap-3 rounded-xl border-2 border-stone-200 bg-white p-2 text-left active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900"
               >
-                {i ? <Foto item={i} classe="h-16 w-16 shrink-0 rounded-lg" /> : <div className="h-16 w-16 shrink-0" />}
+                {l.servico_id ? (
+                  <FotoServico classe="h-16 w-16 shrink-0 rounded-lg" />
+                ) : i ? (
+                  <Foto item={i} classe="h-16 w-16 shrink-0 rounded-lg" />
+                ) : (
+                  <div className="h-16 w-16 shrink-0" />
+                )}
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="font-mono text-base font-bold text-stone-900 dark:text-white">
@@ -184,7 +202,11 @@ export default function ApontamentoHistorico({
                     <span className="text-sm font-bold text-stone-800 dark:text-slate-200">{l.operador ?? "—"}</span>
                   </span>
                   <span className="truncate text-sm font-semibold text-stone-800 dark:text-slate-200">
-                    {i ? `${i.desenho ?? i.po} · ${i.descricao ?? ""}` : "pedido fora do Follow up"}
+                    {l.servico_id
+                      ? `🔧 Serviço interno · ${l.servico ?? ""}`
+                      : i
+                        ? `${i.desenho ?? i.po} · ${i.descricao ?? ""}`
+                        : "pedido fora do Follow up"}
                   </span>
                   {l.observacao && <span className="text-sm text-stone-600 dark:text-slate-400">“{l.observacao}”</span>}
                 </span>

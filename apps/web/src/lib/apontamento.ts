@@ -34,6 +34,15 @@ export const CONFIG_USINAGEM: ConfigSetor = {
       selo: "bg-amber-400 text-stone-900",
     },
     {
+      // Pedido do usuário: o operador parou esse pra começar outra coisa.
+      status: "pausado",
+      rotulo: "PAUSADO",
+      icone: "⏸",
+      ligado: "bg-sky-600 text-white border-sky-700",
+      desligado: "border-sky-500 text-sky-700 dark:text-sky-300",
+      selo: "bg-sky-600 text-white",
+    },
+    {
       status: "finalizado",
       rotulo: "FIM DE USINAGEM",
       icone: "✔",
