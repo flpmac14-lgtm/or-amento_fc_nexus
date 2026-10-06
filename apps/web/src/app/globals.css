@@ -101,6 +101,7 @@ body {
 
 /* Páginas com a casca (components/AppShell.tsx) têm o botão de tema no
    cabeçalho — some o botão fixo do canto (layout.tsx). */
-body:has([data-app-shell]) .tema-fixo {
+body:has([data-app-shell]) .tema-fixo,
+body:has([data-sem-botao-tema]) .tema-fixo {
   display: none;
 }

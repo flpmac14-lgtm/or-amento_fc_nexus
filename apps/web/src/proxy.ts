@@ -4,7 +4,9 @@ import { ehEmailAdmin } from "@/lib/admin";
 import { ROTA_FINANCEIRO, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
-const ROTAS_PUBLICAS = ["/login"];
+// /instalar, manifesto e ícones do app instalável (PWA): públicos — o celular
+// lê antes de qualquer login (ver app/manifest.ts e app/instalar/page.tsx).
+const ROTAS_PUBLICAS = ["/login", "/instalar", "/manifest.webmanifest", "/icone-app"];
 
 export async function proxy(request: NextRequest) {
   const { response, user } = await atualizarSessaoSupabase(request);
@@ -22,12 +24,16 @@ export async function proxy(request: NextRequest) {
 
   const soFollowUp = acessoSoFollowUp(user);
 
-  if (user && rotaPublica) {
+  // Logado abrindo o /login → vai pra sua tela inicial. As outras rotas
+  // públicas (instalar, manifesto, ícones do app) valem pra todos, logado ou
+  // não, inclusive conta restrita (o celular busca o manifesto já logado).
+  if (user && request.nextUrl.pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
+  if (rotaPublica) return response;
 
   // Visão Geral: só o admin (ADMIN_EMAILS) e a conta marcelo (acesso
   // "follow_up") — pedido do usuário. Os demais voltam pra sua tela inicial.

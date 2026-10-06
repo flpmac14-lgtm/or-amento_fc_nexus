@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -36,6 +36,17 @@ export const metadata: Metadata = {
     title: TITULO,
     description: DESCRICAO,
   },
+  // App instalável no iPhone (Adicionar à Tela de Início) — ver app/instalar.
+  appleWebApp: {
+    capable: true,
+    title: "FC Nexus",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+// Cor da barra do celular / da janela do app instalado (menu lateral).
+export const viewport: Viewport = {
+  themeColor: "#14213a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
