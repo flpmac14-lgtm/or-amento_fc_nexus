@@ -16,6 +16,7 @@ Precisa de SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env (só nesta máquina)
 import hashlib
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,9 +95,17 @@ def sincronizar(pasta: Path = Path(PASTA_PADRAO), simular: bool = False, arquivo
             programas, tamanho, modificado = arquivos[nome]
             conteudo = (pasta / nome).read_bytes()
             caminho = f"{hashlib.sha256(conteudo).hexdigest()}.pdf"
-            r = st.post(f"/object/{BUCKET}/{caminho}", content=conteudo,
-                        headers={"Content-Type": "application/pdf", "x-upsert": "true",
-                                 "Cache-Control": "max-age=31536000"})
+            for tentativa in range(4):  # 504/timeout do Storage acontece de vez em quando
+                try:
+                    r = st.post(f"/object/{BUCKET}/{caminho}", content=conteudo,
+                                headers={"Content-Type": "application/pdf", "x-upsert": "true",
+                                         "Cache-Control": "max-age=31536000"})
+                    if r.status_code < 500:
+                        break
+                except httpx.TransportError:
+                    if tentativa == 3:
+                        raise
+                time.sleep(5 * (tentativa + 1))
             if r.status_code >= 300:
                 raise RuntimeError(f"Falha ao subir {nome}: {r.status_code} {r.text[:200]}")
             cur.execute(
