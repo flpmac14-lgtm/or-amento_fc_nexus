@@ -197,7 +197,12 @@ export default function AppShell({
           aberto ? "translate-x-0" : "-translate-x-full"
         } ${recolhido ? "lg:-translate-x-full" : "lg:translate-x-0"}`}
       >
-        <Link href={conta?.itens.some((s) => s.itens.some((i) => i.href === "/")) ? "/" : "/follow-up"} className="group flex items-center gap-3 border-b border-white/10 px-4 py-4">
+        {/* Logo → Visão Geral (pedido do usuário); quem não tem Visão Geral vai pro Follow up. */}
+        <Link
+          href={conta?.itens.some((s) => s.itens.some((i) => i.href === "/visao-geral")) ? "/visao-geral" : "/follow-up"}
+          onClick={() => setAberto(false)}
+          className="group flex items-center gap-3 border-b border-white/10 px-4 py-4"
+        >
           <MarcaNexus />
           <span className="leading-none">
             <span className="block text-[17px] tracking-tight">
