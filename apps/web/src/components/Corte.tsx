@@ -17,6 +17,7 @@ import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { MarcaCorte, ProgramaCorte } from "@/lib/types";
 import CorteHistorico from "@/components/CorteHistorico";
+import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
@@ -104,6 +105,8 @@ export default function Corte({
 }: {
   comHistorico?: boolean;
 }) {
+  // PDF do programa na pasta de corte (pedido do usuário) — components/PdfPrograma.tsx.
+  const { pdfsDe, abrir: abrirPdf } = usePdfsCorte();
   const [tela, setTela] = useState<"programas" | "historico">("programas");
   const [salvo, setSalvo] = useState("");
   const [programas, setProgramas] = useState<ProgramaCorte[]>([]);
@@ -374,7 +377,7 @@ export default function Corte({
                   className="flex flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
                 >
                   <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
-                    {p.programa}
+                    <NumeroPrograma programa={p.programa} />
                   </span>
                   <span className="flex flex-wrap gap-1">
                     <span
@@ -440,6 +443,15 @@ export default function Corte({
                 <p className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white">
                   {aberto.programa}
                 </p>
+                {pdfsDe(aberto.programa).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => abrirPdf(aberto.programa)}
+                    className="mt-2 rounded-xl border-2 border-blue-600 bg-blue-50 px-4 py-2 text-lg font-bold text-blue-700 active:scale-[0.98] dark:border-sky-500 dark:bg-sky-950/40 dark:text-sky-300"
+                  >
+                    📄 Abrir PDF do programa
+                  </button>
+                )}
                 {aberto.manual ? (
                   <p className="mt-2 max-w-md rounded-lg border border-sky-400 bg-sky-50 px-2 py-1 text-sm text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
                     <strong>Lançado manualmente</strong> — ainda não está na Croqui de corte. Quando o projetista colocar esse

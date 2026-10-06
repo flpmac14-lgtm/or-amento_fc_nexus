@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
 import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
+import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
@@ -211,10 +212,17 @@ export default function ModuloFollowUp({
       )}
       {(croquiAberto || visao === "croqui") && (
         <div className={visao === "croqui" ? "" : "hidden"}>
-          <CroquiCorte telaCheia={telaCheia} />
+          {/* Nº do programa abre o PDF da pasta de corte (components/PdfPrograma.tsx). */}
+          <ProvedorPdfsCorte>
+            <CroquiCorte telaCheia={telaCheia} />
+          </ProvedorPdfsCorte>
         </div>
       )}
-      {visao === "corte" && <Corte comHistorico={perfil !== "corte"} />}
+      {visao === "corte" && (
+        <ProvedorPdfsCorte>
+          <Corte comHistorico={perfil !== "corte"} />
+        </ProvedorPdfsCorte>
+      )}
       {visao === "usinagem" && <ApontamentoSetor config={CONFIG_USINAGEM} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>

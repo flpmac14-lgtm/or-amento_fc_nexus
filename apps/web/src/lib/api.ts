@@ -930,6 +930,37 @@ export async function listarProgramasCorte(): Promise<ProgramaCorte[]> {
   return (await resposta.json()).programas;
 }
 
+// PDFs dos programas de corte (pasta do J:, sincronizada por
+// scripts/sincronizar_pdfs_corte.py) — ver app/corte_pdfs.py.
+export interface PdfPrograma {
+  nome: string; // nome do arquivo na pasta (ex.: 16,0mm-573.26-NC939.pdf)
+  caminho: string; // objeto no bucket privado programas-corte
+  modificado_em: string;
+}
+
+/** Índice nº do programa → PDFs (o mais novo primeiro). */
+export async function listarPdfsCorte(): Promise<Record<string, PdfPrograma[]>> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/pdfs`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar os PDFs dos programas (${resposta.status}).`);
+  return (await resposta.json()).pdfs;
+}
+
+/** Abre o PDF numa aba nova (link assinado do Storage, vale 1 hora). */
+export async function abrirPdfCorte(pdf: PdfPrograma): Promise<void> {
+  // A aba é aberta já no clique (senão o navegador bloqueia como pop-up) e
+  // recebe o endereço quando o link assinado fica pronto.
+  const aba = window.open("", "_blank");
+  const { data, error } = await criarClienteSupabaseNavegador()
+    .storage.from("programas-corte")
+    .createSignedUrl(pdf.caminho, 3600);
+  if (error || !data) {
+    aba?.close();
+    throw new Error(`Não deu pra abrir o PDF: ${error?.message ?? "erro desconhecido"}`);
+  }
+  if (aba) aba.location.href = data.signedUrl;
+  else window.location.href = data.signedUrl;
+}
+
 export async function listarHistoricoCorte(dias = 90): Promise<HistoricoCorte[]> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/corte/historico?dias=${dias}`);
   if (!resposta.ok) throw new Error(`Falha ao carregar o histórico (${resposta.status}).`);

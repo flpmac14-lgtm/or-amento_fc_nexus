@@ -100,7 +100,7 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
-from app import apontamentos_setor
+from app import apontamentos_setor, corte_pdfs
 from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
 from app.corte import marcar as marcar_corte
@@ -585,6 +585,15 @@ def apontamentos_apontar_servico(setor: str, servico_id: str, pedido: dict) -> d
     if not linhas:
         raise HTTPException(status_code=404, detail="Serviço interno não encontrado")
     return {"apontamentos": linhas}
+
+
+@app.get("/corte/pdfs")
+def corte_pdfs_indice() -> dict:
+    """Índice nº do programa → PDFs da pasta de corte (app/corte_pdfs.py)."""
+    try:
+        return corte_pdfs.indice()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/corte/programas")

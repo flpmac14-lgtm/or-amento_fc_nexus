@@ -50,25 +50,48 @@ const classeInput =
   "w-full rounded border border-green-600 dark:border-cyan-500 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs text-stone-900 dark:text-slate-100 outline-none";
 
 // Célula da tabela: mostra o valor; clique para editar; Enter/sair salva, Esc cancela.
+// aoDuploClique (ex.: nº do programa com PDF): 2 cliques chamam isso e 1 clique
+// só edita depois de um instante (pra dar tempo do 2º clique).
 export function CelulaEditavel({
   valor,
   tipo,
   exibicao,
   salvar,
+  aoDuploClique,
 }: {
   valor: string;
   tipo: TipoEdicao;
   exibicao: React.ReactNode;
   salvar: (valor: string) => Promise<void>;
+  aoDuploClique?: () => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rascunho, setRascunho] = useState(valor);
   const { estado, erro, enviar } = useSalvamento(valor, salvar);
 
   function abrir(e: React.MouseEvent) {
     e.stopPropagation(); // não abre o painel de detalhes da linha
+    if (aoDuploClique) {
+      if (espera.current) clearTimeout(espera.current);
+      if (e.detail > 1) return; // 2º clique: quem age é o onDoubleClick
+      espera.current = setTimeout(() => {
+        espera.current = null;
+        setRascunho(valor);
+        setEditando(true);
+      }, 280);
+      return;
+    }
     setRascunho(valor);
     setEditando(true);
+  }
+
+  function duploClique(e: React.MouseEvent) {
+    e.stopPropagation(); // 2 cliques numa célula editável não abrem o card
+    if (!aoDuploClique) return;
+    if (espera.current) clearTimeout(espera.current);
+    espera.current = null;
+    aoDuploClique();
   }
 
   function confirmar() {
@@ -103,8 +126,8 @@ export function CelulaEditavel({
     <button
       type="button"
       onClick={abrir}
-      onDoubleClick={(e) => e.stopPropagation()} // 2 cliques numa célula editável = editar, não abrir o card
-      title="Clique para editar — salva sozinho"
+      onDoubleClick={duploClique} // sem aoDuploClique: só não deixa abrir o card
+      title={aoDuploClique ? "Duplo clique abre o PDF · 1 clique edita" : "Clique para editar — salva sozinho"}
       className="group relative block w-full min-w-[2.5rem] rounded text-left outline-none ring-green-600/40 hover:ring-1 focus-visible:ring-2 dark:ring-cyan-500/40"
     >
       {exibicao}

@@ -17,6 +17,7 @@ import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemCroquiCorte } from "@/lib/types";
 import { CelulaEditavel, IconeCadeado } from "@/components/FollowUpEdicao";
 import FollowUpSino from "@/components/FollowUpSino";
+import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -100,6 +101,8 @@ function exibir(item: ItemCroquiCorte, col: Coluna): string {
 function CelulaProgramas({ valor, salvar }: { valor: string; salvar: (novo: string) => Promise<void> }) {
   const partes = valor.split(",").map((p) => p.trim()).filter(Boolean);
   const [novo, setNovo] = useState<string | null>(null);
+  // Pedido do usuário: como no Excel, nº com PDF na pasta de corte = link (duplo clique abre).
+  const { pdfsDe, abrir } = usePdfsCorte();
 
   function gravar(lista: string[]) {
     return salvar(lista.map((p) => p.trim()).filter(Boolean).join(", "));
@@ -131,8 +134,9 @@ function CelulaProgramas({ valor, salvar }: { valor: string; salvar: (novo: stri
           <CelulaEditavel
             valor={p}
             tipo="texto"
-            exibicao={<span className="text-xs">{p}</span>}
+            exibicao={<NumeroPrograma programa={p} className="text-xs" />}
             salvar={(v) => gravar(partes.map((x, j) => (j === k ? v : x)))}
+            aoDuploClique={pdfsDe(p).length ? () => abrir(p) : undefined}
           />
         </div>
       ))}
