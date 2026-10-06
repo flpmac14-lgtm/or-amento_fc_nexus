@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { podeVerFinanceiro } from "@/lib/financeiro";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import AbasFormulario from "@/components/AbasFormulario";
 import FormularioUpload, { type ModoFormulario } from "@/components/FormularioUpload";
@@ -55,6 +56,13 @@ function nomeOrcamentoPadrao(): string {
 export default function Home() {
   const router = useRouter();
   const [modo, setModo] = useState<ModoFormulario>("arquivo");
+  // Link "Financeiro" só pra conta flpmac14 (o bloqueio de verdade é no proxy.ts e na /api/financeiro).
+  const [verFinanceiro, setVerFinanceiro] = useState(false);
+  useEffect(() => {
+    criarClienteSupabaseNavegador()
+      .auth.getUser()
+      .then(({ data }) => setVerFinanceiro(podeVerFinanceiro(data.user?.email)));
+  }, []);
   const [carregando, setCarregando] = useState(false);
   const [baixandoExcel, setBaixandoExcel] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -459,6 +467,14 @@ export default function Home() {
               >
                 Visão Geral
               </Link>
+              {verFinanceiro && (
+                <Link
+                  href="/financeiro"
+                  className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"
+                >
+                  Financeiro
+                </Link>
+              )}
               <Link
                 href="/orcamentistas"
                 className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 transition-colors hover:border-green-600/50 dark:hover:border-cyan-500/50 hover:bg-stone-100 dark:hover:bg-slate-800"

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
+import { ROTA_FINANCEIRO, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 const ROTAS_PUBLICAS = ["/login"];
@@ -32,6 +33,15 @@ export async function proxy(request: NextRequest) {
   // "follow_up") — pedido do usuário. Os demais voltam pra sua tela inicial.
   if (user && request.nextUrl.pathname.startsWith(ROTA_VISAO_GERAL)) {
     if (ehEmailAdmin(user.email) || user.app_metadata?.acesso === ACESSO_SO_FOLLOW_UP) return response;
+    const url = request.nextUrl.clone();
+    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Financeiro: SÓ a conta flpmac14 — pedido explícito do usuário (os dados
+  // também são conferidos em app/api/financeiro/route.ts).
+  if (user && request.nextUrl.pathname.startsWith(ROTA_FINANCEIRO) && !podeVerFinanceiro(user.email)) {
     const url = request.nextUrl.clone();
     url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
     url.search = "";

@@ -30,6 +30,7 @@ from app.follow_up_mae import propagar  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
 from sincronizar_pdfs_corte import sincronizar_se_mudou as sincronizar_pdfs_corte_se_mudou  # noqa: E402
+from sincronizar_financeiro import sincronizar as sincronizar_financeiro  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
 
@@ -76,6 +77,14 @@ def main() -> int:
                 print(f"{agora} PDFs de corte - {resumo}")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO nos PDFs de corte - {type(e).__name__}: {e}")
+            return 1
+        # Aba Financeiro (só flpmac14): resumo do ERP — só grava se mudou.
+        try:
+            resumo = sincronizar_financeiro()
+            if resumo:
+                print(f"{agora} Financeiro - {resumo}")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO no Financeiro (ERP) - {type(e).__name__}: {e}")
             return 1
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app
