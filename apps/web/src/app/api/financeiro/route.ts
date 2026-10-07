@@ -16,17 +16,33 @@ async function usuarioFinanceiro(): Promise<string | null> {
   return podeVerFinanceiro(user?.email) ? user!.email! : null;
 }
 
+// "JWT issued at future" (07/10): o token que o Supabase gera na hora às vezes
+// sai uns instantes à frente do relógio do banco — erro passageiro. Espera e
+// tenta de novo (até 3 vezes) em vez de mostrar o erro.
+function erroPassageiro(msg: string | undefined): boolean {
+  return !!msg && /issued at future|future|nbf|not yet valid/i.test(msg);
+}
+
+async function lerComRetentativa() {
+  const admin = criarClienteSupabaseAdmin();
+  for (let tentativa = 1; ; tentativa++) {
+    const [resumo, budget] = await Promise.all([
+      admin.from("financeiro_resumo").select("dados, gerado_em").eq("id", 1).maybeSingle(),
+      admin.from("financeiro_budget").select("dados").eq("id", 1).maybeSingle(),
+    ]);
+    const msg = (resumo.error ?? budget.error)?.message;
+    if (!erroPassageiro(msg) || tentativa >= 3) return { resumo, budget };
+    await new Promise((r) => setTimeout(r, 700 * tentativa));
+  }
+}
+
 const NEGADO = () => NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
 
 export async function GET(request: Request) {
   if (!(await usuarioFinanceiro())) return NEGADO();
   // ?sem_notas=1 (bloco da Visão Geral): não manda a lista de NFs, que é a maior parte.
   const semNotas = new URL(request.url).searchParams.has("sem_notas");
-  const admin = criarClienteSupabaseAdmin();
-  const [resumo, budget] = await Promise.all([
-    admin.from("financeiro_resumo").select("dados, gerado_em").eq("id", 1).maybeSingle(),
-    admin.from("financeiro_budget").select("dados").eq("id", 1).maybeSingle(),
-  ]);
+  const { resumo, budget } = await lerComRetentativa();
   if (resumo.error || budget.error) {
     return NextResponse.json({ erro: (resumo.error ?? budget.error)!.message }, { status: 500 });
   }

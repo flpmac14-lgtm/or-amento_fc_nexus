@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bloco } from "@/components/VisaoGeralComum";
 import { compacto, rotuloMes } from "@/components/FinanceiroGraficos";
-import { ROTA_FINANCEIRO, type RespostaFinanceiro } from "@/lib/financeiro";
+import { ROTA_FINANCEIRO, buscarFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
 
 // O resumo do ERP só muda a cada 15 min (scripts/sincronizar_financeiro.py):
 // não relê a cada atualização da Visão Geral (egress do Supabase).
@@ -53,10 +53,8 @@ export default function VisaoGeralFinanceiro({ tick }: { tick: number }) {
     if (lidoEm.current && Date.now() - lidoEm.current < RELER_APOS_MS) return;
     lidoEm.current = Date.now();
     // sem_notas: a lista de NFs (~190 KB) só é usada na aba Financeiro.
-    fetch("/api/financeiro?sem_notas=1", { cache: "no-store" })
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.erro ?? `Erro ${r.status}`);
+    buscarFinanceiro(true)
+      .then((j) => {
         if (montado.current) {
           setDados(j);
           setErro("");

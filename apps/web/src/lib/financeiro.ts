@@ -44,3 +44,17 @@ export interface RespostaFinanceiro {
   gerado_em: string | null;
   budget: BudgetFinanceiro;
 }
+
+/** GET /api/financeiro. Se der erro, tenta mais uma vez depois de 2 s antes de
+ * mostrar (o "JWT issued at future" do Supabase é passageiro — 07/10). */
+export async function buscarFinanceiro(semNotas: boolean): Promise<RespostaFinanceiro> {
+  const url = semNotas ? "/api/financeiro?sem_notas=1" : "/api/financeiro";
+  for (let tentativa = 1; ; tentativa++) {
+    const r = await fetch(url, { cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j as RespostaFinanceiro;
+    // 403 = não é a conta do financeiro: não adianta tentar de novo.
+    if (r.status === 403 || tentativa >= 2) throw new Error(j.erro ?? `Erro ${r.status}`);
+    await new Promise((ok) => setTimeout(ok, 2000));
+  }
+}

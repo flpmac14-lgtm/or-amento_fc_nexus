@@ -12,7 +12,7 @@ import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
 import FinanceiroNotas from "@/components/FinanceiroNotas";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
-import type { BudgetFinanceiro, RespostaFinanceiro } from "@/lib/financeiro";
+import { buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
 
 function moeda(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -48,10 +48,8 @@ export default function PaginaFinanceiro() {
   const [mesNotas, setMesNotas] = useState("");
 
   const buscar = useCallback(() => {
-    fetch("/api/financeiro", { cache: "no-store" })
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.erro ?? `Erro ${r.status}`);
+    buscarFinanceiro(false)
+      .then((j) => {
         setDados(j);
         setErro("");
       })
