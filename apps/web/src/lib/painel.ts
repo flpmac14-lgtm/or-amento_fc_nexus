@@ -233,9 +233,19 @@ export interface GrupoApontamento {
   status: Record<string, number>;
 }
 
+export interface PedidoProjetista {
+  pedido: string;
+  obra: string;
+  descricao: string | null;
+  programa: string | null;
+  desde: string | null;
+}
+
 export interface Projetista {
   projetista: string;
-  fazendo: { pedido: string; obra: string; descricao: string | null; programa: string | null; desde: string | null }[];
+  fazendo: PedidoProjetista[];
+  pausados: PedidoProjetista[]; // status Pausado nos últimos 7 dias
+  semana_7: number; // apontados nos últimos 7 dias
   hoje: number;
   hoje_por_status: Record<string, number>;
   semana: number;
@@ -245,6 +255,29 @@ export interface Projetista {
 
 export interface RespostaProjeto {
   projetistas: Projetista[];
+}
+
+// Busca na Croqui de corte (GET /painel/croqui-busca — app/painel.py::busca_croqui).
+export interface ItemBuscaCroqui {
+  pedido: string;
+  obra: string;
+  descricao: string | null;
+  desenho: string | null;
+  mp: string | null;
+  qtt: number | null;
+  un: string | null;
+  status: string | null;
+  projetista: string | null;
+  n_programa: string | null;
+  programas: {
+    programa: string;
+    situacao: "a_cortar" | "cortando" | "finalizado" | "falta_material";
+    maquina: "laser" | "oxicorte";
+  }[];
+  dt_fazendo: string | null;
+  dt_feito: string | null;
+  editado_em: string | null;
+  observacao: string | null;
 }
 
 // Usinagem (GET /painel/usinagem — app/painel.py::usinagem).

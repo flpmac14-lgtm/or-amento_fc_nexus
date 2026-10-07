@@ -612,6 +612,15 @@ def projeto(limite: int = 80) -> dict:
                where status = 'Fazendo' and projetista is not null order by dt_fazendo nulls last"""
         )
         fazendo = cur.fetchall()
+        # Pausado (pedido do usuário, 07/10): os parados nos últimos 7 dias.
+        cur.execute(
+            """select projetista, pedido, mac, descricao, n_programa, coalesce(editado_em, dt_fazendo)
+               from croqui_corte_itens
+               where status = 'Pausado' and projetista is not null and coalesce(editado_em, dt_fazendo) >= %s
+               order by 6 desc""",
+            (ini_7,),
+        )
+        pausados = cur.fetchall()
         cur.execute(
             """select projetista, status, (dt_feito at time zone 'America/Sao_Paulo')::date, count(*)
                from croqui_corte_itens where projetista is not null and dt_feito >= %s
@@ -644,6 +653,8 @@ def projeto(limite: int = 80) -> dict:
         saida.append({
             "projetista": nome,
             "fazendo": [{**item(p, m, ds, np_), "desde": _iso(df)} for (pj, p, m, ds, np_, df) in fazendo if pj == nome],
+            "pausados": [{**item(p, m, ds, np_), "desde": _iso(df)} for (pj, p, m, ds, np_, df) in pausados if pj == nome],
+            "semana_7": sum(n for _, _, d, n in cs if d >= ini_7.date()),
             "hoje": sum(hoje_por_status.values()),
             "hoje_por_status": hoje_por_status,
             "semana": sum(n for _, _, d, n in cs if d >= ini_semana.date()),
@@ -653,6 +664,55 @@ def projeto(limite: int = 80) -> dict:
     # quem apontou mais hoje primeiro
     saida.sort(key=lambda x: (-x["hoje"], -x["semana"], x["projetista"]))
     return {"projetistas": saida}
+
+
+def busca_croqui(q: str, limite: int = 40) -> dict:
+    """Busca da Visão Geral (pedido do usuário: "saber se já foi feito o croqui
+    de corte e em que estágio está"): pedido, obra (MAC), desenho, descrição ou
+    nº do programa. Junta a situação do programa no Corte (corte_programas)."""
+    from app.corte import maquina_padrao, programas_de
+
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"itens": []}
+    termo = f"%{q}%"
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select pedido, mac, descricao, desenho, mp, qtt, un, status, projetista, n_programa,
+                      dt_fazendo, dt_feito, editado_em, observacao
+               from croqui_corte_itens
+               where pedido ilike %s or mac ilike %s or desenho ilike %s or descricao ilike %s or n_programa ilike %s
+               order by linha_planilha desc limit %s""",
+            (termo, termo, termo, termo, termo, limite),
+        )
+        linhas = cur.fetchall()
+        progs = sorted({p for r in linhas for p in programas_de(r[9])})
+        corte = {}
+        if progs:
+            cur.execute(
+                """select programa, cortando_em, finalizado_em, falta_material_em, maquina
+                   from corte_programas where programa = any(%s)""",
+                (progs,),
+            )
+            corte = {r[0]: r for r in cur.fetchall()}
+    itens = []
+    for (pedido, mac, descricao, desenho, mp, qtt, un, status, projetista, n_prog,
+         dt_fazendo, dt_feito, editado_em, obs) in linhas:
+        programas = []
+        for p in programas_de(n_prog):
+            c = corte.get(p)
+            fim = c and c[2] and not (c[1] and c[1] > c[2])
+            situacao = ("finalizado" if fim else "falta_material" if c and c[3] else
+                        "cortando" if c and c[1] else "a_cortar")
+            programas.append({"programa": p, "situacao": situacao,
+                              "maquina": (c[4] if c and c[4] else None) or maquina_padrao(p)})
+        itens.append({
+            "pedido": pedido, "obra": obra_de(mac), "descricao": descricao, "desenho": desenho, "mp": mp,
+            "qtt": float(qtt) if qtt is not None else None, "un": un, "status": status, "projetista": projetista,
+            "n_programa": n_prog, "programas": programas, "dt_fazendo": _iso(dt_fazendo), "dt_feito": _iso(dt_feito),
+            "editado_em": _iso(editado_em), "observacao": obs,
+        })
+    return {"itens": itens}
 
 
 # --- Usinagem (pedido do usuário: no lugar do "Atenção hoje") ----------------

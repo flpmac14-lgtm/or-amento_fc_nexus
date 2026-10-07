@@ -455,6 +455,12 @@ def painel_projeto() -> dict:
     return _painel(painel.projeto)
 
 
+@app.get("/painel/croqui-busca")
+def painel_croqui_busca(q: str = "") -> dict:
+    """Busca na Croqui de corte (Visão Geral): em que estágio está o pedido."""
+    return _painel(painel.busca_croqui, q[:80])
+
+
 @app.get("/painel/usinagem")
 def painel_usinagem() -> dict:
     return _painel(painel.usinagem)

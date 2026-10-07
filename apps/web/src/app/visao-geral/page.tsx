@@ -11,10 +11,13 @@ import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import { BlocoEsteira } from "@/components/VisaoGeralBlocos";
 import VisaoGeralCompras from "@/components/VisaoGeralCompras";
 import VisaoGeralCorte from "@/components/VisaoGeralCorte";
+import VisaoGeralFinanceiro from "@/components/VisaoGeralFinanceiro";
 import { Janela, useBloco, type ListaAberta } from "@/components/VisaoGeralComum";
 import VisaoGeralProjeto from "@/components/VisaoGeralProjeto";
 import VisaoGeralRegistros from "@/components/VisaoGeralRegistros";
 import VisaoGeralUsinagem from "@/components/VisaoGeralUsinagem";
+import { podeVerFinanceiro } from "@/lib/financeiro";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import {
   FILTROS_PAINEL_VAZIOS,
   horaMinuto,
@@ -54,6 +57,17 @@ export default function PaginaVisaoGeral() {
   const { dados: opcoes } = useBloco<OpcoesPainel>("opcoes", {}, tick);
   const registros = useBloco<RespostaRegistros>("registros", { data: dataRegistros }, tick);
   const fecharLista = useCallback(() => setLista(null), []);
+  // Financeiro (pedido do usuário): só a conta flpmac14 — /api/financeiro confere de novo no servidor.
+  const [comFinanceiro, setComFinanceiro] = useState(false);
+  useEffect(() => {
+    let ativo = true;
+    criarClienteSupabaseNavegador()
+      .auth.getUser()
+      .then(({ data }) => ativo && setComFinanceiro(podeVerFinanceiro(data.user?.email)));
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   const campo =
     "rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm text-stone-800 dark:text-slate-200";
@@ -122,7 +136,13 @@ export default function PaginaVisaoGeral() {
           <VisaoGeralCorte tick={tick} />
           <VisaoGeralCompras tick={tick} />
         </div>
-        <div className="grid min-h-[24rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Com o Financeiro (só flpmac14), ele fica embaixo da Usinagem e a Esteira estreita. */}
+        <div
+          className={`grid min-h-[24rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 ${
+            comFinanceiro ? "xl:grid-cols-[repeat(4,minmax(0,1fr))]" : "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]"
+          }`}
+        >
+          {comFinanceiro && <VisaoGeralFinanceiro tick={tick} />}
           <BlocoEsteira params={params} tick={tick} />
           <VisaoGeralProjeto tick={tick} />
         </div>

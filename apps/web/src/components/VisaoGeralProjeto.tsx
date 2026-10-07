@@ -5,9 +5,11 @@
 // GET /painel/projeto (app/painel.py::projeto). Rende dois blocos lado a lado
 // (uma busca só), como o Corte: o que cada um está fazendo agora e os apontamentos.
 
+import { useState } from "react";
 import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
+import VisaoGeralCroquiBusca from "@/components/VisaoGeralCroquiBusca";
 import { minutosUteis } from "@/lib/jornada";
-import { ddmm, duracao, horaMinuto, linkObra, type Projetista, type RespostaProjeto } from "@/lib/painel";
+import { ddmm, duracao, horaMinuto, linkObra, type PedidoProjetista, type Projetista, type RespostaProjeto } from "@/lib/painel";
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
@@ -96,7 +98,28 @@ function desde(v: string | null): string {
   return `há ${duracao(minutosUteis(v))}`; // só a jornada (lib/jornada.ts)
 }
 
-/** Linha de um projetista no bloco "agora": o que está em "Fazendo". */
+/** Uma linha de pedido (obra · descrição · há quanto tempo). */
+function LinhaPedido({ f, pausado }: { f: PedidoProjetista; pausado?: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      <span className={`shrink-0 text-[10px] font-black ${pausado ? "text-orange-600 dark:text-orange-400" : "text-amber-700 dark:text-amber-300"}`}>
+        {pausado ? "⏸" : "▶"}
+      </span>
+      <a href={linkObra(f.obra)} target="_blank" rel="noreferrer" className="rounded bg-white dark:bg-slate-800 px-1.5 text-[11px] font-semibold text-stone-700 dark:text-slate-300 hover:underline">
+        {f.obra}
+      </a>
+      <span className="min-w-0 flex-1 truncate text-stone-700 dark:text-slate-300" title={`${f.descricao ?? ""}
+Pedido ${f.pedido}${f.programa ? ` · programa ${f.programa}` : ""}`}>
+        {f.descricao ?? f.pedido}
+      </span>
+      <span className={`shrink-0 font-semibold ${pausado ? "text-orange-700 dark:text-orange-300" : "text-amber-800 dark:text-amber-200"}`}>
+        {pausado ? `pausado ${desde(f.desde)}` : desde(f.desde)}
+      </span>
+    </div>
+  );
+}
+
+/** Um projetista no bloco "agora": o que está em "Fazendo" e o que pausou (7 dias). */
 function Agora({ p }: { p: Projetista }) {
   const ativo = p.fazendo.length > 0;
   return (
@@ -111,41 +134,64 @@ function Agora({ p }: { p: Projetista }) {
           <span className={`relative inline-flex h-3 w-3 rounded-full ${ativo ? "bg-amber-500" : "bg-stone-300 dark:bg-slate-600"}`} />
         </span>
         <span className="text-base font-black text-stone-900 dark:text-white">{p.projetista}</span>
-        <span className="ml-auto text-xs text-stone-500 dark:text-slate-400">
-          {ativo ? `fazendo ${p.fazendo.length} pedido(s)` : "nada em “Fazendo”"}
+        <span className="ml-auto flex flex-wrap justify-end gap-1 text-[11px] font-bold">
+          <span className={`rounded px-1.5 ${ativo ? "bg-amber-400 text-stone-900" : "bg-stone-200 text-stone-600 dark:bg-slate-700 dark:text-slate-300"}`}>
+            ▶ fazendo {p.fazendo.length}
+          </span>
+          {p.pausados.length > 0 && <span className="rounded bg-orange-500 px-1.5 text-white">⏸ pausado {p.pausados.length}</span>}
+          <span className="rounded bg-green-600 px-1.5 text-white dark:bg-cyan-600" title="Apontados (Feito / Sem Corte / Estoque) nos últimos 7 dias">
+            ✓ {p.semana_7} em 7 dias
+          </span>
         </span>
       </div>
-      {p.fazendo.map((f) => (
-        <div key={f.pedido} className="flex items-center gap-1.5 text-xs">
-          <a href={linkObra(f.obra)} target="_blank" rel="noreferrer" className="rounded bg-white dark:bg-slate-800 px-1.5 text-[11px] font-semibold text-stone-700 dark:text-slate-300 hover:underline">
-            {f.obra}
-          </a>
-          <span className="min-w-0 flex-1 truncate text-stone-700 dark:text-slate-300" title={`${f.descricao ?? ""}
-Pedido ${f.pedido}${f.programa ? ` · programa ${f.programa}` : ""}`}>
-            {f.descricao ?? f.pedido}
-          </span>
-          <span className="shrink-0 font-semibold text-amber-800 dark:text-amber-200">{desde(f.desde)}</span>
-        </div>
-      ))}
+      {p.fazendo.map((f) => <LinhaPedido key={f.pedido} f={f} />)}
+      {p.pausados.map((f) => <LinhaPedido key={`p${f.pedido}`} f={f} pausado />)}
+      {!ativo && p.pausados.length === 0 && <p className="text-xs text-stone-500 dark:text-slate-400">nada em “Fazendo” agora</p>}
     </div>
   );
 }
 
 export default function VisaoGeralProjeto({ tick }: { tick: number }) {
   const { dados, erro, carregando } = useBloco<RespostaProjeto>("projeto", {}, tick);
+  const [busca, setBusca] = useState("");
   const ps = dados?.projetistas ?? [];
+  const totalPausados = ps.reduce((t, p) => t + p.pausados.length, 0);
   const totalHoje = ps.reduce((t, p) => t + p.hoje, 0);
   const totalSemana = ps.reduce((t, p) => t + p.semana, 0);
   const porDia = (ps[0]?.por_dia ?? []).map((d, i) => ({ data: d.data, n: ps.reduce((t, p) => t + (p.por_dia[i]?.n ?? 0), 0) }));
   const maxDia = Math.max(1, ...porDia.map((d) => d.n));
   return (
     <>
-      <Bloco titulo="📐 Projeto — agora" carregando={carregando} erro={erro} extra={<span className="text-stone-500 dark:text-slate-400">Croqui de corte</span>}>
-        {dados && (
+      <Bloco
+        titulo="📐 Croqui de corte"
+        carregando={carregando}
+        erro={erro}
+        extra={
+          <a href="/follow-up" className="font-semibold text-green-700 dark:text-cyan-300 hover:underline">
+            abrir Croqui
+          </a>
+        }
+      >
+        {/* Pedido do usuário: buscar ali mesmo se o croqui já foi feito e em que estágio está. */}
+        <div className="relative mb-2 shrink-0">
+          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400">🔍</span>
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Pedido, obra, desenho ou nº do programa"
+            className="h-10 w-full rounded-lg border-2 border-stone-300 bg-white pl-8 pr-2 text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+          />
+        </div>
+        {busca.trim() ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-auto pr-1">
+            <VisaoGeralCroquiBusca busca={busca} />
+          </div>
+        ) : dados && (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
             <div className="grid shrink-0 grid-cols-[1fr_1fr_1.3fr] gap-2">
               <Numero rotulo="Hoje" valor={totalHoje} sub="pedidos apontados" />
-              <Numero rotulo="Semana" valor={totalSemana} sub="pedidos apontados" />
+              <Numero rotulo="Semana" valor={totalSemana} sub={totalPausados ? `apontados · ⏸ ${totalPausados} pausado(s)` : "pedidos apontados"} />
               <div className="flex flex-col rounded-lg bg-stone-50 dark:bg-slate-800/60 px-3 py-1.5" title="Pedidos apontados por dia">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">Últimos 7 dias</p>
                 <div className="flex flex-1 items-end gap-1 pt-1">
