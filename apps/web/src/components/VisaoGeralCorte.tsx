@@ -5,7 +5,8 @@
 // GET /painel/corte (app/painel.py::corte_recente). Rende dois blocos lado a
 // lado (uma busca só): o laser agora e os "Cortados" por operador.
 
-import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
+import { useState } from "react";
+import { Bloco, Vazio, useBloco } from "@/components/VisaoGeralComum";
 import { ddmm, duracao, horaMinuto, linkObra, type OperadorCorte, type ProgramaCorte, type RespostaCorte } from "@/lib/painel";
 import { minutosUteis } from "@/lib/jornada";
 import { MAQUINAS, infoMaquina } from "@/lib/maquinaCorte";
@@ -53,7 +54,7 @@ function EmCorte({ p, falta }: { p: ProgramaCorte; falta?: boolean }) {
   const min = minutosDesde(falta ? p.falta_material_em : p.cortando_em);
   return (
     <div
-      className={`flex min-w-[12rem] flex-1 items-center gap-2 rounded-lg border px-2 py-1 ${
+      className={`flex min-w-0 flex-1 basis-[11rem] items-center gap-2 rounded-lg border px-2 py-1 ${
         falta ? "border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-950/30" : "border-green-300 bg-green-50 dark:border-cyan-500/40 dark:bg-cyan-950/30"
       }`}
     >
@@ -74,8 +75,17 @@ function EmCorte({ p, falta }: { p: ProgramaCorte; falta?: boolean }) {
   );
 }
 
+// Pedido do usuário: sem busca, só os últimos de cada operador (cabe na tela).
+const CORTADOS_SEM_BUSCA = 5;
+
 /** Cartão de um operador no bloco "Cortados" — mesmo formato do Projeto. */
-function CartaoOperador({ o }: { o: OperadorCorte }) {
+function CartaoOperador({ o, termo }: { o: OperadorCorte; termo: string }) {
+  const achados = termo
+    ? o.recentes.filter((p) =>
+        [p.programa, ...p.obras, ...p.mps].some((v) => v.toLowerCase().includes(termo)),
+      )
+    : o.recentes.slice(0, CORTADOS_SEM_BUSCA);
+  if (termo && achados.length === 0) return null;
   const max = Math.max(1, ...o.por_dia.map((d) => d.programas));
   return (
     <div className="flex flex-col gap-1.5 rounded-lg bg-stone-50 dark:bg-slate-800/50 p-2">
@@ -109,7 +119,7 @@ function CartaoOperador({ o }: { o: OperadorCorte }) {
       </div>
 
       <ul className="flex flex-col">
-        {o.recentes.map((p) => (
+        {achados.map((p) => (
           <li key={p.programa} className="flex items-center gap-1.5 border-t border-stone-200/70 dark:border-slate-700/60 py-0.5 text-xs">
             <span className="text-green-600 dark:text-cyan-400">✓</span>
             <span className="w-16 shrink-0 font-bold text-stone-900 dark:text-white" title={infoMaquina(p.maquina).rotulo}>
@@ -134,6 +144,8 @@ function CartaoOperador({ o }: { o: OperadorCorte }) {
 
 export default function VisaoGeralCorte({ tick }: { tick: number }) {
   const { dados, erro, carregando } = useBloco<RespostaCorte>("corte", {}, tick);
+  const [busca, setBusca] = useState("");
+  const termo = busca.trim().toLowerCase();
   const maxDia = Math.max(1, ...(dados?.por_dia ?? []).map((d) => d.programas));
   return (
     <>
@@ -149,23 +161,37 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
     >
       {dados && (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
-          <div className="grid shrink-0 grid-cols-[1fr_1fr_1.3fr] gap-2">
-            <Numero rotulo="Hoje" valor={dados.hoje.programas} sub={subContagem(dados.hoje)} />
-            <Numero rotulo="Semana" valor={dados.semana.programas} sub={subContagem(dados.semana)} />
-            <div className="flex flex-col rounded-lg bg-stone-50 dark:bg-slate-800/60 px-3 py-1.5" title="Programas finalizados por dia">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">Últimos 7 dias</p>
-              <div className="flex flex-1 items-end gap-1 pt-1">
+          {/* Faixa compacta (pedido do usuário: tudo numa tela). */}
+          <div className="grid shrink-0 grid-cols-[auto_auto_minmax(0,1fr)] items-stretch gap-2">
+            {[
+              ["Hoje", dados.hoje],
+              ["Semana", dados.semana],
+            ].map(([r, c]) => {
+              const cc = c as ContagemCorte;
+              return (
+                <div key={r as string} className="rounded-lg bg-stone-50 px-2.5 py-1 leading-tight dark:bg-slate-800/60" title={subContagem(cc)}>
+                  <p className="text-[10px] font-bold uppercase text-stone-500 dark:text-slate-400">{r as string}</p>
+                  <p className="text-xl font-black text-stone-900 dark:text-white">{cc.programas}</p>
+                  <p className="whitespace-nowrap text-[10px] text-stone-500 dark:text-slate-400">
+                    ⚡{cc.laser.programas} · 🔥{cc.oxicorte.programas}
+                  </p>
+                </div>
+              );
+            })}
+            <div className="flex min-w-0 flex-col rounded-lg bg-stone-50 dark:bg-slate-800/60 px-2 py-1" title="Programas finalizados por dia">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">7 dias</p>
+              <div className="flex flex-1 items-end gap-0.5 pt-0.5">
                 {dados.por_dia.map((d, i) => {
                   const hoje = i === dados.por_dia.length - 1;
                   const [a, m, dia] = d.data.split("-").map(Number);
                   return (
-                    <div key={d.data} className="flex flex-1 flex-col items-center gap-0.5" title={`${ddmm(d.data)}: ${d.laser} Laser · ${d.oxicorte} Oxicorte`}>
+                    <div key={d.data} className="flex min-w-0 flex-1 flex-col items-center gap-0.5" title={`${ddmm(d.data)}: ${d.laser} Laser · ${d.oxicorte} Oxicorte`}>
                       <span className="text-[10px] font-bold text-stone-700 dark:text-slate-300">{d.programas || ""}</span>
                       {/* Empilhada: Oxicorte em cima, Laser embaixo. */}
                       <div className={`flex w-full flex-col overflow-hidden rounded-t ${hoje ? "" : "opacity-60"}`}>
                         {d.programas === 0 && <div className="h-0.5 bg-stone-300 dark:bg-slate-700" />}
                         {[...MAQUINAS].reverse().map((m) => (
-                          <div key={m.maquina} className={m.barra} style={{ height: `${(d[m.maquina] / maxDia) * 26}px` }} />
+                          <div key={m.maquina} className={m.barra} style={{ height: `${(d[m.maquina] / maxDia) * 22}px` }} />
                         ))}
                       </div>
                       <span className="text-[9px] uppercase text-stone-500 dark:text-slate-400">{DIAS[new Date(a, m - 1, dia).getDay()]}</span>
@@ -187,11 +213,11 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
                 const falta = dados.falta_material.filter((p) => p.maquina === m.maquina);
                 return (
                   <div key={m.maquina} className="flex w-full flex-wrap items-center gap-1.5">
-                    <span className={`w-24 shrink-0 text-xs font-black uppercase ${m.titulo}`}>
-                      {m.icone} {m.rotulo}
+                    <span className={`w-5 shrink-0 text-center text-base ${m.titulo}`} title={m.rotulo}>
+                      {m.icone}
                     </span>
                     {cortando.length === 0 && falta.length === 0 ? (
-                      <span className="text-xs text-stone-500 dark:text-slate-400">nada em corte agora</span>
+                      <span className="text-xs text-stone-500 dark:text-slate-400">{m.rotulo}: nada em corte agora</span>
                     ) : (
                       <>
                         {cortando.map((p) => <EmCorte key={p.programa} p={p} />)}
@@ -207,10 +233,28 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
         </div>
       )}
     </Bloco>
-    <Bloco titulo="✅ Cortados — últimos" carregando={carregando} erro={erro} extra={<span className="text-stone-500 dark:text-slate-400">por operador</span>}>
+    <Bloco
+      titulo="✅ Cortados — últimos"
+      carregando={carregando}
+      erro={erro}
+      extra={
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="🔍 programa, obra…"
+          className="w-32 rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-0.5 text-stone-800 dark:text-slate-200"
+        />
+      }
+    >
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
         {dados && dados.operadores.length === 0 && <Vazio>Nenhum programa finalizado ainda.</Vazio>}
-        {dados?.operadores.map((o) => <CartaoOperador key={o.operador} o={o} />)}
+        {dados?.operadores.map((o) => <CartaoOperador key={o.operador} o={o} termo={termo} />)}
+        {termo && dados && !dados.operadores.some((o) => o.recentes.some((p) => [p.programa, ...p.obras, ...p.mps].some((v) => v.toLowerCase().includes(termo)))) && (
+          <Vazio>Nada nos últimos cortados com “{busca.trim()}”.</Vazio>
+        )}
+        {!termo && dados && dados.operadores.some((o) => o.recentes.length > CORTADOS_SEM_BUSCA) && (
+          <p className="text-center text-[11px] text-stone-500 dark:text-slate-400">mostrando os {CORTADOS_SEM_BUSCA} últimos de cada · use a busca pra ver mais</p>
+        )}
       </div>
     </Bloco>
     </>

@@ -98,8 +98,9 @@ export default function PaginaVisaoGeral() {
         </>
       }
     >
-    {/* Em telas ≥ 1280px (TV 1920×1080) cabe sem rolagem: altura da tela menos o cabeçalho. */}
-    <div className="flex flex-1 flex-col xl:h-[calc(100vh-3.5rem)] xl:overflow-hidden">
+    {/* Em telas ≥ 1280px (TV 1920×1080) cabe sem rolagem: altura da tela menos o cabeçalho (~61px).
+        xl:flex-none: com flex-1 a altura era ignorada e a página crescia (bug de 07/10, dentro do AppShell). */}
+    <div className="flex flex-1 flex-col xl:h-[calc(100dvh-4rem)] xl:flex-none xl:overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60 sm:px-4">
         <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">Filtros</span>
         <select value={filtros.cliente} onChange={(e) => setFiltros((f) => ({ ...f, cliente: e.target.value }))} className={`${campo} max-w-[12rem]`}>
@@ -138,9 +139,14 @@ export default function PaginaVisaoGeral() {
         </div>
         {/* Com o Financeiro (só flpmac14), ele fica embaixo da Usinagem e a Esteira estreita. */}
         <div
-          className={`grid min-h-[24rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 ${
-            comFinanceiro ? "xl:grid-cols-[repeat(4,minmax(0,1fr))]" : "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]"
-          }`}
+          className="grid min-h-[24rem] grid-cols-[minmax(0,1fr)] gap-3 xl:min-h-0 xl:grid-cols-(--colunas-baixo)"
+          style={
+            {
+              "--colunas-baixo": comFinanceiro
+                ? "minmax(0,0.85fr) minmax(0,1.55fr) minmax(0,1fr) minmax(0,1fr)"
+                : "minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)",
+            } as React.CSSProperties
+          }
         >
           {comFinanceiro && <VisaoGeralFinanceiro tick={tick} />}
           <BlocoEsteira params={params} tick={tick} />

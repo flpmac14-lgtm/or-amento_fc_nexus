@@ -6,7 +6,7 @@
 // (uma busca só), como o Corte: o que cada um está fazendo agora e os apontamentos.
 
 import { useState } from "react";
-import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
+import { Bloco, Vazio, useBloco } from "@/components/VisaoGeralComum";
 import VisaoGeralCroquiBusca from "@/components/VisaoGeralCroquiBusca";
 import { minutosUteis } from "@/lib/jornada";
 import { ddmm, duracao, horaMinuto, linkObra, type PedidoProjetista, type Projetista, type RespostaProjeto } from "@/lib/painel";
@@ -62,7 +62,7 @@ function Cartao({ p }: { p: Projetista }) {
 
       <ul className="flex flex-col">
         {p.recentes.length === 0 && <Vazio>Nenhum apontamento ainda.</Vazio>}
-        {p.recentes.map((g) => (
+        {p.recentes.slice(0, APONTAMENTOS_SEM_BUSCA).map((g) => (
           <li key={g.obra + g.em} className="flex items-center gap-1.5 border-t border-stone-200/70 dark:border-slate-700/60 py-0.5 text-xs">
             <a href={linkObra(g.obra)} target="_blank" rel="noreferrer" className="w-14 shrink-0 font-bold text-stone-900 dark:text-white hover:underline">
               {g.obra}
@@ -97,6 +97,9 @@ function desde(v: string | null): string {
   if (!hoje(v)) return `desde ${diaLocal(v)} ${horaMinuto(v)}`;
   return `há ${duracao(minutosUteis(v))}`; // só a jornada (lib/jornada.ts)
 }
+
+const LINHAS_AGORA = 2;
+const APONTAMENTOS_SEM_BUSCA = 4;
 
 /** Uma linha de pedido (obra · descrição · há quanto tempo). */
 function LinhaPedido({ f, pausado }: { f: PedidoProjetista; pausado?: boolean }) {
@@ -144,8 +147,14 @@ function Agora({ p }: { p: Projetista }) {
           </span>
         </span>
       </div>
-      {p.fazendo.map((f) => <LinhaPedido key={f.pedido} f={f} />)}
-      {p.pausados.map((f) => <LinhaPedido key={`p${f.pedido}`} f={f} pausado />)}
+      {/* Pedido do usuário: poucas linhas (cabe na tela); o resto pela busca. */}
+      {p.fazendo.slice(0, LINHAS_AGORA).map((f) => <LinhaPedido key={f.pedido} f={f} />)}
+      {p.pausados.slice(0, Math.max(1, LINHAS_AGORA - p.fazendo.length)).map((f) => <LinhaPedido key={`p${f.pedido}`} f={f} pausado />)}
+      {(() => {
+        const resto =
+          Math.max(0, p.fazendo.length - LINHAS_AGORA) + Math.max(0, p.pausados.length - Math.max(1, LINHAS_AGORA - p.fazendo.length));
+        return resto > 0 ? <p className="text-[11px] text-stone-500 dark:text-slate-400">+ {resto} · use a busca pra ver</p> : null;
+      })()}
       {!ativo && p.pausados.length === 0 && <p className="text-xs text-stone-500 dark:text-slate-400">nada em “Fazendo” agora</p>}
     </div>
   );
@@ -189,26 +198,34 @@ export default function VisaoGeralProjeto({ tick }: { tick: number }) {
           </div>
         ) : dados && (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
-            <div className="grid shrink-0 grid-cols-[1fr_1fr_1.3fr] gap-2">
-              <Numero rotulo="Hoje" valor={totalHoje} sub="pedidos apontados" />
-              <Numero rotulo="Semana" valor={totalSemana} sub={totalPausados ? `apontados · ⏸ ${totalPausados} pausado(s)` : "pedidos apontados"} />
-              <div className="flex flex-col rounded-lg bg-stone-50 dark:bg-slate-800/60 px-3 py-1.5" title="Pedidos apontados por dia">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">Últimos 7 dias</p>
-                <div className="flex flex-1 items-end gap-1 pt-1">
-                  {porDia.map((d, i) => {
-                    const [a, m, dia] = d.data.split("-").map(Number);
-                    return (
-                      <div key={d.data} className="flex flex-1 flex-col items-center gap-0.5" title={`${ddmm(d.data)}: ${d.n} pedido(s)`}>
-                        <span className="text-[10px] font-bold text-stone-700 dark:text-slate-300">{d.n || ""}</span>
-                        <div
-                          className={`w-full rounded-t ${i === porDia.length - 1 ? "bg-green-600 dark:bg-cyan-400" : "bg-green-300 dark:bg-cyan-800"}`}
-                          style={{ height: `${Math.max(2, (d.n / maxDia) * 26)}px` }}
-                        />
-                        <span className="text-[9px] uppercase text-stone-500 dark:text-slate-400">{DIAS[new Date(a, m - 1, dia).getDay()]}</span>
-                      </div>
-                    );
-                  })}
+            {/* Faixa compacta (pedido do usuário: tudo numa tela). */}
+            <div className="flex shrink-0 items-center gap-3 rounded-lg bg-stone-50 px-2.5 py-1.5 dark:bg-slate-800/60">
+              <div className="leading-none">
+                <p className="text-[10px] font-bold uppercase text-stone-500 dark:text-slate-400">Hoje</p>
+                <p className="text-xl font-black text-stone-900 dark:text-white">{totalHoje}</p>
+              </div>
+              <div className="leading-none">
+                <p className="text-[10px] font-bold uppercase text-stone-500 dark:text-slate-400">Semana</p>
+                <p className="text-xl font-black text-stone-900 dark:text-white">{totalSemana}</p>
+              </div>
+              {totalPausados > 0 && (
+                <div className="leading-none">
+                  <p className="text-[10px] font-bold uppercase text-orange-600 dark:text-orange-400">Pausados</p>
+                  <p className="text-xl font-black text-orange-600 dark:text-orange-400">{totalPausados}</p>
                 </div>
+              )}
+              <div className="ml-auto flex h-8 min-w-0 flex-1 items-end gap-0.5" title="Pedidos apontados por dia (7 dias)">
+                {porDia.map((d, i) => {
+                  const [a, m, dia] = d.data.split("-").map(Number);
+                  return (
+                    <div
+                      key={d.data}
+                      title={`${DIAS[new Date(a, m - 1, dia).getDay()]} ${ddmm(d.data)}: ${d.n} pedido(s)`}
+                      className={`flex-1 rounded-t ${i === porDia.length - 1 ? "bg-green-600 dark:bg-cyan-400" : "bg-green-300 dark:bg-cyan-800"}`}
+                      style={{ height: `${Math.max(2, (d.n / maxDia) * 32)}px` }}
+                    />
+                  );
+                })}
               </div>
             </div>
             {ps.length === 0 && <Vazio>Nenhum projetista apontado na Croqui.</Vazio>}
