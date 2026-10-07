@@ -11,7 +11,11 @@
 // o número na Croqui, as peças se juntam sozinhas (mesmo número).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { listarProgramasCorte, marcarProgramaCorte, salvarNriCorte } from "@/lib/api";
+import {
+  listarProgramasCorte,
+  marcarProgramaCorte,
+  salvarNriCorte,
+} from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -53,6 +57,40 @@ const MARCAS: {
     icone: "⚠",
     ligado: "bg-red-600 text-white border-red-700",
     desligado: "border-red-500 text-red-600 dark:text-red-400",
+  },
+];
+
+// Pedido do usuário: programa com 4 algarismos ou mais (1416, 1417…) é do
+// Laser; com até 3 (321, 322…) é do Oxicorte. Na tela ficam separados.
+type Maquina = "laser" | "oxicorte";
+
+function maquinaDe(programa: string): Maquina {
+  return programa.length >= 4 ? "laser" : "oxicorte";
+}
+
+const MAQUINAS: {
+  maquina: Maquina;
+  rotulo: string;
+  icone: string;
+  regra: string;
+  borda: string;
+  titulo: string;
+}[] = [
+  {
+    maquina: "laser",
+    rotulo: "Laser",
+    icone: "⚡",
+    regra: "programa com 4 algarismos",
+    borda: "border-sky-400 dark:border-sky-700",
+    titulo: "text-sky-700 dark:text-sky-300",
+  },
+  {
+    maquina: "oxicorte",
+    rotulo: "Oxicorte",
+    icone: "🔥",
+    regra: "programa com 3 algarismos",
+    borda: "border-orange-400 dark:border-orange-700",
+    titulo: "text-orange-700 dark:text-orange-300",
   },
 ];
 
@@ -398,46 +436,81 @@ export default function Corte({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            {lista.map((p) => {
-              const s = situacao(p);
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {MAQUINAS.map((m) => {
+              const daMaquina = lista.filter(
+                (p) => maquinaDe(p.programa) === m.maquina,
+              );
+              const pecas = daMaquina.reduce((t, p) => t + (p.pecas || 0), 0);
               return (
-                <button
-                  key={p.programa}
-                  type="button"
-                  onClick={(e) => cliqueCartao(p.programa, e.detail)}
-                  onDoubleClick={() => duploCliqueCartao(p.programa)}
-                  title={pdfsDe(p.programa).length ? "Toque para apontar · duplo clique abre o PDF" : undefined}
-                  className="flex flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
+                <section
+                  key={m.maquina}
+                  className={`flex flex-col gap-2 rounded-xl border-2 ${m.borda} bg-white/60 dark:bg-slate-900/30 p-2 sm:p-3`}
                 >
-                  <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
-                    <NumeroPrograma programa={p.programa} />
-                  </span>
-                  <span className="flex flex-wrap gap-1">
-                    <span
-                      className={`w-fit rounded px-2 py-0.5 text-xs font-bold ${s.classe}`}
-                    >
-                      {s.texto}
+                  <div className="flex items-baseline justify-between gap-2 px-1">
+                    <h2 className={`text-xl font-extrabold ${m.titulo}`}>
+                      {m.icone} {m.rotulo}{" "}
+                      <span className="font-mono">({daMaquina.length})</span>
+                    </h2>
+                    <span className="text-xs text-stone-500 dark:text-slate-400">
+                      {m.regra} · {formatarNumero(pecas, 0)} peça(s)
                     </span>
-                    {p.nri && (
-                      <span className="w-fit rounded border border-stone-400 px-2 py-0.5 font-mono text-xs font-bold text-stone-700 dark:border-slate-500 dark:text-slate-200">
-                        NRI {p.nri}
-                      </span>
-                    )}
-                    {p.manual && (
-                      <span className="w-fit rounded border border-sky-500 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
-                        Manual
-                      </span>
-                    )}
-                  </span>
-                  <span className="truncate text-xs text-stone-600 dark:text-slate-400">
-                    {p.manual ? "ainda não está na Croqui" : p.mps.join(" · ") || "—"}
-                  </span>
-                  <span className="text-xs text-stone-500 dark:text-slate-500">
-                    {formatarNumero(p.pecas, 0)} peça(s) · {p.itens.length}{" "}
-                    item(ns)
-                  </span>
-                </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {daMaquina.map((p) => {
+                      const s = situacao(p);
+                      return (
+                        <button
+                          key={p.programa}
+                          type="button"
+                          onClick={(e) => cliqueCartao(p.programa, e.detail)}
+                          onDoubleClick={() => duploCliqueCartao(p.programa)}
+                          title={
+                            pdfsDe(p.programa).length
+                              ? "Toque para apontar · duplo clique abre o PDF"
+                              : undefined
+                          }
+                          className="flex flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
+                        >
+                          <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
+                            <NumeroPrograma programa={p.programa} />
+                          </span>
+                          <span className="flex flex-wrap gap-1">
+                            <span
+                              className={`w-fit rounded px-2 py-0.5 text-xs font-bold ${s.classe}`}
+                            >
+                              {s.texto}
+                            </span>
+                            {p.nri && (
+                              <span className="w-fit rounded border border-stone-400 px-2 py-0.5 font-mono text-xs font-bold text-stone-700 dark:border-slate-500 dark:text-slate-200">
+                                NRI {p.nri}
+                              </span>
+                            )}
+                            {p.manual && (
+                              <span className="w-fit rounded border border-sky-500 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
+                                Manual
+                              </span>
+                            )}
+                          </span>
+                          <span className="truncate text-xs text-stone-600 dark:text-slate-400">
+                            {p.manual
+                              ? "ainda não está na Croqui"
+                              : p.mps.join(" · ") || "—"}
+                          </span>
+                          <span className="text-xs text-stone-500 dark:text-slate-500">
+                            {formatarNumero(p.pecas, 0)} peça(s) ·{" "}
+                            {p.itens.length} item(ns)
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {daMaquina.length === 0 && !carregando && (
+                    <p className="py-4 text-center text-sm text-stone-500 dark:text-slate-400">
+                      Nada aqui.
+                    </p>
+                  )}
+                </section>
               );
             })}
           </div>
@@ -447,9 +520,12 @@ export default function Corte({
               onClick={() => lancarManual(numero)}
               className="mx-auto flex w-full max-w-md flex-col items-center gap-1 rounded-2xl border-4 border-dashed border-sky-500 bg-sky-50 px-4 py-4 text-sky-800 active:scale-[0.98] dark:bg-sky-950/40 dark:text-sky-200"
             >
-              <span className="text-2xl font-extrabold">+ Lançar programa {numero} manualmente</span>
+              <span className="text-2xl font-extrabold">
+                + Lançar programa {numero} manualmente
+              </span>
               <span className="text-xs">
-                Ainda não está na Croqui de corte. Marque o status agora; as peças aparecem quando o projetista colocar o número lá.
+                Ainda não está na Croqui de corte. Marque o status agora; as
+                peças aparecem quando o projetista colocar o número lá.
               </span>
             </button>
           )}
@@ -477,12 +553,27 @@ export default function Corte({
             <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-950 p-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">
-                  Programa
+                  Programa ·{" "}
+                  <span
+                    className={
+                      MAQUINAS.find(
+                        (m) => m.maquina === maquinaDe(aberto.programa),
+                      )?.titulo
+                    }
+                  >
+                    {maquinaDe(aberto.programa) === "laser"
+                      ? "Laser"
+                      : "Oxicorte"}
+                  </span>
                 </p>
                 <p
                   className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white"
                   onDoubleClick={() => abrirPdf(aberto.programa)}
-                  title={pdfsDe(aberto.programa).length ? "Duplo clique abre o PDF" : undefined}
+                  title={
+                    pdfsDe(aberto.programa).length
+                      ? "Duplo clique abre o PDF"
+                      : undefined
+                  }
                 >
                   <NumeroPrograma programa={aberto.programa} />
                 </p>
@@ -497,8 +588,9 @@ export default function Corte({
                 )}
                 {aberto.manual ? (
                   <p className="mt-2 max-w-md rounded-lg border border-sky-400 bg-sky-50 px-2 py-1 text-sm text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
-                    <strong>Lançado manualmente</strong> — ainda não está na Croqui de corte. Quando o projetista colocar esse
-                    número lá, as peças aparecem aqui sozinhas.
+                    <strong>Lançado manualmente</strong> — ainda não está na
+                    Croqui de corte. Quando o projetista colocar esse número lá,
+                    as peças aparecem aqui sozinhas.
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-stone-700 dark:text-slate-300">
@@ -567,7 +659,8 @@ export default function Corte({
                 value={nri}
                 onChange={(e) => setNri(e.target.value.replace(/\D/g, ""))}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && salvando === null) salvarEFechar(aberto.programa);
+                  if (e.key === "Enter" && salvando === null)
+                    salvarEFechar(aberto.programa);
                 }}
                 inputMode="numeric"
                 pattern="[0-9]*"
