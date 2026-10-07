@@ -25,6 +25,12 @@ from app.jornada import minutos_uteis
 from app.orcamentos_salvos import _conectar
 
 MARCAS = {"cortando", "finalizado", "falta_material"}
+MAQUINAS = {"laser", "oxicorte"}
+
+
+def maquina_padrao(programa: str) -> str:
+    """Pedido do usuário: 4 algarismos ou mais (1416) = Laser; até 3 (321) = Oxicorte."""
+    return "laser" if len(str(programa)) >= 4 else "oxicorte"
 
 
 def programas_de(texto: str | None) -> list[str]:
@@ -76,7 +82,7 @@ def listar() -> dict:
         itens = cur.fetchall()
         cur.execute(
             """select programa, cortando_em, cortando_por, finalizado_em, finalizado_por,
-                      falta_material_em, falta_material_por, nri, nri_por, nri_em from corte_programas"""
+                      falta_material_em, falta_material_por, nri, nri_por, nri_em, maquina, maquina_por from corte_programas"""
         )
         marcas = {r[0]: r for r in cur.fetchall()}
 
@@ -111,6 +117,10 @@ def listar() -> dict:
         prog["finalizado_em"], prog["finalizado_por"] = (_iso(m[3]), m[4]) if m else (None, None)
         prog["falta_material_em"], prog["falta_material_por"] = (_iso(m[5]), m[6]) if m else (None, None)
         prog["nri"], prog["nri_por"], prog["nri_em"] = (m[7], m[8], _iso(m[9])) if m else (None, None, None)
+        # Trocada pelo operador (corta o do outro) ou pela regra dos algarismos.
+        prog["maquina"] = (m[10] if m and m[10] else None) or maquina_padrao(p)
+        prog["maquina_trocada"] = bool(m and m[10] and m[10] != maquina_padrao(p))
+        prog["maquina_por"] = m[11] if prog["maquina_trocada"] else None
         lista.append(prog)
     lista.sort(key=lambda x: int(x["programa"]), reverse=True)
     return {"programas": lista}
@@ -144,7 +154,8 @@ def historico(dias: int = 90) -> dict:
         saida.append({
             "id": hid, "programa": programa, "marca": marca, "valor": valor, "por": por, "em": em.isoformat(),
             "mps": prog.get("mps", []), "pecas": prog.get("pecas"), "itens": len(prog.get("itens", [])),
-            "projetistas": prog.get("projetistas", []), "nri": prog.get("nri"), "minutos_corte": minutos,
+            "projetistas": prog.get("projetistas", []), "nri": prog.get("nri"),
+            "maquina": prog.get("maquina") or maquina_padrao(programa), "minutos_corte": minutos,
         })
     return {"historico": saida}
 
@@ -189,6 +200,28 @@ def salvar_nri(programa: str, nri: str | None, por: str | None) -> dict:
                on conflict (programa) do update set
                  nri = excluded.nri, nri_por = excluded.nri_por, nri_em = excluded.nri_em, atualizado_em = now()""",
             (programa, nri, por if nri else None, nri),
+        )
+        conn.commit()
+    return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})
+
+
+def trocar_maquina(programa: str, maquina: str, por: str | None) -> dict:
+    """Operador troca a máquina do programa (Laser ↔ Oxicorte). Voltar pra
+    máquina da regra dos algarismos apaga a troca. Devolve o programa atualizado."""
+    programa = str(programa).strip()
+    if not re.fullmatch(r"\d+", programa):
+        raise ValueError("Número de programa inválido.")
+    if maquina not in MAQUINAS:
+        raise ValueError(f"Máquina inválida: {maquina}")
+    trocada = maquina != maquina_padrao(programa)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into corte_programas (programa, maquina, maquina_por, maquina_em, atualizado_em)
+               values (%s, %s, %s, case when %s then now() end, now())
+               on conflict (programa) do update set
+                 maquina = excluded.maquina, maquina_por = excluded.maquina_por,
+                 maquina_em = excluded.maquina_em, atualizado_em = now()""",
+            (programa, maquina if trocada else None, por if trocada else None, trocada),
         )
         conn.commit()
     return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})

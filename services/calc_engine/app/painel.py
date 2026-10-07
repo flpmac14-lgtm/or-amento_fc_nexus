@@ -285,6 +285,7 @@ def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
     """Situação do laser a partir do que o operador marca na aba Corte
     (corte_programas + corte_historico) e das peças da Croqui (app/corte.py)."""
     from app.corte import listar as listar_corte
+    from app.corte import maquina_padrao
 
     h = hoje()
     ini_hoje = datetime(h.year, h.month, h.day, tzinfo=FUSO)
@@ -298,7 +299,7 @@ def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
             # Só a jornada da fábrica (app/jornada.py), não relógio corrido.
             minutos = minutos_uteis(datetime.fromisoformat(p["cortando_em"]), datetime.fromisoformat(p["finalizado_em"]))
         return {
-            "programa": p["programa"], "obras": obras, "mps": p["mps"], "pecas": p["pecas"], "itens": len(p["itens"]),
+            "programa": p["programa"], "maquina": p["maquina"], "obras": obras, "mps": p["mps"], "pecas": p["pecas"], "itens": len(p["itens"]),
             "cortando_em": p["cortando_em"], "cortando_por": p["cortando_por"],
             "finalizado_em": p["finalizado_em"], "finalizado_por": p["finalizado_por"],
             "falta_material_em": p["falta_material_em"], "falta_material_por": p["falta_material_por"],
@@ -315,15 +316,28 @@ def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
     def desde(p: dict, t: datetime) -> bool:
         return datetime.fromisoformat(p["finalizado_em"]) >= t
 
-    # Finalizados por dia (últimos 7 dias) — barrinhas do painel.
+    # Finalizados por dia (últimos 7 dias) — barrinhas do painel, separadas
+    # em Laser e Oxicorte (pedido do usuário; máquina atual do programa).
+    maquina = {p["programa"]: p["maquina"] for p in programas}
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
-            """select (em at time zone 'America/Sao_Paulo')::date, count(distinct programa) from corte_historico
-               where marca = 'finalizado' and valor and em >= %s group by 1""",
+            """select distinct (em at time zone 'America/Sao_Paulo')::date, programa from corte_historico
+               where marca = 'finalizado' and valor and em >= %s""",
             (ini_hoje - timedelta(days=6),),
         )
-        por_dia = dict(cur.fetchall())
+        por_dia: dict = {}
+        for d, prog in cur.fetchall():
+            m = maquina.get(prog) or maquina_padrao(prog)
+            por_dia.setdefault(d, {"laser": 0, "oxicorte": 0})[m] += 1
     dias = [h - timedelta(days=k) for k in range(6, -1, -1)]
+
+    def contagem(t: datetime) -> dict:
+        lista = [p for p in finalizados if desde(p, t)]
+        out = {"programas": len(lista), "pecas": sum(p["pecas"] or 0 for p in lista)}
+        for mq in ("laser", "oxicorte"):
+            out[mq] = {"programas": sum(1 for p in lista if p["maquina"] == mq),
+                       "pecas": sum(p["pecas"] or 0 for p in lista if p["maquina"] == mq)}
+        return out
 
     # Cortados por operador (quem marcou Finalizado) — bloco "Cortados" do painel,
     # no mesmo formato do Projeto: hoje, semana, barrinhas de 7 dias e os últimos.
@@ -349,11 +363,11 @@ def corte_recente(limite: int = 12, limite_operador: int = 40) -> dict:
     return {
         "cortando": cortando,
         "falta_material": falta,
-        "hoje": {"programas": sum(1 for p in finalizados if desde(p, ini_hoje)),
-                 "pecas": sum(p["pecas"] or 0 for p in finalizados if desde(p, ini_hoje))},
-        "semana": {"programas": sum(1 for p in finalizados if desde(p, ini_semana)),
-                   "pecas": sum(p["pecas"] or 0 for p in finalizados if desde(p, ini_semana))},
-        "por_dia": [{"data": d.isoformat(), "programas": por_dia.get(d, 0)} for d in dias],
+        "hoje": contagem(ini_hoje),
+        "semana": contagem(ini_semana),
+        "por_dia": [{"data": d.isoformat(), "programas": sum(por_dia.get(d, {}).values()),
+                     "laser": por_dia.get(d, {}).get("laser", 0), "oxicorte": por_dia.get(d, {}).get("oxicorte", 0)}
+                    for d in dias],
         "recentes": [resumo(p) for p in finalizados[:limite]],
         # Quem cortou mais recentemente primeiro.
         "operadores": sorted(operadores.values(), key=lambda o: o["recentes"][0]["finalizado_em"], reverse=True),

@@ -12,6 +12,7 @@ import type {
   ItemFollowUpCompleto,
   NotificacaoFollowUp,
   MarcaCorte,
+  MaquinaCorte,
   HistoricoCorte,
   ProgramaCorte,
   ItemCroquiCorte,
@@ -998,6 +999,23 @@ export async function salvarNriCorte(
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     throw new Error(`O NRI não salvou (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
+export async function trocarMaquinaCorte(
+  programa: string,
+  maquina: MaquinaCorte,
+  por: string | null,
+): Promise<ProgramaCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas/${encodeURIComponent(programa)}/maquina`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ maquina, por }),
+  });
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Não trocou a máquina (${resposta.status}). ${corpo}`);
   }
   return resposta.json();
 }

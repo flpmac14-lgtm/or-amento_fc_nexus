@@ -8,6 +8,14 @@
 import { Bloco, Numero, Vazio, useBloco } from "@/components/VisaoGeralComum";
 import { ddmm, duracao, horaMinuto, linkObra, type OperadorCorte, type ProgramaCorte, type RespostaCorte } from "@/lib/painel";
 import { minutosUteis } from "@/lib/jornada";
+import { MAQUINAS, infoMaquina } from "@/lib/maquinaCorte";
+import type { ContagemCorte } from "@/lib/painel";
+
+// Pedido do usuário: separar Laser (4 algarismos) e Oxicorte (3) — a máquina
+// vem do servidor (o operador pode trocar na aba Corte).
+function subContagem(c: ContagemCorte): string {
+  return `⚡ ${c.laser.programas} · 🔥 ${c.oxicorte.programas} · ${c.pecas.toLocaleString("pt-BR")} peças`;
+}
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
@@ -53,7 +61,9 @@ function EmCorte({ p, falta }: { p: ProgramaCorte; falta?: boolean }) {
         {!falta && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60 dark:bg-cyan-400" />}
         <span className={`relative inline-flex h-3 w-3 rounded-full ${falta ? "bg-red-500" : "bg-green-500 dark:bg-cyan-400"}`} />
       </span>
-      <span className="text-base font-black text-stone-900 dark:text-white">{p.programa}</span>
+      <span className="text-base font-black text-stone-900 dark:text-white" title={infoMaquina(p.maquina).rotulo}>
+        {infoMaquina(p.maquina).icone} {p.programa}
+      </span>
       <Obras obras={p.obras} />
       <span className="ml-auto whitespace-nowrap text-right text-xs leading-tight text-stone-600 dark:text-slate-300">
         <span className="font-semibold">{falta ? "falta material" : p.cortando_por ?? "—"}</span>
@@ -102,7 +112,9 @@ function CartaoOperador({ o }: { o: OperadorCorte }) {
         {o.recentes.map((p) => (
           <li key={p.programa} className="flex items-center gap-1.5 border-t border-stone-200/70 dark:border-slate-700/60 py-0.5 text-xs">
             <span className="text-green-600 dark:text-cyan-400">✓</span>
-            <span className="w-12 shrink-0 font-bold text-stone-900 dark:text-white">{p.programa}</span>
+            <span className="w-16 shrink-0 font-bold text-stone-900 dark:text-white" title={infoMaquina(p.maquina).rotulo}>
+              {infoMaquina(p.maquina).icone} {p.programa}
+            </span>
             <Obras obras={p.obras} />
             <span className="min-w-0 flex-1 truncate text-stone-600 dark:text-slate-300" title={p.mps.join(", ")}>
               {p.mps.join(", ")}
@@ -126,7 +138,7 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
   return (
     <>
     <Bloco
-      titulo="✂️ Corte a laser"
+      titulo="✂️ Corte — ⚡ Laser · 🔥 Oxicorte"
       carregando={carregando}
       erro={erro}
       extra={
@@ -138,8 +150,8 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
       {dados && (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
           <div className="grid shrink-0 grid-cols-[1fr_1fr_1.3fr] gap-2">
-            <Numero rotulo="Hoje" valor={dados.hoje.programas} sub={`programas · ${dados.hoje.pecas.toLocaleString("pt-BR")} peças`} />
-            <Numero rotulo="Semana" valor={dados.semana.programas} sub={`programas · ${dados.semana.pecas.toLocaleString("pt-BR")} peças`} />
+            <Numero rotulo="Hoje" valor={dados.hoje.programas} sub={subContagem(dados.hoje)} />
+            <Numero rotulo="Semana" valor={dados.semana.programas} sub={subContagem(dados.semana)} />
             <div className="flex flex-col rounded-lg bg-stone-50 dark:bg-slate-800/60 px-3 py-1.5" title="Programas finalizados por dia">
               <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">Últimos 7 dias</p>
               <div className="flex flex-1 items-end gap-1 pt-1">
@@ -147,12 +159,15 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
                   const hoje = i === dados.por_dia.length - 1;
                   const [a, m, dia] = d.data.split("-").map(Number);
                   return (
-                    <div key={d.data} className="flex flex-1 flex-col items-center gap-0.5" title={`${ddmm(d.data)}: ${d.programas} programa(s)`}>
+                    <div key={d.data} className="flex flex-1 flex-col items-center gap-0.5" title={`${ddmm(d.data)}: ${d.laser} Laser · ${d.oxicorte} Oxicorte`}>
                       <span className="text-[10px] font-bold text-stone-700 dark:text-slate-300">{d.programas || ""}</span>
-                      <div
-                        className={`w-full rounded-t ${hoje ? "bg-green-600 dark:bg-cyan-400" : "bg-green-300 dark:bg-cyan-800"}`}
-                        style={{ height: `${Math.max(2, (d.programas / maxDia) * 26)}px` }}
-                      />
+                      {/* Empilhada: Oxicorte em cima, Laser embaixo. */}
+                      <div className={`flex w-full flex-col overflow-hidden rounded-t ${hoje ? "" : "opacity-60"}`}>
+                        {d.programas === 0 && <div className="h-0.5 bg-stone-300 dark:bg-slate-700" />}
+                        {[...MAQUINAS].reverse().map((m) => (
+                          <div key={m.maquina} className={m.barra} style={{ height: `${(d[m.maquina] / maxDia) * 26}px` }} />
+                        ))}
+                      </div>
                       <span className="text-[9px] uppercase text-stone-500 dark:text-slate-400">{DIAS[new Date(a, m - 1, dia).getDay()]}</span>
                     </div>
                   );
@@ -167,10 +182,25 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
                 Nenhum programa em corte agora.
               </p>
             ) : (
-              <>
-                {dados.cortando.map((p) => <EmCorte key={p.programa} p={p} />)}
-                {dados.falta_material.map((p) => <EmCorte key={`f${p.programa}`} p={p} falta />)}
-              </>
+              MAQUINAS.map((m) => {
+                const cortando = dados.cortando.filter((p) => p.maquina === m.maquina);
+                const falta = dados.falta_material.filter((p) => p.maquina === m.maquina);
+                return (
+                  <div key={m.maquina} className="flex w-full flex-wrap items-center gap-1.5">
+                    <span className={`w-24 shrink-0 text-xs font-black uppercase ${m.titulo}`}>
+                      {m.icone} {m.rotulo}
+                    </span>
+                    {cortando.length === 0 && falta.length === 0 ? (
+                      <span className="text-xs text-stone-500 dark:text-slate-400">nada em corte agora</span>
+                    ) : (
+                      <>
+                        {cortando.map((p) => <EmCorte key={p.programa} p={p} />)}
+                        {falta.map((p) => <EmCorte key={`f${p.programa}`} p={p} falta />)}
+                      </>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 

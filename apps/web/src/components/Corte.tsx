@@ -15,11 +15,13 @@ import {
   listarProgramasCorte,
   marcarProgramaCorte,
   salvarNriCorte,
+  trocarMaquinaCorte,
 } from "@/lib/api";
+import { MAQUINAS, infoMaquina, maquinaPadrao } from "@/lib/maquinaCorte";
 import { formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
-import type { MarcaCorte, ProgramaCorte } from "@/lib/types";
+import type { MaquinaCorte, MarcaCorte, ProgramaCorte } from "@/lib/types";
 import CorteHistorico from "@/components/CorteHistorico";
 import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
@@ -60,40 +62,6 @@ const MARCAS: {
   },
 ];
 
-// Pedido do usuário: programa com 4 algarismos ou mais (1416, 1417…) é do
-// Laser; com até 3 (321, 322…) é do Oxicorte. Na tela ficam separados.
-type Maquina = "laser" | "oxicorte";
-
-function maquinaDe(programa: string): Maquina {
-  return programa.length >= 4 ? "laser" : "oxicorte";
-}
-
-const MAQUINAS: {
-  maquina: Maquina;
-  rotulo: string;
-  icone: string;
-  regra: string;
-  borda: string;
-  titulo: string;
-}[] = [
-  {
-    maquina: "laser",
-    rotulo: "Laser",
-    icone: "⚡",
-    regra: "programa com 4 algarismos",
-    borda: "border-sky-400 dark:border-sky-700",
-    titulo: "text-sky-700 dark:text-sky-300",
-  },
-  {
-    maquina: "oxicorte",
-    rotulo: "Oxicorte",
-    icone: "🔥",
-    regra: "programa com 3 algarismos",
-    borda: "border-orange-400 dark:border-orange-700",
-    titulo: "text-orange-700 dark:text-orange-300",
-  },
-];
-
 function programaManual(programa: string): ProgramaCorte {
   return {
     programa,
@@ -112,6 +80,9 @@ function programaManual(programa: string): ProgramaCorte {
     nri: null,
     nri_por: null,
     nri_em: null,
+    maquina: maquinaPadrao(programa),
+    maquina_trocada: false,
+    maquina_por: null,
   };
 }
 
@@ -315,6 +286,22 @@ export default function Corte({
     setFiltro("recentes");
   });
 
+  // Às vezes um corta o programa do outro (pedido do usuário).
+  async function trocarMaquina(p: ProgramaCorte, maquina: MaquinaCorte) {
+    setSalvando("cortando");
+    setErro("");
+    try {
+      const atualizado = await trocarMaquinaCorte(p.programa, maquina, usuario);
+      setProgramas((l) =>
+        l.map((x) => (x.programa === atualizado.programa ? atualizado : x)),
+      );
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setSalvando(null);
+    }
+  }
+
   async function marcar(p: ProgramaCorte, marca: MarcaCorte) {
     const valor = !p[`${marca}_em`];
     setSalvando(marca);
@@ -439,7 +426,7 @@ export default function Corte({
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {MAQUINAS.map((m) => {
               const daMaquina = lista.filter(
-                (p) => maquinaDe(p.programa) === m.maquina,
+                (p) => p.maquina === m.maquina,
               );
               const pecas = daMaquina.reduce((t, p) => t + (p.pecas || 0), 0);
               return (
@@ -486,7 +473,12 @@ export default function Corte({
                                 NRI {p.nri}
                               </span>
                             )}
-                            {p.manual && (
+                            {p.maquina_trocada && (
+                      <span className="w-fit rounded border border-violet-500 px-2 py-0.5 text-xs font-bold text-violet-700 dark:text-violet-300">
+                        ↔ trocado
+                      </span>
+                    )}
+                    {p.manual && (
                               <span className="w-fit rounded border border-sky-500 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
                                 Manual
                               </span>
@@ -554,16 +546,9 @@ export default function Corte({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">
                   Programa ·{" "}
-                  <span
-                    className={
-                      MAQUINAS.find(
-                        (m) => m.maquina === maquinaDe(aberto.programa),
-                      )?.titulo
-                    }
-                  >
-                    {maquinaDe(aberto.programa) === "laser"
-                      ? "Laser"
-                      : "Oxicorte"}
+                  <span className={infoMaquina(aberto.maquina).titulo}>
+                    {infoMaquina(aberto.maquina).icone}{" "}
+                    {infoMaquina(aberto.maquina).rotulo}
                   </span>
                 </p>
                 <p
@@ -645,6 +630,29 @@ export default function Corte({
                 );
               })}
             </div>
+
+            {(() => {
+              const outra = MAQUINAS.find((m) => m.maquina !== aberto.maquina)!;
+              return (
+                <div className="px-4 pb-3">
+                  <button
+                    type="button"
+                    disabled={salvando !== null}
+                    onClick={() => trocarMaquina(aberto, outra.maquina)}
+                    className={`h-14 w-full rounded-2xl border-4 bg-white text-lg font-extrabold active:scale-[0.98] disabled:opacity-60 dark:bg-slate-900 ${outra.borda} ${outra.titulo}`}
+                  >
+                    ↔ Alterar para {outra.icone} {outra.rotulo}
+                  </button>
+                  {aberto.maquina_trocada && (
+                    <p className="mt-1 text-center text-xs text-stone-500 dark:text-slate-400">
+                      Trocado para {infoMaquina(aberto.maquina).rotulo}
+                      {aberto.maquina_por ? ` por ${aberto.maquina_por}` : ""} (pela regra seria{" "}
+                      {infoMaquina(maquinaPadrao(aberto.programa)).rotulo})
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <label className="flex flex-col gap-1 px-4 pb-3">
               <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">

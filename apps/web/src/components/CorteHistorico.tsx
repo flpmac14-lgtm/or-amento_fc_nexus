@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { listarHistoricoCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
-import type { HistoricoCorte, MarcaCorte } from "@/lib/types";
+import { MAQUINAS, infoMaquina } from "@/lib/maquinaCorte";
+import type { HistoricoCorte, MaquinaCorte, MarcaCorte } from "@/lib/types";
 
 const ROTULO: Record<MarcaCorte, { texto: string; classe: string }> = {
   cortando: { texto: "Cortando", classe: "bg-amber-400 text-stone-900" },
@@ -42,6 +43,7 @@ export default function CorteHistorico() {
   const [operador, setOperador] = useState("");
   const [acao, setAcao] = useState("");
   const [programa, setPrograma] = useState("");
+  const [maquina, setMaquina] = useState<MaquinaCorte | "">("");
   const [comDesmarcadas, setComDesmarcadas] = useState(false);
 
   useEffect(() => {
@@ -74,9 +76,10 @@ export default function CorteHistorico() {
           (comDesmarcadas || l.valor) &&
           (!operador || l.por === operador) &&
           (!acao || l.marca === acao) &&
+          (!maquina || l.maquina === maquina) &&
           (!programa || l.programa.startsWith(programa.replace(/\D/g, ""))),
       ),
-    [linhas, operador, acao, programa, comDesmarcadas],
+    [linhas, operador, acao, programa, maquina, comDesmarcadas],
   );
 
   const resumo = useMemo(() => {
@@ -84,7 +87,11 @@ export default function CorteHistorico() {
     const tempos = fin
       .map((l) => l.minutos_corte)
       .filter((m): m is number => m !== null);
+    const porMaquina = (m: MaquinaCorte) =>
+      new Set(fin.filter((l) => l.maquina === m).map((l) => l.programa)).size;
     return {
+      laser: porMaquina("laser"),
+      oxicorte: porMaquina("oxicorte"),
       finalizados: new Set(fin.map((l) => l.programa)).size,
       pecas: fin.reduce((s, l) => s + (l.pecas ?? 0), 0),
       faltas: filtradas.filter((l) => l.marca === "falta_material" && l.valor)
@@ -100,6 +107,7 @@ export default function CorteHistorico() {
     const cab = [
       "Data/hora",
       "Programa",
+      "Máquina",
       "NRI",
       "Ação",
       "Marcou/Desmarcou",
@@ -114,6 +122,7 @@ export default function CorteHistorico() {
       ...filtradas.map((l) => [
         dataHora(l.em),
         l.programa,
+        infoMaquina(l.maquina).rotulo,
         l.nri ?? "",
         ROTULO[l.marca].texto,
         l.valor ? "Marcou" : "Desmarcou",
@@ -144,7 +153,11 @@ export default function CorteHistorico() {
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
-          { r: "Programas finalizados", v: resumo.finalizados },
+          {
+            r: "Programas finalizados",
+            v: resumo.finalizados,
+            d: `⚡ Laser ${resumo.laser} · 🔥 Oxicorte ${resumo.oxicorte}`,
+          },
           { r: "Peças finalizadas", v: formatarNumero(resumo.pecas, 0) },
           {
             r: "Falta de material",
@@ -165,7 +178,27 @@ export default function CorteHistorico() {
             >
               {k.v}
             </p>
+            {"d" in k && (
+              <p className="text-xs text-stone-500 dark:text-slate-400">{k.d}</p>
+            )}
           </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [{ maquina: "" as const, rotulo: "Todas as máquinas", icone: "", borda: "border-stone-400", titulo: "text-stone-700 dark:text-slate-200" }, ...MAQUINAS]
+        ).map((m) => (
+          <button
+            key={m.maquina || "todas"}
+            type="button"
+            onClick={() => setMaquina(m.maquina)}
+            className={`rounded-full border-2 px-4 py-1.5 text-sm font-bold ${m.borda} ${
+              maquina === m.maquina ? "bg-stone-800 text-white dark:bg-slate-200 dark:text-slate-900" : m.titulo
+            }`}
+          >
+            {m.icone} {m.rotulo}
+          </button>
         ))}
       </div>
 
@@ -251,12 +284,13 @@ export default function CorteHistorico() {
       {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
 
       <div className="max-h-[65vh] overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
-        <table className="w-full min-w-[50rem] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
               {[
                 "Data/hora",
                 "Programa",
+                "Máquina",
                 "NRI",
                 "Ação",
                 "Operador",
@@ -284,6 +318,11 @@ export default function CorteHistorico() {
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-base font-bold">
                   {l.programa}
+                </td>
+                <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5">
+                  <span className={`whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold ${infoMaquina(l.maquina).etiqueta}`}>
+                    {infoMaquina(l.maquina).icone} {infoMaquina(l.maquina).rotulo}
+                  </span>
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-xs">
                   {l.nri ?? "—"}
@@ -315,7 +354,7 @@ export default function CorteHistorico() {
             {filtradas.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-3 py-10 text-center text-stone-500 dark:text-slate-500"
                 >
                   {carregando

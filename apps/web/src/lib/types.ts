@@ -739,9 +739,13 @@ export interface ProgramaCorte {
   nri: string | null; // número do NRI anotado pelo operador ao apontar
   nri_por: string | null;
   nri_em: string | null;
+  maquina: MaquinaCorte; // trocada pelo operador ou pela regra dos algarismos
+  maquina_trocada: boolean;
+  maquina_por: string | null;
 }
 
 export type MarcaCorte = "cortando" | "finalizado" | "falta_material";
+export type MaquinaCorte = "laser" | "oxicorte";
 
 export interface HistoricoCorte {
   id: number;
@@ -755,6 +759,7 @@ export interface HistoricoCorte {
   itens: number;
   projetistas: string[];
   nri: string | null;
+  maquina: MaquinaCorte;
   minutos_corte: number | null; // só em "Finalizado": tempo desde o último "Cortando"
 }
 

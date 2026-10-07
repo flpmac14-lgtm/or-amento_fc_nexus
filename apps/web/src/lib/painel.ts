@@ -55,6 +55,7 @@ export interface RespostaColetas {
 
 export interface ProgramaCorte {
   programa: string;
+  maquina: "laser" | "oxicorte";
   obras: string[];
   mps: string[];
   pecas: number | null;
@@ -71,11 +72,19 @@ export interface ProgramaCorte {
 export interface RespostaCorte {
   cortando: ProgramaCorte[];
   falta_material: ProgramaCorte[];
-  hoje: { programas: number; pecas: number };
-  semana: { programas: number; pecas: number };
-  por_dia: { data: string; programas: number }[];
+  hoje: ContagemCorte;
+  semana: ContagemCorte;
+  por_dia: { data: string; programas: number; laser: number; oxicorte: number }[];
   recentes: ProgramaCorte[];
   operadores: OperadorCorte[];
+}
+
+// Total + separado por máquina (pedido do usuário: Laser × Oxicorte).
+export interface ContagemCorte {
+  programas: number;
+  pecas: number;
+  laser: { programas: number; pecas: number };
+  oxicorte: { programas: number; pecas: number };
 }
 
 export interface OperadorCorte {
