@@ -26,6 +26,7 @@ const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 const COR_STATUS: Record<string, string> = {
   "Sem Corte": "#44B3E1",
   Fazendo: "#FFFF00",
+  Pausado: "#FFC000",
   Feito: "#DAF2D0",
   Terceirizado: "#C4A7E7",
   "Corte Manual": "#F8CBAD",
@@ -299,10 +300,11 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   }, [itens, busca, status, projetista, filtrosColuna, ordem]);
 
   const contagem = useMemo(() => {
-    const c = { semStatus: 0, fazendo: 0, feito: 0 };
+    const c = { semStatus: 0, fazendo: 0, pausado: 0, feito: 0 };
     for (const i of filtrados) {
       if (!i.status) c.semStatus++;
       else if (i.status === "Fazendo") c.fazendo++;
+      else if (i.status === "Pausado") c.pausado++;
       else if (i.status === "Feito") c.feito++;
     }
     return c;
@@ -440,11 +442,12 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         </div>
       )}
 
-      <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-4`}>
+      <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-5`}>
         {[
           { r: "Linhas", v: filtrados.length, d: `de ${itens.length}` },
           { r: "Sem status", v: contagem.semStatus, d: "a fazer" },
           { r: "Fazendo", v: contagem.fazendo, d: "em andamento", cor: "text-amber-600 dark:text-amber-400" },
+          { r: "Pausado", v: contagem.pausado, d: "parados", cor: "text-orange-600 dark:text-orange-400" },
           { r: "Feito", v: contagem.feito, d: "concluídos", cor: "text-green-700 dark:text-cyan-300" },
         ].map((k) => (
           <div key={k.r} className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3">
