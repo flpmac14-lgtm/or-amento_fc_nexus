@@ -736,6 +736,9 @@ export interface ProgramaCorte {
   finalizado_por: string | null;
   falta_material_em: string | null;
   falta_material_por: string | null;
+  nri: string | null; // número do NRI anotado pelo operador ao apontar
+  nri_por: string | null;
+  nri_em: string | null;
 }
 
 export type MarcaCorte = "cortando" | "finalizado" | "falta_material";
@@ -751,6 +754,7 @@ export interface HistoricoCorte {
   pecas: number | null;
   itens: number;
   projetistas: string[];
+  nri: string | null;
   minutos_corte: number | null; // só em "Finalizado": tempo desde o último "Cortando"
 }
 

@@ -985,6 +985,23 @@ export async function marcarProgramaCorte(
   return resposta.json();
 }
 
+export async function salvarNriCorte(
+  programa: string,
+  nri: string,
+  por: string | null,
+): Promise<ProgramaCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas/${encodeURIComponent(programa)}/nri`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nri, por }),
+  });
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`O NRI não salvou (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
 // Mesmo valor em várias linhas — "puxar" como no Excel.
 export async function editarLoteCroquiCorte(
   ids: string[],

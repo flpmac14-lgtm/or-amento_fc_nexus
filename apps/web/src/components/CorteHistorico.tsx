@@ -100,6 +100,7 @@ export default function CorteHistorico() {
     const cab = [
       "Data/hora",
       "Programa",
+      "NRI",
       "Ação",
       "Marcou/Desmarcou",
       "Operador",
@@ -113,6 +114,7 @@ export default function CorteHistorico() {
       ...filtradas.map((l) => [
         dataHora(l.em),
         l.programa,
+        l.nri ?? "",
         ROTULO[l.marca].texto,
         l.valor ? "Marcou" : "Desmarcou",
         l.por ?? "",
@@ -249,12 +251,13 @@ export default function CorteHistorico() {
       {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
 
       <div className="max-h-[65vh] overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
-        <table className="w-full min-w-[46rem] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[50rem] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
               {[
                 "Data/hora",
                 "Programa",
+                "NRI",
                 "Ação",
                 "Operador",
                 "Material",
@@ -281,6 +284,9 @@ export default function CorteHistorico() {
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-base font-bold">
                   {l.programa}
+                </td>
+                <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-xs">
+                  {l.nri ?? "—"}
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5">
                   <span
@@ -309,7 +315,7 @@ export default function CorteHistorico() {
             {filtradas.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-3 py-10 text-center text-stone-500 dark:text-slate-500"
                 >
                   {carregando

@@ -76,7 +76,7 @@ def listar() -> dict:
         itens = cur.fetchall()
         cur.execute(
             """select programa, cortando_em, cortando_por, finalizado_em, finalizado_por,
-                      falta_material_em, falta_material_por from corte_programas"""
+                      falta_material_em, falta_material_por, nri, nri_por, nri_em from corte_programas"""
         )
         marcas = {r[0]: r for r in cur.fetchall()}
 
@@ -110,6 +110,7 @@ def listar() -> dict:
         prog["cortando_em"], prog["cortando_por"] = (_iso(m[1]), m[2]) if m else (None, None)
         prog["finalizado_em"], prog["finalizado_por"] = (_iso(m[3]), m[4]) if m else (None, None)
         prog["falta_material_em"], prog["falta_material_por"] = (_iso(m[5]), m[6]) if m else (None, None)
+        prog["nri"], prog["nri_por"], prog["nri_em"] = (m[7], m[8], _iso(m[9])) if m else (None, None, None)
         lista.append(prog)
     lista.sort(key=lambda x: int(x["programa"]), reverse=True)
     return {"programas": lista}
@@ -143,7 +144,7 @@ def historico(dias: int = 90) -> dict:
         saida.append({
             "id": hid, "programa": programa, "marca": marca, "valor": valor, "por": por, "em": em.isoformat(),
             "mps": prog.get("mps", []), "pecas": prog.get("pecas"), "itens": len(prog.get("itens", [])),
-            "projetistas": prog.get("projetistas", []), "minutos_corte": minutos,
+            "projetistas": prog.get("projetistas", []), "nri": prog.get("nri"), "minutos_corte": minutos,
         })
     return {"historico": saida}
 
@@ -168,5 +169,26 @@ def marcar(programa: str, marca: str, valor: bool, por: str | None) -> dict:
         # Histórico de serviço (migration 0024) — pedido do usuário.
         cur.execute("insert into corte_historico (programa, marca, valor, por) values (%s, %s, %s, %s)",
                     (programa, marca, valor, por))
+        conn.commit()
+    return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})
+
+
+def salvar_nri(programa: str, nri: str | None, por: str | None) -> dict:
+    """Grava o número do NRI do programa (vazio apaga). Devolve o programa atualizado."""
+    programa = str(programa).strip()
+    if not re.fullmatch(r"\d+", programa):
+        raise ValueError("Número de programa inválido.")
+    nri = re.sub(r"\s", "", str(nri or ""))
+    if nri and not re.fullmatch(r"\d{1,20}", nri):
+        raise ValueError("O NRI deve ter só números.")
+    nri = nri or None
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into corte_programas (programa, nri, nri_por, nri_em, atualizado_em)
+               values (%s, %s, %s, case when %s::text is not null then now() end, now())
+               on conflict (programa) do update set
+                 nri = excluded.nri, nri_por = excluded.nri_por, nri_em = excluded.nri_em, atualizado_em = now()""",
+            (programa, nri, por if nri else None, nri),
+        )
         conn.commit()
     return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})

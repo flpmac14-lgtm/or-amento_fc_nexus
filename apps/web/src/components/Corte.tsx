@@ -11,7 +11,7 @@
 // o número na Croqui, as peças se juntam sozinhas (mesmo número).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { listarProgramasCorte, marcarProgramaCorte } from "@/lib/api";
+import { listarProgramasCorte, marcarProgramaCorte, salvarNriCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -71,6 +71,9 @@ function programaManual(programa: string): ProgramaCorte {
     finalizado_por: null,
     falta_material_em: null,
     falta_material_por: null,
+    nri: null,
+    nri_por: null,
+    nri_em: null,
   };
 }
 
@@ -136,6 +139,8 @@ export default function Corte({
   const [abertoNum, setAbertoNum] = useState<string | null>(null);
   const [salvando, setSalvando] = useState<MarcaCorte | null>(null);
   const [agora, setAgora] = useState(0);
+  // NRI (pedido do usuário): anotado no apontamento; grava no "Salvar".
+  const [nri, setNri] = useState("");
 
   useEffect(() => {
     let ativo = true;
@@ -171,6 +176,14 @@ export default function Corte({
     [programas],
   );
   const aberto = abertoNum ? (porNumero.get(abertoNum) ?? null) : null;
+  const nriSalvo = aberto?.nri ?? "";
+  // Ao abrir outro programa (ou o NRI gravado mudar), o campo começa com o NRI já gravado.
+  const [nriDe, setNriDe] = useState("");
+  const chaveNri = `${abertoNum ?? ""}|${nriSalvo}`;
+  if (nriDe !== chaveNri) {
+    setNriDe(chaveNri);
+    setNri(nriSalvo);
+  }
 
   const contagem = useMemo(() => {
     const limite = agora - DIAS_RECENTES * 86400000;
@@ -237,6 +250,7 @@ export default function Corte({
     setSalvando("cortando");
     setErro("");
     try {
+      if (nri !== nriSalvo) await salvarNriCorte(numeroProg, nri, usuario);
       const l = await listarProgramasCorte();
       setProgramas(l);
       setSalvo(
@@ -405,6 +419,11 @@ export default function Corte({
                     >
                       {s.texto}
                     </span>
+                    {p.nri && (
+                      <span className="w-fit rounded border border-stone-400 px-2 py-0.5 font-mono text-xs font-bold text-stone-700 dark:border-slate-500 dark:text-slate-200">
+                        NRI {p.nri}
+                      </span>
+                    )}
                     {p.manual && (
                       <span className="w-fit rounded border border-sky-500 px-2 py-0.5 text-xs font-bold text-sky-700 dark:text-sky-300">
                         Manual
@@ -534,6 +553,29 @@ export default function Corte({
                 );
               })}
             </div>
+
+            <label className="flex flex-col gap-1 px-4 pb-3">
+              <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">
+                Nº do NRI
+                {aberto.nri && aberto.nri_por && (
+                  <span className="ml-2 font-normal text-stone-500 dark:text-slate-500">
+                    gravado por {aberto.nri_por} · {quando(aberto.nri_em)}
+                  </span>
+                )}
+              </span>
+              <input
+                value={nri}
+                onChange={(e) => setNri(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && salvando === null) salvarEFechar(aberto.programa);
+                }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                placeholder="Digite o número do NRI"
+                className="h-20 w-full rounded-2xl border-4 border-stone-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 font-mono text-4xl font-bold text-stone-900 dark:text-white outline-none focus:border-green-600 dark:focus:border-cyan-400"
+              />
+            </label>
 
             <div className="px-4 pb-3">
               <button
