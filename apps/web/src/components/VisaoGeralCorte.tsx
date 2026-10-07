@@ -6,6 +6,7 @@
 // lado (uma busca só): o laser agora e os "Cortados" por operador.
 
 import { useState } from "react";
+import { ProvedorPdfsCorte, usePdfsCorte } from "@/components/PdfPrograma";
 import { Bloco, Vazio, useBloco } from "@/components/VisaoGeralComum";
 import { ddmm, duracao, horaMinuto, linkObra, type OperadorCorte, type ProgramaCorte, type RespostaCorte } from "@/lib/painel";
 import { minutosUteis } from "@/lib/jornada";
@@ -28,6 +29,27 @@ function diaLocal(v: string | Date): string {
 // Só a jornada da fábrica (lib/jornada.ts), não relógio corrido.
 function minutosDesde(iso: string | null): number | null {
   return iso ? minutosUteis(iso) : null;
+}
+
+/** Olhinho (pedido do usuário): abre o PDF do programa, se tiver na pasta de corte. */
+function OlhoPdf({ programa }: { programa: string }) {
+  const { pdfsDe, abrir } = usePdfsCorte();
+  const n = pdfsDe(programa).length;
+  if (!n) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        abrir(programa);
+      }}
+      title={`Ver o PDF do programa ${programa}${n > 1 ? ` (${n} arquivos)` : ""}`}
+      aria-label={`Ver o PDF do programa ${programa}`}
+      className="shrink-0 rounded px-0.5 text-sm leading-none text-sky-700 hover:bg-sky-100 dark:text-sky-300 dark:hover:bg-sky-950/60"
+    >
+      👁
+    </button>
+  );
 }
 
 function Obras({ obras }: { obras: string[] }) {
@@ -65,6 +87,7 @@ function EmCorte({ p, falta }: { p: ProgramaCorte; falta?: boolean }) {
       <span className="text-base font-black text-stone-900 dark:text-white" title={infoMaquina(p.maquina).rotulo}>
         {infoMaquina(p.maquina).icone} {p.programa}
       </span>
+      <OlhoPdf programa={p.programa} />
       <Obras obras={p.obras} />
       <span className="ml-auto whitespace-nowrap text-right text-xs leading-tight text-stone-600 dark:text-slate-300">
         <span className="font-semibold">{falta ? "falta material" : p.cortando_por ?? "—"}</span>
@@ -125,6 +148,7 @@ function CartaoOperador({ o, termo }: { o: OperadorCorte; termo: string }) {
             <span className="w-16 shrink-0 font-bold text-stone-900 dark:text-white" title={infoMaquina(p.maquina).rotulo}>
               {infoMaquina(p.maquina).icone} {p.programa}
             </span>
+            <OlhoPdf programa={p.programa} />
             <Obras obras={p.obras} />
             <span className="min-w-0 flex-1 truncate text-stone-600 dark:text-slate-300" title={p.mps.join(", ")}>
               {p.mps.join(", ")}
@@ -148,7 +172,8 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
   const termo = busca.trim().toLowerCase();
   const maxDia = Math.max(1, ...(dados?.por_dia ?? []).map((d) => d.programas));
   return (
-    <>
+    // Índice dos PDFs da pasta de corte (uma busca ao abrir a Visão Geral) — o olhinho 👁.
+    <ProvedorPdfsCorte>
     <Bloco
       titulo="✂️ Corte — ⚡ Laser · 🔥 Oxicorte"
       carregando={carregando}
@@ -257,6 +282,6 @@ export default function VisaoGeralCorte({ tick }: { tick: number }) {
         )}
       </div>
     </Bloco>
-    </>
+    </ProvedorPdfsCorte>
   );
 }
