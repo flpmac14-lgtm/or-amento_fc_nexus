@@ -176,7 +176,7 @@ export default function VisaoGeralProjeto({ tick }: { tick: number }) {
         carregando={carregando}
         erro={erro}
         extra={
-          <a href="/follow-up" className="font-semibold text-green-700 dark:text-cyan-300 hover:underline">
+          <a href="/follow-up?aba=croqui" className="font-semibold text-green-700 dark:text-cyan-300 hover:underline">
             abrir Croqui
           </a>
         }

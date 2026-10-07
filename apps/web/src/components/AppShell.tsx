@@ -14,12 +14,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
+import {
+  EVENTO_ABA_MUDOU,
+  EVENTO_IR_PARA_ABA,
+  ROTA_FOLLOW_UP,
+  abaDoEndereco,
+  hrefAba,
+  visoesDoPerfil,
+  type ValorVisao,
+} from "@/lib/abasFollowUp";
 import { acessoSoFollowUp, perfilModulo } from "@/lib/acesso";
 import { podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
+const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
 type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "sair";
 
@@ -105,6 +115,8 @@ interface ItemMenu {
   href: string;
   rotulo: string;
   icone: Icone;
+  // Abas de dentro (pedido do usuário: Follow up / Produção abre as sub-abas no menu).
+  subitens?: { valor: ValorVisao; rotulo: string }[];
 }
 
 interface Conta {
@@ -131,7 +143,12 @@ function montarMenu(user: User): Conta {
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
   if (!restrita) operacao.push({ href: "/", rotulo: "Orçamentos", icone: "orcamento" });
-  operacao.push({ href: "/follow-up", rotulo: "Follow up / Produção", icone: "followup" });
+  operacao.push({
+    href: ROTA_FOLLOW_UP,
+    rotulo: "Follow up / Produção",
+    icone: "followup",
+    subitens: visoesDoPerfil(perfil, perfil === "follow_up").map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+  });
   secoes.push({ secao: "Operação", itens: operacao });
   if (!restrita) secoes.push({ secao: "Administração", itens: [{ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" }] });
   return { login: emailParaLogin(user.email ?? ""), perfil, itens: secoes };
@@ -153,6 +170,37 @@ export default function AppShell({
   const [conta, setConta] = useState<Conta | null>(null);
   const [aberto, setAberto] = useState(false); // celular
   const [recolhido, setRecolhido] = useState(false); // PC
+  // Sub-abas do Follow up no menu: aberto por padrão (lembrado), e qual aba está aberta.
+  const [submenuAberto, setSubmenuAberto] = useState(true);
+  const [abaAtual, setAbaAtual] = useState<ValorVisao | null>(null);
+
+  useEffect(() => {
+    function mudou(e: Event) {
+      setAbaAtual((e as CustomEvent<ValorVisao>).detail);
+    }
+    window.addEventListener(EVENTO_ABA_MUDOU, mudou);
+    return () => window.removeEventListener(EVENTO_ABA_MUDOU, mudou);
+  }, []);
+
+  function alternarSubmenu() {
+    setSubmenuAberto((a) => {
+      try {
+        localStorage.setItem(CHAVE_SUBMENU, a ? "0" : "1");
+      } catch {
+        // sem persistência
+      }
+      return !a;
+    });
+  }
+
+  // Já está no Follow up: troca de aba sem recarregar; senão vai pra página com ?aba=.
+  function irParaAba(e: React.MouseEvent, valor: ValorVisao) {
+    setAberto(false);
+    if (caminho === ROTA_FOLLOW_UP) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent(EVENTO_IR_PARA_ABA, { detail: valor }));
+    }
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -161,9 +209,11 @@ export default function AppShell({
       .then(({ data }) => {
         if (!ativo) return;
         if (data.user) setConta(montarMenu(data.user));
+        setAbaAtual((a) => a ?? abaDoEndereco());
         // Menu recolhido no PC (lembrado entre visitas).
         try {
           if (localStorage.getItem(CHAVE_RECOLHIDO) === "1") setRecolhido(true);
+          if (localStorage.getItem(CHAVE_SUBMENU) === "0") setSubmenuAberto(false);
         } catch {
           // localStorage bloqueado: começa aberto
         }
@@ -239,25 +289,73 @@ export default function AppShell({
             <div key={s.secao} className="mt-2">
               <p className="px-4 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/40">{s.secao}</p>
               {s.itens.map((i) => (
-                <Link
-                  key={i.href}
-                  href={i.href}
-                  onClick={() => setAberto(false)}
-                  className={`flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-sm transition-colors ${
-                    ativo(i.href)
-                      ? "border-amber-400 bg-white/10 font-semibold text-white"
-                      : "border-transparent text-white/75 hover:border-amber-400/60 hover:bg-white/5 hover:text-white"
-                  }`}
-                >
-                  <IconeMenu nome={i.icone} />
-                  {i.rotulo}
-                </Link>
+                <div key={i.href}>
+                  <div className="flex items-stretch">
+                    <Link
+                      href={i.href}
+                      onClick={() => setAberto(false)}
+                      className={`flex min-w-0 flex-1 items-center gap-3 border-l-[3px] px-4 py-2.5 text-sm transition-colors ${
+                        ativo(i.href)
+                          ? "border-amber-400 bg-white/10 font-semibold text-white"
+                          : "border-transparent text-white/75 hover:border-amber-400/60 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <IconeMenu nome={i.icone} />
+                      <span className="truncate">{i.rotulo}</span>
+                    </Link>
+                    {i.subitens && i.subitens.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={alternarSubmenu}
+                        aria-expanded={submenuAberto}
+                        aria-label={submenuAberto ? "Esconder as abas" : "Mostrar as abas"}
+                        title={submenuAberto ? "Esconder as abas" : "Mostrar as abas"}
+                        className={`flex w-10 shrink-0 items-center justify-center text-white/60 hover:bg-white/5 hover:text-white ${ativo(i.href) ? "bg-white/10" : ""}`}
+                      >
+                        <svg viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${submenuAberto ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  {i.subitens && i.subitens.length > 1 && submenuAberto && (
+                    <div className="mb-1 ml-[1.6rem] border-l border-white/15 py-0.5">
+                      {i.subitens.map((sub) => {
+                        const naAba = ativo(i.href) && abaAtual === sub.valor;
+                        return (
+                          <Link
+                            key={sub.valor}
+                            href={hrefAba(sub.valor)}
+                            onClick={(e) => irParaAba(e, sub.valor)}
+                            className={`relative flex items-center py-1.5 pl-4 pr-3 text-[13px] transition-colors ${
+                              naAba ? "font-semibold text-amber-300" : "text-white/60 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            <span
+                              className={`absolute -left-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${naAba ? "bg-amber-400" : "bg-white/25"}`}
+                            />
+                            {sub.rotulo}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           ))}
         </nav>
 
-        <div className="border-t border-white/10 p-3">
+        <div className="flex flex-col gap-2 border-t border-white/10 p-3">
+          {/* Pedido do usuário: minimizar o menu pra ver a página toda (o ☰ traz de volta). */}
+          <button
+            type="button"
+            onClick={alternarMenu}
+            title="Minimizar o menu (o ☰ no topo traz de volta)"
+            className="hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-sm text-white/60 hover:bg-white/10 hover:text-white lg:flex"
+          >
+            <span aria-hidden="true">«</span> Minimizar menu
+          </button>
           <button
             type="button"
             onClick={sair}
@@ -274,6 +372,7 @@ export default function AppShell({
             type="button"
             onClick={alternarMenu}
             aria-label="Abrir ou fechar o menu"
+            title={recolhido ? "Mostrar o menu" : "Abrir ou fechar o menu"}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

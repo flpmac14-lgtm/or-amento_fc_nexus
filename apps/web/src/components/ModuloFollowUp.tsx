@@ -21,28 +21,16 @@ import { classeAbaSublinhada } from "@/components/AppShell";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
+import {
+  EVENTO_ABA_MUDOU,
+  EVENTO_IR_PARA_ABA,
+  abaDoEndereco,
+  visoesDoPerfil,
+  type PerfilModulo,
+  type ValorVisao,
+} from "@/lib/abasFollowUp";
 
-const VISOES = [
-  { valor: "followup", rotulo: "Follow up" },
-  { valor: "controle", rotulo: "Controle de obras" },
-  // Espelho da aba MACLM do MACLM.xlsx — pedido do usuário (mãe de um projeto novo).
-  { valor: "material", rotulo: "Material de compra" },
-  // Filha do Material de compra (aba Croqui 2 do Croqui de corte) — pedido do usuário.
-  { valor: "croqui", rotulo: "Croqui de corte" },
-  // Operador do laser marca Cortando / Finalizado / Falta material por programa.
-  { valor: "corte", rotulo: "Corte" },
-  // Líder da Usinagem aponta por pedido do Follow up (pedido do usuário).
-  { valor: "usinagem", rotulo: "Usinagem" },
-  { valor: "referencia", rotulo: "Referência de preços" },
-] as const;
-
-// comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
-// a aba "Referência de preços" (histórico de compras do ERP), que as contas
-// completas já têm na tela principal.
-// perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
-// Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
-// "usinagem" (líder da Usinagem, saymon) = só Usinagem.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem";
+export type { PerfilModulo } from "@/lib/abasFollowUp";
 
 export default function ModuloFollowUp({
   comReferenciaPrecos = false,
@@ -52,24 +40,42 @@ export default function ModuloFollowUp({
   perfil?: PerfilModulo;
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem";
-  const [visaoEscolhida, setVisao] = useState<(typeof VISOES)[number]["valor"]>(
-    perfil === "corte" ? "corte" : perfil === "usinagem" ? "usinagem" : perfil === "projeto" ? "croqui" : "followup",
+  // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
+  const [visaoEscolhida, setVisao] = useState<ValorVisao>(
+    () =>
+      abaDoEndereco() ??
+      (perfil === "corte" ? "corte" : perfil === "usinagem" ? "usinagem" : perfil === "projeto" ? "croqui" : "followup"),
   );
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
-  const [materialAberto, setMaterialAberto] = useState(false);
-  const [croquiAberto, setCroquiAberto] = useState(false);
-  const visoes = VISOES.filter((v) =>
-    perfil === "corte"
-      ? v.valor === "corte"
-      : perfil === "usinagem"
-        ? v.valor === "usinagem"
-        : perfil === "projeto"
-          ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-          : v.valor === "usinagem"
-            ? perfil === "total"
-            : v.valor !== "referencia" || comReferenciaPrecos,
-  );
+  const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
+  const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
+  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
+
+  function abrirVisao(v: ValorVisao) {
+    setVisao(v);
+    if (v === "material") setMaterialAberto(true);
+    if (v === "croqui") setCroquiAberto(true);
+  }
+
+  // Menu lateral → aba (mesma página, sem recarregar).
+  useEffect(() => {
+    function ir(e: Event) {
+      abrirVisao((e as CustomEvent<ValorVisao>).detail);
+    }
+    window.addEventListener(EVENTO_IR_PARA_ABA, ir);
+    return () => window.removeEventListener(EVENTO_IR_PARA_ABA, ir);
+  }, []);
+
+  // Aba aberta no endereço (recarregar continua nela) e avisa o menu lateral.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("aba") !== visao) {
+      url.searchParams.set("aba", visao);
+      window.history.replaceState(window.history.state, "", url);
+    }
+    window.dispatchEvent(new CustomEvent(EVENTO_ABA_MUDOU, { detail: visao }));
+  }, [visao]);
   const [telaCheia, setTelaCheia] = useState(false);
   // Onde o Follow up desenha os cards de ativos por cliente (só na tela cheia).
   const [alvoCards, setAlvoCards] = useState<HTMLDivElement | null>(null);
@@ -165,11 +171,7 @@ export default function ModuloFollowUp({
             <button
               key={v.valor}
               type="button"
-              onClick={() => {
-                setVisao(v.valor);
-                if (v.valor === "material") setMaterialAberto(true);
-                if (v.valor === "croqui") setCroquiAberto(true);
-              }}
+              onClick={() => abrirVisao(v.valor)}
               className={classeAbaSublinhada(visao === v.valor)}
             >
               {v.rotulo}

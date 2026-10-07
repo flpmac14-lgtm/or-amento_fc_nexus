@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
 import { acessoSoFollowUp, perfilModulo } from "@/lib/acesso";
-import type { PerfilModulo } from "@/components/ModuloFollowUp";
+import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
