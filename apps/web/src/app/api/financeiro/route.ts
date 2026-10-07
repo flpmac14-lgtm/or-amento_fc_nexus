@@ -18,8 +18,10 @@ async function usuarioFinanceiro(): Promise<string | null> {
 
 const NEGADO = () => NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await usuarioFinanceiro())) return NEGADO();
+  // ?sem_notas=1 (bloco da Visão Geral): não manda a lista de NFs, que é a maior parte.
+  const semNotas = new URL(request.url).searchParams.has("sem_notas");
   const admin = criarClienteSupabaseAdmin();
   const [resumo, budget] = await Promise.all([
     admin.from("financeiro_resumo").select("dados, gerado_em").eq("id", 1).maybeSingle(),
@@ -30,7 +32,7 @@ export async function GET() {
   }
   return NextResponse.json(
     {
-      resumo: resumo.data?.dados ?? null,
+      resumo: resumo.data?.dados ? (semNotas ? { ...resumo.data.dados, notas: [] } : resumo.data.dados) : null,
       gerado_em: resumo.data?.gerado_em ?? null,
       budget: budget.data?.dados ?? { faturamento: {}, custos_pct: {} },
     },

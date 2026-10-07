@@ -38,47 +38,36 @@ export default function VisaoGeralFinanceiro({ tick }: { tick: number }) {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const lidoEm = useRef(0);
+  // "Montado" num ref à parte: se o React desmontar e montar de novo o efeito
+  // (StrictMode), a resposta da 1ª busca ainda vale — senão ficava preso em
+  // "atualizando…" (bug de 07/10).
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (lidoEm.current && Date.now() - lidoEm.current < RELER_APOS_MS) return;
-    let ativo = true;
     lidoEm.current = Date.now();
-    fetch("/api/financeiro", { cache: "no-store" })
+    // sem_notas: a lista de NFs (~190 KB) só é usada na aba Financeiro.
+    fetch("/api/financeiro?sem_notas=1", { cache: "no-store" })
       .then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.erro ?? `Erro ${r.status}`);
-        if (ativo) {
+        if (montado.current) {
           setDados(j);
           setErro("");
         }
       })
       .catch((e: Error) => {
         lidoEm.current = 0;
-        if (ativo) setErro(e.message);
+        if (montado.current) setErro(e.message);
       })
-      .finally(() => ativo && setCarregando(false));
-    return () => {
-      ativo = false;
-    };
+      .finally(() => montado.current && setCarregando(false));
   }, [tick]);
-
-  const resumo = dados?.resumo ?? null;
-  const budget = dados?.budget ?? { faturamento: {}, custos_pct: {} };
-  const meses = resumo?.meses ?? [];
-  const m0 = meses[meses.length - 1];
-  const m1 = meses[meses.length - 2];
-  const fat = (m?: string) => {
-    const f = m ? resumo?.faturamento[m] : undefined;
-    return f ? f.producao + f.servico : 0;
-  };
-  const custos = (m?: string) => Object.values((m && resumo?.custos[m]) || {}).reduce((t, v) => t + v, 0);
-
-  const total = fat(m0);
-  const meta = m0 ? budget.faturamento[m0] : undefined;
-  const f0 = m0 ? resumo?.faturamento[m0] : undefined;
-  const ultimos = meses.slice(-6);
-  const maxBarra = Math.max(1, ...ultimos.map((m) => Math.max(fat(m), budget.faturamento[m] ?? 0)));
-  const metaAnt = m1 ? budget.faturamento[m1] : undefined;
 
   return (
     <Bloco
@@ -99,8 +88,34 @@ export default function VisaoGeralFinanceiro({ tick }: { tick: number }) {
     >
       {/* Faixa de destaque no topo do quadro. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500" />
-      {!resumo && !carregando && !erro && <p className="text-sm text-stone-500 dark:text-slate-400">Ainda não há resumo do ERP gravado.</p>}
-      {resumo && m0 && (
+      {!dados?.resumo && !carregando && !erro && <p className="text-sm text-stone-500 dark:text-slate-400">Ainda não há resumo do ERP gravado.</p>}
+      {dados?.resumo && <ConteudoFinanceiro dados={dados} />}
+    </Bloco>
+  );
+}
+
+/** O que o bloco mostra (separado do carregamento, pra dar pra testar com dados reais). */
+export function ConteudoFinanceiro({ dados }: { dados: RespostaFinanceiro }) {
+  const resumo = dados?.resumo ?? null;
+  const budget = dados?.budget ?? { faturamento: {}, custos_pct: {} };
+  const meses = resumo?.meses ?? [];
+  const m0 = meses[meses.length - 1];
+  const m1 = meses[meses.length - 2];
+  const fat = (m?: string) => {
+    const f = m ? resumo?.faturamento[m] : undefined;
+    return f ? f.producao + f.servico : 0;
+  };
+  const custos = (m?: string) => Object.values((m && resumo?.custos[m]) || {}).reduce((t, v) => t + v, 0);
+
+  const total = fat(m0);
+  const meta = m0 ? budget.faturamento[m0] : undefined;
+  const f0 = m0 ? resumo?.faturamento[m0] : undefined;
+  const ultimos = meses.slice(-6);
+  const maxBarra = Math.max(1, ...ultimos.map((m) => Math.max(fat(m), budget.faturamento[m] ?? 0)));
+  const metaAnt = m1 ? budget.faturamento[m1] : undefined;
+
+  if (!resumo || !m0) return null;
+  return (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
           {/* Faturamento do mês x budget */}
           <div className="shrink-0 rounded-lg bg-gradient-to-br from-emerald-50 to-cyan-50 p-2.5 dark:from-emerald-950/40 dark:to-cyan-950/30">
@@ -175,7 +190,6 @@ export default function VisaoGeralFinanceiro({ tick }: { tick: number }) {
             </p>
           )}
         </div>
-      )}
-    </Bloco>
+      
   );
 }
