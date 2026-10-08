@@ -72,7 +72,8 @@ const COLUNAS: Coluna[] = [
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[8rem]" },
   { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
   { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
-  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
+  // Pos inteira, sem cortar (pedido do usuário: igual vem do Material de compra, ex. 001.001.003).
+  { campo: "pos", rotulo: "Pos", tipo: "codigo", fixa: true },
   { campo: "status", rotulo: "Status", tipo: "status" },
   // Pedido do usuário: Nº do programa logo depois do Status.
   { campo: "n_programa", rotulo: "Nº do programa", tipo: "programa" },
