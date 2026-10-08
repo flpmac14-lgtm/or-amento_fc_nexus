@@ -1086,6 +1086,37 @@ export async function editarItemCroquiCorte(
   return resposta.json();
 }
 
+// Corrige (ou apaga) o dia e a hora de Fazendo / Pausado / Feito — João e Honório.
+async function enviarTemposCroqui(url: string, metodo: string, corpo: object): Promise<ItemCroquiCorte> {
+  const resposta = await fetch(url, {
+    method: metodo,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(corpo),
+  });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(detalhe || `Falha ao salvar (${resposta.status}).`);
+  }
+  return resposta.json();
+}
+
+export function editarTemposCroquiCorte(
+  id: string,
+  tempos: { dt_fazendo?: string | null; dt_pausado?: string | null; dt_feito?: string | null; tempo_anterior_min?: number },
+  editadoPor: string | null,
+): Promise<ItemCroquiCorte> {
+  return enviarTemposCroqui(`${CALC_ENGINE_URL}/croqui-corte/itens/${id}/tempos`, "PATCH", { tempos, editado_por: editadoPor });
+}
+
+export function excluirTemposCroquiCorte(id: string, editadoPor: string | null): Promise<ItemCroquiCorte> {
+  return enviarTemposCroqui(`${CALC_ENGINE_URL}/croqui-corte/itens/${id}/tempos/excluir`, "POST", { editado_por: editadoPor });
+}
+
 // Material de compra: mesmo formato da Controle de obras (espelho de planilha).
 export async function listarMaterialCompra(): Promise<RespostaControleObras> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/material-compra`);

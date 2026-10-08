@@ -691,7 +691,10 @@ export interface ItemCroquiCorte {
   n_programa: string | null;
   observacao: string | null;
   dt_fazendo: string | null;
+  // migration 0032: hora do Pausado e minutos de jornada antes do último Fazendo
+  dt_pausado: string | null;
   dt_feito: string | null;
+  tempo_anterior_min: number;
   linha_planilha: number;
   origem: "importacao_croqui" | "material_compra";
   editado_em: string | null;

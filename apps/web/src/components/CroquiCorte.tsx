@@ -5,11 +5,24 @@
 // aba "Croqui 2" do "Croqui de corte rev 01.1.xlsb"; agora é editada aqui.
 // Fixas (PROCV pelo Pedido, travadas): Mac, Descrição, Desenho, MP, L, Pos,
 // QT, QT_1, QTT, UN. Editáveis: Status, Projetista, Nº do programa,
-// Observação — Status "Fazendo" grava Dt.Fazendo e "Feito" grava Dt.Feito
-// (no servidor, ver services/calc_engine/app/croqui_corte.py).
+// Observação — Status "Fazendo" grava Dt.Fazendo, "Pausado" Dt.Pausado e
+// "Feito" Dt.Feito (no servidor, ver services/calc_engine/app/croqui_corte.py).
+// Tempo (pedido do usuário, 08/10): quanto ficou Fazendo até Feito / Pausado,
+// só na jornada; João e Honório corrigem ou apagam essas datas (✏️ / 🗑️ na
+// Última edição).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { editarItemCroquiCorte, editarLoteCroquiCorte, listarCroquiCorte, listarNotificacoesCroquiCorte } from "@/lib/api";
+import {
+  editarItemCroquiCorte,
+  editarLoteCroquiCorte,
+  editarTemposCroquiCorte,
+  excluirTemposCroquiCorte,
+  listarCroquiCorte,
+  listarNotificacoesCroquiCorte,
+} from "@/lib/api";
+import { perfilModulo } from "@/lib/acesso";
+import { minutosUteis } from "@/lib/jornada";
+import { duracao } from "@/lib/painel";
 import { formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca } from "@/lib/followUp";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -37,7 +50,7 @@ const COR_STATUS: Record<string, string> = {
 const PUXAVEIS = new Set<Campo>(["status", "projetista", "n_programa", "observacao"]);
 
 type Campo = keyof ItemCroquiCorte;
-type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "lista" | "editavel" | "edicao" | "programa";
+type Tipo = "codigo" | "texto" | "numero" | "datahora" | "status" | "lista" | "editavel" | "edicao" | "programa" | "tempo";
 
 interface Coluna {
   campo: Campo;
@@ -67,7 +80,10 @@ const COLUNAS: Coluna[] = [
   { campo: "projetista", rotulo: "Projetista", tipo: "lista" },
   { campo: "observacao", rotulo: "Observação", tipo: "editavel", maxW: "max-w-[14rem]" },
   { campo: "dt_fazendo", rotulo: "Dt.Fazendo", tipo: "datahora" },
+  { campo: "dt_pausado", rotulo: "Dt.Pausado", tipo: "datahora" },
   { campo: "dt_feito", rotulo: "Dt.Feito", tipo: "datahora" },
+  // Tempo Fazendo → Feito / Pausado (ou até agora), só a jornada.
+  { campo: "tempo_anterior_min", rotulo: "Tempo", tipo: "tempo" },
   { campo: "qt", rotulo: "QT", tipo: "numero", fixa: true },
   { campo: "qt_1", rotulo: "QT_1", tipo: "numero", fixa: true },
   { campo: "qtt", rotulo: "QTT", tipo: "numero", fixa: true },
@@ -86,7 +102,25 @@ function dataHora(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// Minutos de jornada trabalhados: etapas antes do último Fazendo + o trecho
+// atual, que termina agora (Fazendo), no Pausado (Pausado, ou Feito depois de
+// pausar) ou no Feito. Mesma regra de app/croqui_corte.py (migration 0032).
+function tempoMin(item: ItemCroquiCorte, agora: Date = new Date()): number | null {
+  const anterior = item.tempo_anterior_min ?? 0;
+  if (!item.dt_fazendo) return anterior || null;
+  let fim: string | Date | null = null;
+  if (item.status === "Fazendo") fim = agora;
+  else if (item.status === "Pausado") fim = item.dt_pausado;
+  else if (item.status === "Feito") fim = item.dt_pausado ?? item.dt_feito;
+  if (!fim) return anterior || null;
+  return anterior + minutosUteis(item.dt_fazendo, fim);
+}
+
 function exibir(item: ItemCroquiCorte, col: Coluna): string {
+  if (col.tipo === "tempo") {
+    const m = tempoMin(item);
+    return m === null ? "" : duracao(m);
+  }
   const v = item[col.campo];
   if (v === null || v === undefined) return "";
   if (col.tipo === "datahora") return dataHora(v as string);
@@ -176,6 +210,11 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [editadoPor, setEditadoPor] = useState<string | null>(null);
+  // ✏️ / 🗑️ das datas — pedido do usuário: só o João e o Honório (e quem tem acesso total).
+  const [podeCorrigir, setPodeCorrigir] = useState(false);
+  const [corrigindo, setCorrigindo] = useState<{ item: ItemCroquiCorte; excluir: boolean } | null>(null);
+  // Tempo de quem está Fazendo anda sozinho na tela.
+  const [, setTique] = useState(0);
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState("");
   const [projetista, setProjetista] = useState("");
@@ -210,10 +249,17 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
     const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
-      .then(({ data }) => ativo && data.user?.email && setEditadoPor(emailParaLogin(data.user.email)));
+      .then(({ data }) => {
+        if (!ativo || !data.user) return;
+        if (data.user.email) setEditadoPor(emailParaLogin(data.user.email));
+        const perfil = perfilModulo(data.user);
+        setPodeCorrigir(perfil === "total" || perfil === "projeto");
+      });
+    const tique = setInterval(() => setTique((t) => t + 1), 60 * 1000);
     return () => {
       ativo = false;
       clearInterval(id);
+      clearInterval(tique);
     };
   }, []);
 
@@ -288,9 +334,11 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
       return true;
     });
     if (ordem) {
+      const agora = new Date();
+      const valor = (i: ItemCroquiCorte) => (ordem.campo === "tempo_anterior_min" ? tempoMin(i, agora) : i[ordem.campo]);
       lista.sort((a, b) => {
-        const va = a[ordem.campo];
-        const vb = b[ordem.campo];
+        const va = valor(a);
+        const vb = valor(b);
         const vazio = (x: unknown) => x === null || x === undefined || x === "";
         if (vazio(va) || vazio(vb)) return compararValores(va, vb);
         return ordem.desc ? -compararValores(va, vb) : compararValores(va, vb);
@@ -410,14 +458,56 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
     if (col.tipo === "programa") {
       return <CelulaProgramas valor={item.n_programa ?? ""} salvar={(novo) => salvar(item, "n_programa", novo)} />;
     }
-    if (col.tipo === "edicao") {
-      return item.editado_em ? (
-        <span className="block whitespace-nowrap text-[11px] leading-tight">
-          <span className="font-semibold">{item.editado_por ?? "—"}</span>
-          <span className="block font-mono text-stone-500 dark:text-slate-400">{dataHora(item.editado_em)}</span>
+    if (col.tipo === "tempo") {
+      const m = tempoMin(item);
+      if (m === null) return <span className="text-xs text-stone-300 dark:text-slate-600">—</span>;
+      return (
+        <span
+          className={`font-mono font-semibold ${item.status === "Fazendo" ? "text-amber-600 dark:text-amber-400" : ""}`}
+          title={
+            item.status === "Fazendo"
+              ? "Fazendo agora — conta até agora (só a jornada: seg–sex 7:30–17:17, sem almoço)"
+              : "Tempo Fazendo até Feito / Pausado (só a jornada: seg–sex 7:30–17:17, sem almoço)"
+          }
+        >
+          {duracao(m)}
         </span>
-      ) : (
-        <span className="text-xs text-stone-300 dark:text-slate-600">—</span>
+      );
+    }
+    if (col.tipo === "edicao") {
+      return (
+        <span className="flex items-center gap-1.5">
+          {item.editado_em ? (
+            <span className="block whitespace-nowrap text-[11px] leading-tight">
+              <span className="font-semibold">{item.editado_por ?? "—"}</span>
+              <span className="block font-mono text-stone-500 dark:text-slate-400">{dataHora(item.editado_em)}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-stone-300 dark:text-slate-600">—</span>
+          )}
+          {podeCorrigir && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCorrigindo({ item, excluir: false })}
+                title="Editar o dia e a hora de Fazendo / Pausado / Feito"
+                aria-label={`Editar datas do pedido ${item.pedido}`}
+                className="rounded px-0.5 text-xs leading-none opacity-60 hover:bg-stone-100 hover:opacity-100 dark:hover:bg-slate-800"
+              >
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => setCorrigindo({ item, excluir: true })}
+                title="Excluir as datas de Fazendo / Pausado / Feito (o status fica)"
+                aria-label={`Excluir datas do pedido ${item.pedido}`}
+                className="rounded px-0.5 text-xs leading-none opacity-60 hover:bg-red-50 hover:opacity-100 dark:hover:bg-red-950/40"
+              >
+                🗑️
+              </button>
+            </>
+          )}
+        </span>
       );
     }
     return exibir(item, col);
@@ -431,8 +521,9 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           Filha do <strong>Material de compra</strong>: pedidos ST = A novos entram sozinhos (a cada 15 min) e as colunas{" "}
           <IconeCadeado /> vêm da MACLM pelo Pedido — não são editáveis. Status, Projetista, Nº do programa e Observação: edite na
           célula, salva sozinho. No Nº do programa, o <strong>+</strong> acrescenta subprogramas na mesma linha (cada um aparece
-          na aba Corte). Status <strong>Fazendo</strong> grava a data e hora em Dt.Fazendo; <strong>Feito</strong>, em
-          Dt.Feito. Para repetir um valor em várias linhas, arraste o quadradinho do canto da célula (como no Excel).
+          na aba Corte). Status <strong>Fazendo</strong> grava a data e hora em Dt.Fazendo; <strong>Pausado</strong>, em
+          Dt.Pausado; <strong>Feito</strong>, em Dt.Feito — e a coluna <strong>Tempo</strong> mostra quanto ficou Fazendo (só a
+          jornada). Para corrigir ou apagar essas datas, use ✏️ / 🗑️ na Última edição. Para repetir um valor em várias linhas, arraste o quadradinho do canto da célula (como no Excel).
         </p>
       </div>
 
@@ -695,6 +786,203 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           >
             Próxima ›
           </button>
+        </div>
+      </div>
+      {corrigindo && (
+        <CorrigirTempos
+          key={corrigindo.item.id}
+          item={corrigindo.item}
+          excluir={corrigindo.excluir}
+          editadoPor={editadoPor}
+          fechar={() => setCorrigindo(null)}
+          salvo={(novo) => {
+            trocarItens([novo]);
+            setCorrigindo(null);
+            const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            setAviso({ ok: true, texto: `✓ Datas do pedido ${novo.pedido} salvas — ${hora}` });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ISO → valor do <input type="datetime-local"> no horário do aparelho.
+function paraCampo(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function deCampo(v: string): string | null {
+  return v ? new Date(v).toISOString() : null;
+}
+
+// ✏️ / 🗑️ da Última edição — pedido do usuário (08/10): o João e o Honório
+// corrigem o dia e a hora de Fazendo / Pausado / Feito (ou apagam) e o tempo
+// recalcula pela mesma regra (só a jornada).
+function CorrigirTempos({
+  item,
+  excluir,
+  editadoPor,
+  fechar,
+  salvo,
+}: {
+  item: ItemCroquiCorte;
+  excluir: boolean;
+  editadoPor: string | null;
+  fechar: () => void;
+  salvo: (novo: ItemCroquiCorte) => void;
+}) {
+  const [fazendo, setFazendo] = useState(paraCampo(item.dt_fazendo));
+  const [pausado, setPausado] = useState(paraCampo(item.dt_pausado));
+  const [feito, setFeito] = useState(paraCampo(item.dt_feito));
+  const [anterior, setAnterior] = useState(String(item.tempo_anterior_min ?? 0));
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => e.key === "Escape" && !enviando && fechar();
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, [enviando, fechar]);
+
+  const previa: ItemCroquiCorte = {
+    ...item,
+    dt_fazendo: deCampo(fazendo),
+    dt_pausado: deCampo(pausado),
+    dt_feito: deCampo(feito),
+    tempo_anterior_min: Math.max(0, Math.round(Number(anterior) || 0)),
+  };
+  const tempo = tempoMin(previa);
+
+  async function enviar(acao: () => Promise<ItemCroquiCorte>) {
+    setEnviando(true);
+    setErro("");
+    try {
+      salvo(await acao());
+    } catch (e) {
+      setErro((e as Error).message);
+      setEnviando(false);
+    }
+  }
+
+  const campos: { rotulo: string; valor: string; set: (v: string) => void; cor: string }[] = [
+    { rotulo: "Fazendo", valor: fazendo, set: setFazendo, cor: COR_STATUS.Fazendo },
+    { rotulo: "Pausado", valor: pausado, set: setPausado, cor: COR_STATUS.Pausado },
+    { rotulo: "Feito", valor: feito, set: setFeito, cor: COR_STATUS.Feito },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => !enviando && fechar()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Datas do pedido ${item.pedido}`}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-lg border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xl"
+      >
+        <h3 className="text-base font-bold text-stone-900 dark:text-white">
+          {excluir ? "Excluir datas" : "Editar datas"} — <span className="font-mono">{item.pedido}</span>
+        </h3>
+        <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+          {item.mac ?? ""} {item.descricao ? `· ${item.descricao}` : ""} · Status: <strong>{item.status ?? "—"}</strong>
+        </p>
+
+        {excluir ? (
+          <p className="mt-4 text-sm text-stone-700 dark:text-slate-300">
+            Apaga o dia e a hora de <strong>Fazendo</strong>, <strong>Pausado</strong> e <strong>Feito</strong> e o tempo desta
+            linha. O status, o programa e o resto ficam como estão.
+          </p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-3">
+            {campos.map((c) => (
+              <label key={c.rotulo} className="flex flex-col gap-1 text-xs font-semibold text-stone-700 dark:text-slate-300">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm border border-stone-300" style={{ backgroundColor: c.cor }} />
+                  {c.rotulo}
+                </span>
+                <span className="flex gap-1">
+                  <input type="datetime-local" value={c.valor} onChange={(e) => c.set(e.target.value)} className={classeCampo} />
+                  {c.valor && (
+                    <button
+                      type="button"
+                      onClick={() => c.set("")}
+                      title={`Limpar ${c.rotulo}`}
+                      className="rounded border border-stone-300 dark:border-slate-700 px-2 text-stone-500 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              </label>
+            ))}
+            <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700 dark:text-slate-300">
+              Tempo de antes de pausar (min)
+              <input
+                type="number"
+                min={0}
+                value={anterior}
+                onChange={(e) => setAnterior(e.target.value)}
+                className={classeCampo}
+                title="Minutos já feitos antes do último Fazendo (Fazendo → Pausado → Fazendo soma aqui sozinho)"
+              />
+            </label>
+            <p className="rounded bg-stone-50 dark:bg-slate-800/60 px-3 py-2 text-sm text-stone-700 dark:text-slate-300">
+              Tempo: <strong className="font-mono">{tempo === null ? "—" : duracao(tempo)}</strong>
+              <span className="block text-[11px] text-stone-500 dark:text-slate-400">
+                só a jornada (seg–sex 7:30–17:17, sem almoço)
+                {item.status === "Fazendo" ? " · ainda Fazendo, conta até agora" : ""}
+              </span>
+            </p>
+          </div>
+        )}
+
+        {erro && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{erro}</p>}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={fechar}
+            disabled={enviando}
+            className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300"
+          >
+            Cancelar
+          </button>
+          {excluir ? (
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() => enviar(() => excluirTemposCroquiCorte(item.id, editadoPor))}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {enviando ? "Excluindo…" : "🗑️ Excluir"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() =>
+                enviar(() =>
+                  editarTemposCroquiCorte(
+                    item.id,
+                    {
+                      dt_fazendo: previa.dt_fazendo,
+                      dt_pausado: previa.dt_pausado,
+                      dt_feito: previa.dt_feito,
+                      tempo_anterior_min: previa.tempo_anterior_min,
+                    },
+                    editadoPor,
+                  ),
+                )
+              }
+              className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 dark:bg-cyan-600 dark:hover:bg-cyan-500"
+            >
+              {enviando ? "Salvando…" : "💾 Salvar"}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -30,6 +30,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from app.jornada import minutos_uteis
 from app.orcamentos_salvos import _conectar
 
 ABA = "Croqui 2"
@@ -276,8 +277,8 @@ def propagar(forcar: bool = False) -> dict:
 
 # --- leitura / edição no app --------------------------------------------------
 
-_COLUNAS_LISTA = ["id", "pedido", *FIXOS, *EDITAVEIS, "dt_fazendo", "dt_feito", "linha_planilha", "origem",
-                  "editado_em", "editado_por", "created_at"]
+_COLUNAS_LISTA = ["id", "pedido", *FIXOS, *EDITAVEIS, "dt_fazendo", "dt_pausado", "dt_feito", "tempo_anterior_min",
+                  "linha_planilha", "origem", "editado_em", "editado_por", "created_at"]
 
 
 def _json(v):
@@ -340,29 +341,53 @@ def _normalizar_alteracoes(alteracoes: dict) -> dict:
     return normal
 
 
+def _marcas_status(atual: str | None, novo: str | None, dt_fazendo, dt_pausado, anterior: int, agora: datetime) -> dict:
+    """Datas que a troca de status grava (migration 0032 — pedido do usuário:
+    mapear o tempo Fazendo → Feito / Pausado). Fazendo → Pausado → Fazendo
+    soma o trecho já feito em tempo_anterior_min e recomeça o Fazendo."""
+    if novo == atual:
+        return {}
+    if novo == "Fazendo":
+        if atual == "Pausado" and dt_fazendo and dt_pausado:
+            anterior = (anterior or 0) + minutos_uteis(dt_fazendo, dt_pausado)
+        else:
+            anterior = 0
+        return {"dt_fazendo": agora, "dt_pausado": None, "tempo_anterior_min": anterior}
+    if novo == "Pausado":
+        return {"dt_pausado": agora}
+    if novo == "Feito":
+        return {"dt_feito": agora}
+    return {}
+
+
+def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
+    agora = datetime.now(timezone.utc)
+    cur.execute(
+        "select id, status, dt_fazendo, dt_pausado, tempo_anterior_min from croqui_corte_itens "
+        "where id = any(%s::uuid[]) for update",
+        (ids,),
+    )
+    for item_id, status, dt_fazendo, dt_pausado, anterior in cur.fetchall():
+        sets = dict(normal)
+        if "status" in normal:
+            sets.update(_marcas_status(status, normal["status"], dt_fazendo, dt_pausado, anterior, agora))
+        cur.execute(
+            f"update croqui_corte_itens set {', '.join(f'{c} = %s' for c in sets)}, editado_em = %s, editado_por = %s "
+            "where id = %s",
+            (*sets.values(), agora, editado_por, item_id),
+        )
+
+
 def editar_lote(ids: list[str], alteracoes: dict, editado_por: str | None = None) -> list[dict]:
     """Mesmo valor em várias linhas de uma vez — "puxar" como no Excel (pedido
-    do usuário). Status virando Fazendo/Feito grava a data e hora só nas
-    linhas em que o status mudou."""
+    do usuário). Troca de status grava a data e hora só nas linhas em que o
+    status mudou."""
     normal = _normalizar_alteracoes(alteracoes)
     ids = [str(i) for i in ids][:5000]
     if not ids:
         return []
-    sets, valores = [], []
-    for campo, valor in normal.items():
-        sets.append(f"{campo} = %s")
-        valores.append(valor)
-    novo_status = normal.get("status", "__sem")
-    if novo_status in ("Fazendo", "Feito"):
-        coluna = "dt_fazendo" if novo_status == "Fazendo" else "dt_feito"
-        sets.append(f"{coluna} = case when status is distinct from %s then now() else {coluna} end")
-        valores.append(novo_status)
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute(
-            f"update croqui_corte_itens set {', '.join(sets)}, editado_em = now(), editado_por = %s "
-            "where id = any(%s::uuid[])",
-            (*valores, editado_por, ids),
-        )
+        _salvar(cur, ids, normal, editado_por)
         conn.commit()
         cur.execute(f"select {', '.join(_COLUNAS_LISTA)} from croqui_corte_itens where id = any(%s::uuid[])", (ids,))
         itens = [{c: _json(v) for c, v in zip(_COLUNAS_LISTA, row)} for row in cur.fetchall()]
@@ -372,34 +397,71 @@ def editar_lote(ids: list[str], alteracoes: dict, editado_por: str | None = None
 
 
 def editar(item_id: str, alteracoes: dict, editado_por: str | None = None) -> dict | None:
-    """Salva os campos editáveis. Status virando Fazendo/Feito grava a data e hora."""
-    sets, valores = [], []
-    for campo, valor in alteracoes.items():
-        if campo not in EDITAVEIS:
-            raise CampoNaoEditavel(f"'{campo}' vem do Material de compra (PROCV) e não é editável.")
-        if campo == "status":
-            valor = normalizar_status(valor)
-        elif campo == "projetista":
-            valor = validar_projetista(valor)
-        else:
-            valor = _texto(valor)
-        sets.append(f"{campo} = %s")
-        valores.append(valor)
+    """Salva os campos editáveis. Status Fazendo/Pausado/Feito grava a data e hora."""
+    normal = _normalizar_alteracoes(alteracoes)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select 1 from croqui_corte_itens where id = %s", (item_id,))
+        if not cur.fetchone():
+            return None
+        _salvar(cur, [item_id], normal, editado_por)
+        conn.commit()
+        itens = _carregar(cur, item_id)
+    return itens[0] if itens else None
+
+
+# --- correção das marcações de tempo (João / Honório) -------------------------
+
+_DATAS = ["dt_fazendo", "dt_pausado", "dt_feito"]
+
+
+def _data(v) -> datetime | None:
+    if v in (None, ""):
+        return None
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(f"Data e hora inválida: '{v}'.")
+    return d if d.tzinfo else d.replace(tzinfo=FUSO)
+
+
+def editar_tempos(item_id: str, dados: dict, editado_por: str | None = None) -> dict | None:
+    """Pedido do usuário (08/10): o projetista corrige o dia e a hora de
+    Fazendo / Pausado / Feito (esqueceu de marcar na hora) e o tempo das
+    etapas anteriores. Só os campos enviados mudam."""
+    sets: dict = {}
+    for c in _DATAS:
+        if c in dados:
+            sets[c] = _data(dados[c])
+    if "tempo_anterior_min" in dados:
+        try:
+            sets["tempo_anterior_min"] = max(0, int(dados["tempo_anterior_min"] or 0))
+        except (TypeError, ValueError):
+            raise ValueError("Tempo anterior inválido.")
     if not sets:
         raise ValueError("Nada para salvar.")
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute("select status from croqui_corte_itens where id = %s for update", (item_id,))
+        cur.execute(f"select {', '.join(_DATAS)} from croqui_corte_itens where id = %s for update", (item_id,))
         atual = cur.fetchone()
         if not atual:
             return None
-        if "status" in alteracoes:
-            novo = normalizar_status(alteracoes["status"])
-            if novo != atual[0] and novo in ("Fazendo", "Feito"):
-                sets.append(f"{'dt_fazendo' if novo == 'Fazendo' else 'dt_feito'} = now()")
+        final = {**dict(zip(_DATAS, atual)), **{c: v for c, v in sets.items() if c in _DATAS}}
+        faz = final["dt_fazendo"]
+        for c, nome in (("dt_pausado", "Pausado"), ("dt_feito", "Feito")):
+            if faz and final[c] and final[c] < faz and ("dt_fazendo" in sets or c in sets):
+                raise ValueError(f"{nome} ({final[c].astimezone(FUSO):%d/%m %H:%M}) não pode ser antes do Fazendo "
+                                 f"({faz.astimezone(FUSO):%d/%m %H:%M}).")
         cur.execute(
-            f"update croqui_corte_itens set {', '.join(sets)}, editado_em = now(), editado_por = %s where id = %s",
-            (*valores, editado_por, item_id),
+            f"update croqui_corte_itens set {', '.join(f'{c} = %s' for c in sets)}, editado_em = now(), editado_por = %s "
+            "where id = %s",
+            (*sets.values(), editado_por, item_id),
         )
         conn.commit()
         itens = _carregar(cur, item_id)
     return itens[0] if itens else None
+
+
+def excluir_tempos(item_id: str, editado_por: str | None = None) -> dict | None:
+    """Apaga as marcações de tempo da linha (Fazendo, Pausado, Feito e o tempo
+    anterior). Status, programa e o resto ficam como estão."""
+    return editar_tempos(item_id, {"dt_fazendo": None, "dt_pausado": None, "dt_feito": None, "tempo_anterior_min": 0},
+                         editado_por)

@@ -109,6 +109,8 @@ from app.corte import trocar_maquina as trocar_maquina_corte
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
 from app.croqui_corte import editar as editar_croqui_corte
 from app.croqui_corte import editar_lote as editar_lote_croqui_corte
+from app.croqui_corte import editar_tempos as editar_tempos_croqui_corte
+from app.croqui_corte import excluir_tempos as excluir_tempos_croqui_corte
 from app.croqui_corte import listar as listar_croqui_corte
 from app.croqui_corte import listar_notificacoes as listar_notificacoes_croqui
 from app.follow_up import listar as listar_follow_up
@@ -689,6 +691,32 @@ def croqui_corte_editar(item_id: str, pedido: dict) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return item
+
+
+@app.patch("/croqui-corte/itens/{item_id}/tempos")
+def croqui_corte_editar_tempos(item_id: str, pedido: dict) -> dict:
+    """Corrige o dia e a hora de Fazendo / Pausado / Feito (João e Honório)."""
+    try:
+        item = editar_tempos_croqui_corte(item_id, pedido.get("tempos") or {}, pedido.get("editado_por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return item
+
+
+@app.post("/croqui-corte/itens/{item_id}/tempos/excluir")
+def croqui_corte_excluir_tempos(item_id: str, pedido: dict) -> dict:
+    """Apaga as marcações de tempo da linha (o status fica)."""
+    try:
+        item = excluir_tempos_croqui_corte(item_id, pedido.get("editado_por"))
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
     if not item:

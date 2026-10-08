@@ -614,9 +614,9 @@ def projeto(limite: int = 80) -> dict:
         fazendo = cur.fetchall()
         # Pausado (pedido do usuário, 07/10): os parados nos últimos 7 dias.
         cur.execute(
-            """select projetista, pedido, mac, descricao, n_programa, coalesce(editado_em, dt_fazendo)
+            """select projetista, pedido, mac, descricao, n_programa, coalesce(dt_pausado, editado_em, dt_fazendo)
                from croqui_corte_itens
-               where status = 'Pausado' and projetista is not null and coalesce(editado_em, dt_fazendo) >= %s
+               where status = 'Pausado' and projetista is not null and coalesce(dt_pausado, editado_em, dt_fazendo) >= %s
                order by 6 desc""",
             (ini_7,),
         )
