@@ -556,6 +556,8 @@ export interface ItemFollowUp {
   orcamento_custo_macfab_unid: number | null;
   preco_previsto: number | null;
   obs_felipe_marcelo: string | null;
+  // Tique F.Material (migration 0033): esperando material pra fabricar — linha vermelha.
+  falta_material: boolean;
   obs_alisson: string | null;
   st: string | null;
   nf: string | null;

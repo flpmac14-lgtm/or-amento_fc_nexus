@@ -52,6 +52,8 @@ CAMPOS_EDITAVEIS: dict[str, str] = {
     "orcamento_custo_macfab_unid": "numero",
     "obs_felipe_marcelo": "texto",
     "preco_previsto": "numero",
+    # Tique F.Material (migration 0033): esperando material pra fabricar.
+    "falta_material": "booleano",
 }
 
 _NOMES_ETAPAS = {"eng": "Engenharia", "cor": "Corte", "mon": "Montagem", "sol": "Solda",
@@ -245,6 +247,8 @@ def listar_notificacoes(limite: int = 200) -> list[dict]:
 
 def _converter_edicao(campo: str, valor):
     tipo = CAMPOS_EDITAVEIS[campo]
+    if tipo == "booleano":
+        return valor is True or str(valor).strip().lower() in ("true", "1", "sim")
     if valor is None or (isinstance(valor, str) and valor.strip() == ""):
         return None
     if tipo == "etapa":

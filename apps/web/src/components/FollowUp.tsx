@@ -39,7 +39,7 @@ import { useLimparComF4 } from "@/lib/atalhoLimpar";
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
-type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao";
+type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material";
 
 interface Coluna {
   campo: keyof ItemFollowUp | "foto";
@@ -68,15 +68,18 @@ const COLUNAS: Coluna[] = [
   ...ETAPAS.map((e) => ({ campo: e.campo, rotulo: e.rotulo, tipo: "etapa" as const, principal: true })),
   // Estreita (pedido do usuário): texto longo corta e aparece inteiro ao passar o mouse.
   { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true, maxW: "max-w-[6rem]" },
+  // Tique F.Material — pedido do usuário (08/10): esperando material pra fabricar; marcado = linha vermelha.
+  { campo: "falta_material", rotulo: "F.Material", tipo: "material", principal: true, centro: true },
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
+  // Pedido do usuário (08/10): Fornecedor / terceirizado logo depois do Status, sempre visível.
+  { campo: "fornecedor", rotulo: "Fornecedor / Terceirizado", tipo: "texto", principal: true, maxW: "max-w-[10rem]" },
   // Colunas de pintura sempre visíveis — pedido do usuário. Plano de pintura é
   // longo: corta e mostra inteiro ao passar o mouse.
   { campo: "cor2", rotulo: "COR2", tipo: "texto", principal: true },
   { campo: "cor_2", rotulo: "COR-2", tipo: "texto", principal: true },
   { campo: "plano_pintura", rotulo: "Plano de pintura", tipo: "texto", principal: true, maxW: "max-w-[16rem]" },
-  { campo: "fornecedor", rotulo: "Fornecedor", tipo: "texto", principal: false },
   { campo: "orcamento_terceirizado_unid", rotulo: "Orç. terceirizado unid", tipo: "moeda", principal: false },
   { campo: "orcamento_custo_macfab_unid", rotulo: "Custo Macfab unid", tipo: "moeda", principal: false },
   { campo: "obs_alisson", rotulo: "Obs. Alisson", tipo: "texto", principal: false, largura: "min-w-[14rem]" },
@@ -380,6 +383,8 @@ export default function FollowUp({
           if (situacaoEtapa(i[col.campo as keyof ItemFollowUp] as number | null) !== (termo as SituacaoEtapa)) return false;
         } else if (col.tipo === "foto") {
           if ((termo === "com") !== i.imagens.length > 0) return false;
+        } else if (col.tipo === "material") {
+          if ((termo === "sim") !== !!i.falta_material) return false;
         } else if (col.tipo === "edicao") {
           if (!contem(`${i.editado_por ?? ""} ${formatarDataHora(i.editado_em)}`, termo)) return false;
         } else if (col.tipo === "prazo") {
@@ -488,6 +493,27 @@ export default function FollowUp({
   }
 
   function renderCelula(item: ItemFollowUp, col: Coluna) {
+    if (col.tipo === "material") {
+      return (
+        <input
+          type="checkbox"
+          checked={!!item.falta_material}
+          onChange={(e) => {
+            const marcado = e.target.checked;
+            aplicarItem({ ...item, falta_material: marcado }); // pinta na hora
+            salvarCampo(item, "falta_material", marcado ? "true" : "false").catch((err: Error) => {
+              aplicarItem(item);
+              setErro(err.message);
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          title={item.falta_material ? "Falta material pra fabricar — clique pra tirar" : "Marcar: falta material pra fabricar (linha fica vermelha)"}
+          aria-label={`Falta material — PO ${item.po}`}
+          className="h-3.5 w-3.5 cursor-pointer accent-red-600"
+        />
+      );
+    }
     const tipoEdicao = CAMPOS_EDITAVEIS[col.campo];
     if (!tipoEdicao) return renderValor(item, col);
     const bruto = col.campo === "coleta" ? item.coleta : (item[col.campo as keyof ItemFollowUp] as number | string | null);
@@ -962,6 +988,17 @@ Plano: ${e.plano_pintura ?? "—"}`}
                         </option>
                       ))}
                     </select>
+                  ) : col.tipo === "material" ? (
+                    <select
+                      value={filtrosColuna.falta_material ?? ""}
+                      onChange={(e) => setFiltroColuna("falta_material", e.target.value)}
+                      className={`${classeFiltroColuna} !min-w-0 !px-0.5`}
+                      aria-label="Filtrar falta de material"
+                    >
+                      <option value="">Todas</option>
+                      <option value="sim">Marcadas</option>
+                      <option value="nao">Sem</option>
+                    </select>
                   ) : col.tipo === "foto" ? (
                     <select
                       value={filtrosColuna.foto ?? ""}
@@ -995,9 +1032,11 @@ Plano: ${e.plano_pintura ?? "—"}`}
                   // Pedido do usuário: 1 clique edita a célula; o card do item só com 2 cliques.
                   onDoubleClick={() => setItemAberto(item)}
                   title="Dois cliques para abrir o card do item"
-                  className={`cursor-pointer text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30 ${
-                    item.presente_na_ultima_importacao ? "" : "opacity-50"
-                  }`}
+                  className={`cursor-pointer ${
+                    item.falta_material
+                      ? "bg-red-100 text-red-900 hover:bg-red-200 dark:bg-red-950/60 dark:text-red-100 dark:hover:bg-red-900/60 [&>td]:!bg-red-100 dark:[&>td]:!bg-red-950"
+                      : "text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30"
+                  } ${item.presente_na_ultima_importacao ? "" : "opacity-50"}`}
                 >
                   {colunas.map((col) => (
                     <td

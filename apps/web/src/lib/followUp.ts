@@ -18,7 +18,7 @@ export const ETAPAS: { campo: EtapaFollowUp; rotulo: string; nome: string }[] = 
 // Campos de acompanhamento — os únicos editáveis no app. O resto vem da
 // Controle de obras (PROCV pelo PO) ou é calculado (Status, Ano).
 // Espelha CAMPOS_EDITAVEIS de services/calc_engine/app/follow_up_mae.py.
-export type TipoEdicao = "etapa" | "coleta" | "texto" | "numero";
+export type TipoEdicao = "etapa" | "coleta" | "texto" | "numero" | "booleano";
 export const CAMPOS_EDITAVEIS: Record<string, TipoEdicao> = {
   ...Object.fromEntries(["eng", "cor", "mon", "sol", "usi", "dob", "jat", "pin"].map((e) => [e, "etapa" as const])),
   coleta: "coleta",
@@ -27,6 +27,7 @@ export const CAMPOS_EDITAVEIS: Record<string, TipoEdicao> = {
   orcamento_custo_macfab_unid: "numero",
   obs_felipe_marcelo: "texto",
   preco_previsto: "numero",
+  falta_material: "booleano",
 };
 
 // Campos que vêm da Controle de obras (a "mãe", por PROCV pelo PO) —

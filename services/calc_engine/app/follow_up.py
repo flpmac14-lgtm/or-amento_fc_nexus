@@ -624,7 +624,7 @@ def _json(v):
 
 # dados_originais fica fora da listagem: dobra o tamanho da resposta.
 _COLUNAS_LISTAGEM = ["id", "chave"] + _COLUNAS_ITEM + [
-    "coleta_data", "linha_planilha", "oculta_na_planilha", "cores",
+    "coleta_data", "falta_material", "linha_planilha", "oculta_na_planilha", "cores",
     "presente_na_ultima_importacao", "updated_at", "origem", "editado_em", "editado_por"]
 
 
