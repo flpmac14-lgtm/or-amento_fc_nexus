@@ -4,6 +4,7 @@
 // de venda em aberto, a tabela de notas "conforme vai saindo", da mais
 // recente pra mais antiga. Mesmo filtro do faturamento (soma bate com os
 // cartões). Filtro por mês, busca (nota, cliente, pedido) e "mostrar mais".
+// Canceladas (pedido do usuário, 08/10): aparecem em vermelho e não somam.
 
 import { useMemo, useState } from "react";
 import { rotuloMes } from "@/components/FinanceiroGraficos";
@@ -44,7 +45,8 @@ export default function FinanceiroNotas({
       ),
     [notas, mes, termo],
   );
-  const total = filtradas.reduce((s, n) => s + n.total, 0);
+  const total = filtradas.reduce((s, n) => s + (n.cancelada ? 0 : n.total), 0);
+  const canceladas = filtradas.filter((n) => n.cancelada).length;
   const d = new Date();
   const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -86,7 +88,12 @@ export default function FinanceiroNotas({
       </div>
 
       <p className="mb-2 text-sm text-stone-700 dark:text-slate-300">
-        <strong>{filtradas.length}</strong> nota(s) · total <strong>{moeda(total)}</strong>
+        <strong>{filtradas.length - canceladas}</strong> nota(s) · total <strong>{moeda(total)}</strong>
+        {canceladas > 0 && (
+          <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
+            · {canceladas} cancelada(s) em vermelho, fora da soma
+          </span>
+        )}
       </p>
 
       <div className="overflow-x-auto">
@@ -106,8 +113,21 @@ export default function FinanceiroNotas({
           </thead>
           <tbody>
             {filtradas.slice(0, limite).map((n) => (
-              <tr key={`${n.nota}-${n.emissao}`} className="border-b border-stone-100 hover:bg-stone-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
-                <td className="py-1 pr-2 font-mono font-semibold text-stone-900 dark:text-white">{n.nota}</td>
+              <tr
+                key={`${n.nota}-${n.emissao}`}
+                title={n.cancelada ? "Nota cancelada — não entra na soma nem no faturamento" : undefined}
+                className={`border-b ${
+                  n.cancelada
+                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 [&_*]:!text-red-700 dark:[&_*]:!text-red-300"
+                    : "border-stone-100 hover:bg-stone-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+                }`}
+              >
+                <td className="py-1 pr-2 font-mono font-semibold text-stone-900 dark:text-white">
+                  {n.nota}
+                  {n.cancelada && (
+                    <span className="ml-1 rounded border border-red-500 bg-white px-1 font-sans text-[10px] font-bold dark:bg-red-950">CANCELADA</span>
+                  )}
+                </td>
                 <td className="whitespace-nowrap pr-2 text-stone-700 dark:text-slate-300">
                   {dataBr(n.emissao)}
                   {n.emissao === hoje && (
@@ -136,7 +156,7 @@ export default function FinanceiroNotas({
                 <td className="pr-2 font-mono text-stone-500 dark:text-slate-400">{n.pedido ?? "—"}</td>
                 <td className="pr-2 text-right text-stone-700 dark:text-slate-300">{n.producao ? moeda(n.producao) : "—"}</td>
                 <td className="pr-2 text-right text-stone-700 dark:text-slate-300">{n.servico ? moeda(n.servico) : "—"}</td>
-                <td className="text-right font-semibold text-stone-900 dark:text-white">{moeda(n.total)}</td>
+                <td className={`text-right font-semibold text-stone-900 dark:text-white ${n.cancelada ? "line-through" : ""}`}>{moeda(n.total)}</td>
               </tr>
             ))}
           </tbody>

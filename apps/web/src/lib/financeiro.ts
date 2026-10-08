@@ -32,6 +32,7 @@ export interface NotaFiscal {
   producao: number;
   servico: number;
   total: number;
+  cancelada?: boolean; // vermelha na tabela, fora da soma (o faturamento já não conta)
 }
 
 export interface BudgetFinanceiro {

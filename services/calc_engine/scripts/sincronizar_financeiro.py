@@ -85,17 +85,19 @@ GROUP BY LEFT(I.CFOP, 4), F.NRONOTA, F.DTEMISSAO
 
 
 # Uma linha por nota + CFOP (pra separar Produção x Serviço), mesmo filtro do faturamento.
+# Canceladas (STATUSNF = 'C') vêm também — pedido do usuário (08/10): aparecem em
+# vermelho na tabela, mas não entram na soma (o faturamento continua só 'F').
 SQL_NOTAS = """
 SELECT F.CODIGO, F.NRONOTA, F.DTEMISSAO,
   (SELECT TOP 1 E.RAZAO FROM VW_FN_CLIENTEENDERECO E WHERE E.CLIENTE = F.CLIENTE) AS CLIENTE,
   F.VEPEDIDO, LEFT(I.CFOP, 4) AS CFOP, SUM(I.VLRTOTAL) AS VALOR,
-  P.OBRA AS MAC, P.PEDIDOCLI AS PO, MAX(I.OBRA) AS MAC_ITEM, MAX(I.PEDCOMPRA) AS PO_ITEM
+  P.OBRA AS MAC, P.PEDIDOCLI AS PO, MAX(I.OBRA) AS MAC_ITEM, MAX(I.PEDCOMPRA) AS PO_ITEM, F.STATUSNF
 FROM FN_NFSITENS I
 INNER JOIN FN_NFS F ON I.NFS = F.CODIGO
 LEFT JOIN VE_PEDIDO P ON P.CODIGO = F.VEPEDIDO
 WHERE F.DTEMISSAO >= ?
   AND F.ENTSAIDA = 'S'
-  AND F.STATUSNF = 'F'
+  AND F.STATUSNF IN ('F', 'C')
   AND F.FILIAL = ?
   AND F.TPDOCUMENTO IN ('NF', 'NFS', 'LOC', 'REC')
   AND I.CFOP IN (
@@ -103,7 +105,7 @@ WHERE F.DTEMISSAO >= ?
         '5101A', '5102A', '6101A', '6102A',
         '5933', '5933A', '6933', '6933A', '5124', '5124A', '6124', '9999'
   )
-GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4), P.OBRA, P.PEDIDOCLI
+GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4), P.OBRA, P.PEDIDOCLI, F.STATUSNF
 """
 
 
@@ -172,7 +174,7 @@ def montar(hoje: date | None = None) -> dict:
             if m in entrada:
                 entrada[m] += float(valor or 0)
         cur.execute(SQL_NOTAS, inicio, FILIAL)
-        for codigo, nronota, emissao, cliente, pedido, cfop, valor, mac, po, mac_item, po_item in cur.fetchall():
+        for codigo, nronota, emissao, cliente, pedido, cfop, valor, mac, po, mac_item, po_item, status in cur.fetchall():
             n = notas.setdefault(int(codigo), {
                 # MAC e PO do cliente vêm do pedido de venda; se faltar, dos itens da nota.
                 "mac": _mac(mac) or _mac(mac_item),
@@ -182,6 +184,7 @@ def montar(hoje: date | None = None) -> dict:
                 "cliente": (cliente or "").strip() or None,
                 "pedido": str(int(pedido)) if pedido is not None else None,
                 "producao": 0.0, "servico": 0.0,
+                "cancelada": (status or "").strip() == "C",
             })
             n["servico" if cfop in CFOP_SERVICO else "producao"] += float(valor or 0)
     r2 = lambda d: {k: round(v, 2) for k, v in d.items()}  # noqa: E731
