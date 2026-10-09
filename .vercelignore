@@ -1,0 +1,12 @@
+# Deploy da Vercel (projeto "web", Root Directory = apps/web): só o site sobe.
+# services/ tem arquivos abertos pelas tarefas agendadas (logs, cache e trava da
+# classificação de certificados) — a CLI falhava com EBUSY ao tentar lê-los.
+/services
+/dados-locais
+/supabase
+node_modules
+.next
+.vercel
+.env*
+!.env.example
+*.log
