@@ -14,7 +14,7 @@ export const VISOES = [
   { valor: "corte", rotulo: "Corte" },
   // Líder da Usinagem aponta por pedido do Follow up (pedido do usuário).
   { valor: "usinagem", rotulo: "Usinagem" },
-  // Pedido do usuário (09/10/2026): aba nova, conteúdo ainda a definir.
+  // Certificados de matéria-prima do Recebimento — pedido do usuário (09/10/2026).
   { valor: "qualidade", rotulo: "QUALIDADE" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
@@ -29,17 +29,21 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
 // completas já têm na tela principal.
-export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean) {
+// comQualidade: aba QUALIDADE — por enquanto SÓ a conta flpmac14 (pedido do
+// usuário; mesma regra do Financeiro, lib/financeiro.ts::podeVerFinanceiro).
+export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
   return VISOES.filter((v) =>
-    perfil === "corte"
-      ? v.valor === "corte"
-      : perfil === "usinagem"
-        ? v.valor === "usinagem"
-        : perfil === "projeto"
-          ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-          : v.valor === "usinagem" || v.valor === "qualidade"
-            ? perfil === "total"
-            : v.valor !== "referencia" || comReferenciaPrecos,
+    v.valor === "qualidade"
+      ? comQualidade
+      : perfil === "corte"
+        ? v.valor === "corte"
+        : perfil === "usinagem"
+          ? v.valor === "usinagem"
+          : perfil === "projeto"
+            ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
+            : v.valor === "usinagem"
+              ? perfil === "total"
+              : v.valor !== "referencia" || comReferenciaPrecos,
   );
 }
 

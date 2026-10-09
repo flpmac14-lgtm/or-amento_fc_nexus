@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
 from sincronizar_pdfs_corte import sincronizar_se_mudou as sincronizar_pdfs_corte_se_mudou  # noqa: E402
 from sincronizar_financeiro import sincronizar as sincronizar_financeiro  # noqa: E402
+from sincronizar_certificados import sincronizar_se_mudou as sincronizar_certificados_se_mudou  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
 
@@ -85,6 +86,15 @@ def main() -> int:
                 print(f"{agora} Financeiro - {resumo}")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Financeiro (ERP) - {type(e).__name__}: {e}")
+            return 1
+        # Aba QUALIDADE (só flpmac14): certificados da pasta do Recebimento e o
+        # sininho de PDF adicionado/alterado/excluído — só grava se mudou.
+        try:
+            resumo = sincronizar_certificados_se_mudou()
+            if resumo:
+                print(f"{agora} Certificados (Qualidade) - {resumo}")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO nos certificados (Qualidade) - {type(e).__name__}: {e}")
             return 1
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app

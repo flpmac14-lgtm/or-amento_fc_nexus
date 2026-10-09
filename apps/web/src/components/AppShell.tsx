@@ -147,7 +147,7 @@ function montarMenu(user: User): Conta {
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
     icone: "followup",
-    subitens: visoesDoPerfil(perfil, perfil === "follow_up").map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerFinanceiro(user.email)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
   if (!restrita) secoes.push({ secao: "Administração", itens: [{ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" }] });

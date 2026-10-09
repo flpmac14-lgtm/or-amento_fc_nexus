@@ -36,9 +36,11 @@ export type { PerfilModulo } from "@/lib/abasFollowUp";
 export default function ModuloFollowUp({
   comReferenciaPrecos = false,
   perfil = "total",
+  comQualidade = false,
 }: {
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
+  comQualidade?: boolean; // aba QUALIDADE: só flpmac14
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
@@ -50,7 +52,7 @@ export default function ModuloFollowUp({
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
   const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
-  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos);
+  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
 
   function abrirVisao(v: ValorVisao) {

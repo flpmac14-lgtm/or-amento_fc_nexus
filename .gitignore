@@ -33,3 +33,4 @@ services/extractor/tmp/
 sincronizar_fotos_gerencia.estado
 sincronizar_pdfs_corte.estado
 sincronizar_financeiro.estado
+sincronizar_certificados.estado.json
