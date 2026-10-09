@@ -59,6 +59,14 @@ function rotuloPeca(i: { mac: string | null; cliente: string | null }): string |
   return cliente ? `${mac} (${cliente})` : mac;
 }
 
+function clientesDe(p: ProgramaCorte): string[] {
+  return [...new Set(p.itens.map((i) => rotuloCliente(i.cliente)).filter((c): c is string => !!c))].sort();
+}
+
+function soMacsDe(p: ProgramaCorte): string[] {
+  return [...new Set(p.itens.map((i) => rotuloMac(i.mac)).filter((m): m is string => !!m))].sort();
+}
+
 function macsDe(p: ProgramaCorte): string[] {
   return [...new Set(p.itens.map(rotuloPeca).filter((m): m is string => !!m))].sort();
 }
@@ -490,9 +498,9 @@ export default function Corte({
                               ? "Toque para apontar · duplo clique abre o PDF"
                               : undefined
                           }
-                          className="flex flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
+                          className="flex min-w-0 flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
                         >
-                          <span className="font-mono text-3xl font-bold text-stone-900 dark:text-white">
+                          <span className="font-mono text-2xl font-bold leading-tight text-stone-900 dark:text-white">
                             <NumeroPrograma programa={p.programa} />
                           </span>
                           <span className="flex flex-wrap gap-1">
@@ -517,17 +525,22 @@ export default function Corte({
                               </span>
                             )}
                           </span>
-                          {macsDe(p).length > 0 && (
-                            <span className="truncate text-sm font-bold text-stone-800 dark:text-slate-200">
-                              {macsDe(p).join(" · ")}
+                          {clientesDe(p).length > 0 && (
+                            <span className="break-words text-sm font-extrabold leading-tight text-green-800 dark:text-cyan-300">
+                              {clientesDe(p).join(" · ")}
                             </span>
                           )}
-                          <span className="truncate text-xs text-stone-600 dark:text-slate-400">
+                          {soMacsDe(p).length > 0 && (
+                            <span className="break-words text-[11px] font-semibold leading-tight text-stone-700 dark:text-slate-300">
+                              {soMacsDe(p).join(" · ")}
+                            </span>
+                          )}
+                          <span className="truncate text-[11px] text-stone-600 dark:text-slate-400">
                             {p.manual
                               ? "ainda não está na Croqui"
                               : p.mps.join(" · ") || "—"}
                           </span>
-                          <span className="text-xs text-stone-500 dark:text-slate-500">
+                          <span className="text-[11px] text-stone-500 dark:text-slate-500">
                             {formatarNumero(p.pecas, 0)} peça(s) ·{" "}
                             {p.itens.length} item(ns)
                           </span>
