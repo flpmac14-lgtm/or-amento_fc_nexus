@@ -23,19 +23,22 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
-// "usinagem" (líder da Usinagem, saymon) = só Usinagem.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem";
+// "usinagem" (líder da Usinagem, saymon) = só Usinagem;
+// "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE.
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
 // completas já têm na tela principal.
-// comQualidade: aba QUALIDADE — por enquanto SÓ a conta flpmac14 (pedido do
-// usuário; mesma regra do Financeiro, lib/financeiro.ts::podeVerFinanceiro).
+// comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
+// (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
   return VISOES.filter((v) =>
     v.valor === "qualidade"
-      ? comQualidade
-      : perfil === "corte"
+      ? comQualidade || perfil === "qualidade"
+      : perfil === "qualidade"
+        ? false
+        : perfil === "corte"
         ? v.valor === "corte"
         : perfil === "usinagem"
           ? v.valor === "usinagem"

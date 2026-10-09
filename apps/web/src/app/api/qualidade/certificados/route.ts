@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { podeVerQualidade } from "@/lib/acesso";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
-// Aba QUALIDADE — pedido explícito do usuário: por enquanto SÓ a conta
-// flpmac14 (mesma regra do Financeiro). Tabelas da migration 0034 com RLS sem
+// Aba QUALIDADE — pedido explícito do usuário: a conta flpmac14 e o perfil
+// "qualidade" (ana, carol, pedro, lailto). Tabelas da migration 0034 com RLS sem
 // policy: aqui o servidor confere o usuário e lê com a service_role.
 // Gravadas por services/calc_engine/scripts/sincronizar_certificados.py.
 // ?so_notificacoes=1 (sininho, a cada 5 min): não manda a lista (~7 mil itens).
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!podeVerFinanceiro(user?.email)) return NEGADO();
+  if (!podeVerQualidade(user)) return NEGADO();
 
   const soNotificacoes = new URL(request.url).searchParams.has("so_notificacoes");
   const admin = criarClienteSupabaseAdmin();

@@ -7,8 +7,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
-import { acessoSoFollowUp, perfilModulo } from "@/lib/acesso";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
 import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -25,7 +24,7 @@ export default function PaginaFollowUp() {
             login: emailParaLogin(data.user.email ?? ""),
             restrita: acessoSoFollowUp(data.user),
             perfil: perfilModulo(data.user),
-            qualidade: podeVerFinanceiro(data.user.email),
+            qualidade: podeVerQualidade(data.user),
           });
         }
       });

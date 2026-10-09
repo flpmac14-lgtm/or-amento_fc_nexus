@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { podeVerQualidade } from "@/lib/acesso";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
-// Baixar o PDF do certificado (aba QUALIDADE, só flpmac14) — pedido explícito
+// Baixar o PDF do certificado (aba QUALIDADE: flpmac14 e perfil "qualidade") — pedido explícito
 // do usuário, pra montar data book. Sob demanda (migration 0035): POST grava os
 // pedidos; o vigia services/calc_engine/scripts/servir_certificados.py (no PC
 // da fábrica) sobe o PDF pro bucket privado "certificados"; GET devolve o
@@ -18,7 +18,7 @@ async function autorizado(): Promise<boolean> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return podeVerFinanceiro(user?.email);
+  return podeVerQualidade(user);
 }
 
 export async function POST(request: Request) {

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp } from "@/lib/acesso";
+import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
 import { ROTA_FINANCEIRO, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
@@ -57,7 +57,9 @@ export async function proxy(request: NextRequest) {
   // Conta restrita (app_metadata.acesso = "follow_up", ver lib/acesso.ts):
   // qualquer outra página (orçamentos, orçamentistas, APIs do Next) volta
   // pro módulo Follow up — o bloqueio é aqui no servidor, não só na tela.
-  if (user && soFollowUp && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
+  // Exceção: as rotas da aba QUALIDADE pro perfil "qualidade" (a rota confere de novo).
+  const apiQualidade = request.nextUrl.pathname.startsWith("/api/qualidade/") && podeVerQualidade(user);
+  if (user && soFollowUp && !apiQualidade && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ erro: `Conta com acesso restrito (${user.app_metadata?.acesso ?? ACESSO_SO_FOLLOW_UP}).` }, { status: 403 });
     }

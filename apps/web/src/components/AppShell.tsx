@@ -23,7 +23,7 @@ import {
   visoesDoPerfil,
   type ValorVisao,
 } from "@/lib/abasFollowUp";
-import { acessoSoFollowUp, perfilModulo } from "@/lib/acesso";
+import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
 import { podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -131,6 +131,7 @@ const ROTULO_PERFIL: Record<string, string> = {
   projeto: "PROJETO",
   corte: "CORTE",
   usinagem: "USINAGEM",
+  qualidade: "QUALIDADE",
 };
 
 function montarMenu(user: User): Conta {
@@ -147,7 +148,7 @@ function montarMenu(user: User): Conta {
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
     icone: "followup",
-    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerFinanceiro(user.email)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
   if (!restrita) secoes.push({ secao: "Administração", itens: [{ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" }] });
