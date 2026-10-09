@@ -43,6 +43,7 @@ const CLIENTES: Record<string, string> = {
   A2: "Dana/AlSN",
   W1: "WEIR",
   F2: "FTSX",
+  S1: "Siemens",
 };
 
 function rotuloCliente(codigo: string | null): string | null {
