@@ -30,6 +30,17 @@ const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
 // "Recentes" = liberados pelo projetista nos últimos dias e ainda não finalizados.
 const DIAS_RECENTES = 30;
 
+// MACs (obras) das peças do programa — pedido do usuário: aparecer em cada programa.
+function rotuloMac(mac: string | null): string | null {
+  const m = mac?.trim();
+  if (!m) return null;
+  return /^mac/i.test(m) ? m : `MAC ${m}`;
+}
+
+function macsDe(p: ProgramaCorte): string[] {
+  return [...new Set(p.itens.map((i) => rotuloMac(i.mac)).filter((m): m is string => !!m))].sort();
+}
+
 type Filtro = "recentes" | "cortando" | "falta" | "finalizados" | "todos";
 
 const MARCAS: {
@@ -484,6 +495,11 @@ export default function Corte({
                               </span>
                             )}
                           </span>
+                          {macsDe(p).length > 0 && (
+                            <span className="truncate text-sm font-bold text-stone-800 dark:text-slate-200">
+                              {macsDe(p).join(" · ")}
+                            </span>
+                          )}
                           <span className="truncate text-xs text-stone-600 dark:text-slate-400">
                             {p.manual
                               ? "ainda não está na Croqui"
@@ -580,6 +596,11 @@ export default function Corte({
                 ) : (
                   <p className="mt-2 text-sm text-stone-700 dark:text-slate-300">
                     <strong>{aberto.mps.join(" · ") || "—"}</strong>
+                  </p>
+                )}
+                {macsDe(aberto).length > 0 && (
+                  <p className="text-base font-bold text-stone-800 dark:text-slate-200">
+                    {macsDe(aberto).join(" · ")}
                   </p>
                 )}
                 <p className="text-sm text-stone-600 dark:text-slate-400">
@@ -706,7 +727,7 @@ export default function Corte({
                       {i.descricao}
                     </p>
                     <p className="truncate text-xs text-stone-500 dark:text-slate-500">
-                      {i.pedido} · {i.mp ?? "—"}
+                      {rotuloMac(i.mac) ? `${rotuloMac(i.mac)} · ` : ""}{i.pedido} · {i.mp ?? "—"}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
