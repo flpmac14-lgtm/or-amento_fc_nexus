@@ -715,6 +715,7 @@ export interface PecaCorte {
   id: string;
   pedido: string;
   mac: string | null;
+  cliente: string | null; // código do Follow up pela MAC (A1, A2, W1, F2…)
   descricao: string | null;
   desenho: string | null;
   mp: string | null;

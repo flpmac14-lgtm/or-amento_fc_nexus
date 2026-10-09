@@ -37,8 +37,29 @@ function rotuloMac(mac: string | null): string | null {
   return /^mac/i.test(m) ? m : `MAC ${m}`;
 }
 
+// Código do cliente no Follow up → nome (pedido do usuário).
+const CLIENTES: Record<string, string> = {
+  A1: "Andritz",
+  A2: "Dana/AlSN",
+  W1: "WEIR",
+  F2: "FTSX",
+};
+
+function rotuloCliente(codigo: string | null): string | null {
+  const c = codigo?.trim().toUpperCase();
+  if (!c) return null;
+  return CLIENTES[c] ?? c;
+}
+
+function rotuloPeca(i: { mac: string | null; cliente: string | null }): string | null {
+  const mac = rotuloMac(i.mac);
+  if (!mac) return null;
+  const cliente = rotuloCliente(i.cliente);
+  return cliente ? `${mac} (${cliente})` : mac;
+}
+
 function macsDe(p: ProgramaCorte): string[] {
-  return [...new Set(p.itens.map((i) => rotuloMac(i.mac)).filter((m): m is string => !!m))].sort();
+  return [...new Set(p.itens.map(rotuloPeca).filter((m): m is string => !!m))].sort();
 }
 
 type Filtro = "recentes" | "cortando" | "falta" | "finalizados" | "todos";
@@ -727,7 +748,7 @@ export default function Corte({
                       {i.descricao}
                     </p>
                     <p className="truncate text-xs text-stone-500 dark:text-slate-500">
-                      {rotuloMac(i.mac) ? `${rotuloMac(i.mac)} · ` : ""}{i.pedido} · {i.mp ?? "—"}
+                      {rotuloPeca(i) ? `${rotuloPeca(i)} · ` : ""}{i.pedido} · {i.mp ?? "—"}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">

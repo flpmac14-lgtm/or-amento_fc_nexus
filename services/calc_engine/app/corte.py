@@ -85,13 +85,23 @@ def listar() -> dict:
                       falta_material_em, falta_material_por, nri, nri_por, nri_em, maquina, maquina_por from corte_programas"""
         )
         marcas = {r[0]: r for r in cur.fetchall()}
+        # Cliente de cada MAC (A1, A2, W1, F2…) vem do Follow up — pedido do
+        # usuário: aparecer no programa junto com a MAC.
+        macs = sorted({r[2] for r in itens if r[2]})
+        clientes: dict[str, str] = {}
+        if macs:
+            cur.execute(
+                "select distinct mac, cliente from follow_up_itens where mac = any(%s) and cliente is not null",
+                (macs,),
+            )
+            clientes = {mac: cliente for mac, cliente in cur.fetchall()}
 
     programas: dict[str, dict] = {}
     for (item_id, pedido, mac, descricao, desenho, mp, pos, qt, qtt, un, status, projetista, n_prog, dt_feito) in itens:
         for p in programas_de(n_prog):
             prog = programas.setdefault(p, {"programa": p, "itens": [], "liberado_em": None, "manual": False})
             prog["itens"].append({
-                "id": str(item_id), "pedido": pedido, "mac": mac, "descricao": descricao, "desenho": desenho,
+                "id": str(item_id), "pedido": pedido, "mac": mac, "cliente": clientes.get(mac), "descricao": descricao, "desenho": desenho,
                 "mp": mp, "pos": pos, "qt": _num(qt), "qtt": _num(qtt), "un": un, "status": status,
                 "projetista": projetista, "n_programa": n_prog,
             })
