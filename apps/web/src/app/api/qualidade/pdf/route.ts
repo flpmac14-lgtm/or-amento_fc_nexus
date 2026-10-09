@@ -7,7 +7,7 @@ import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 // do usuário, pra montar data book. Sob demanda (migration 0035): POST grava os
 // pedidos; o vigia services/calc_engine/scripts/servir_certificados.py (no PC
 // da fábrica) sobe o PDF pro bucket privado "certificados"; GET devolve o
-// status e, quando pronto, uma URL assinada de 10 min.
+// status e, quando pronto, uma URL assinada de 1 h (dá tempo de arrastar da bandeja).
 
 const NEGADO = () => NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
 const MAX_POR_VEZ = 200;
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
   const objetos = (data ?? []).filter((p) => p.status === "pronto" && p.objeto).map((p) => p.objeto as string);
   const urls: Record<string, string> = {};
   if (objetos.length) {
-    const { data: assinadas, error: erroUrl } = await admin.storage.from("certificados").createSignedUrls(objetos, 600);
+    const { data: assinadas, error: erroUrl } = await admin.storage.from("certificados").createSignedUrls(objetos, 3600);
     if (erroUrl) return NextResponse.json({ erro: erroUrl.message }, { status: 500 });
     for (const a of assinadas ?? []) if (a.path && a.signedUrl) urls[a.path] = a.signedUrl;
   }
