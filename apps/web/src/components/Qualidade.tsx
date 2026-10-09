@@ -8,25 +8,21 @@
 // Dados: scripts/sincronizar_certificados.py (ciclo de 15 min) → migration
 // 0034 → /api/qualidade/certificados (confere o usuário).
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  nomeDoArquivo,
+  pedirPdfs,
+  textoSemResposta,
+  type Certificado,
+  type FonteCertificados,
+  type Progresso,
+} from "@/lib/certificadosPdf";
 
-interface Certificado {
-  nri: string | null; // "26-5097"
-  descricao: string;
-  tipo: string | null;
-  fornecedor: string | null;
-  recebido: string | null; // AAAA-MM-DD (planilha do Recebimento)
-  codigo: string | null; // código do material no ERP
-  arquivo: string; // caminho relativo do PDF na pasta
-  modificado: string;
-  na_planilha: boolean;
-  // Tipo de certificado pelo conteúdo do PDF (ultrassom, LP, material…);
-  // null = ainda não analisado (classificar_certificados.py, aos poucos).
-  certificado?: string[] | null;
-}
+export type { FonteCertificados } from "@/lib/certificadosPdf";
 
-// Pasta: a principal (aba QUALIDADE) ou o backup (aba Backup Recebimento).
-export type FonteCertificados = "principal" | "backup";
+// Tela de montar data book (PDF.js + pdf-lib): só carrega quando é aberta.
+const MontarDataBook = dynamic(() => import("@/components/MontarDataBook"), { ssr: false });
 
 interface Notificacao {
   id: number;
@@ -198,9 +194,6 @@ function Sino({
 // Sob demanda: o PC da fábrica sobe o PDF quando pedido (/api/qualidade/pdf,
 // scripts/servir_certificados.py). Chrome/Edge: o usuário escolhe a pasta uma
 // vez e todos são gravados lá; outros navegadores: download normal.
-const URL_PDF = "/api/qualidade/pdf";
-const ESPERA_MAX_MS = 90_000;
-
 interface PastaEscolhida {
   getFileHandle(nome: string, op: { create: boolean }): Promise<{
     createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
@@ -209,17 +202,6 @@ interface PastaEscolhida {
 type JanelaComPasta = Window & {
   showDirectoryPicker?: (op?: { id?: string; mode?: "readwrite" }) => Promise<PastaEscolhida>;
 };
-
-interface Progresso {
-  total: number;
-  salvos: number;
-  erros: string[];
-  fim?: string;
-}
-
-function nomeDoArquivo(arquivo: string): string {
-  return arquivo.split("/").pop() ?? arquivo;
-}
 
 async function salvar(pasta: PastaEscolhida | null, nome: string, blob: Blob) {
   if (pasta) {
@@ -234,60 +216,6 @@ async function salvar(pasta: PastaEscolhida | null, nome: string, blob: Blob) {
   a.download = nome;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
-// Pede os PDFs ao PC da fábrica e chama aoPronto(arquivo, url assinada) pra cada
-// um que chegar; devolve o progresso final (salvos = quantos aoPronto deu certo).
-async function pedirPdfs(
-  fonte: FonteCertificados,
-  lista: Certificado[],
-  aoAvancar: (p: Progresso) => void,
-  aoPronto: (arquivo: string, url: string) => Promise<void>,
-): Promise<{ p: Progresso; semResposta: number }> {
-  const p: Progresso = { total: lista.length, salvos: 0, erros: [] };
-  aoAvancar({ ...p });
-  let corpo: { ids?: Record<string, number>; erro?: string } = {};
-  for (let tentativa = 1; ; tentativa++) {
-    const r = await fetch(URL_PDF, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fonte, itens: lista.map((i) => ({ arquivo: i.arquivo, modificado: i.modificado })) }),
-    });
-    corpo = await r.json().catch(() => ({}));
-    if (r.ok) break;
-    // Erro passageiro do Supabase: mais uma tentativa (403 = sem acesso, não adianta).
-    if (r.status === 403 || tentativa >= 2) throw new Error(corpo.erro ?? `Erro ${r.status}`);
-    await new Promise((res) => setTimeout(res, 1500));
-  }
-  const faltam = new Map<number, string>(Object.entries(corpo.ids ?? {}).map(([a, id]) => [id, a]));
-  const inicio = Date.now();
-  while (faltam.size && Date.now() - inicio < ESPERA_MAX_MS) {
-    const g = await fetch(`${URL_PDF}?ids=${[...faltam.keys()].join(",")}`, { cache: "no-store" });
-    const st = (await g.json().catch(() => ({}))) as {
-      pedidos?: { id: number; arquivo: string; status: string; erro: string | null; url: string | null }[];
-    };
-    for (const ped of st.pedidos ?? []) {
-      if (ped.status === "erro") {
-        p.erros.push(`${nomeDoArquivo(ped.arquivo)}: ${ped.erro ?? "erro"}`);
-        faltam.delete(ped.id);
-      } else if (ped.status === "pronto" && ped.url) {
-        try {
-          await aoPronto(ped.arquivo, ped.url);
-          p.salvos++;
-        } catch (e) {
-          p.erros.push(`${nomeDoArquivo(ped.arquivo)}: ${e instanceof Error ? e.message : e}`);
-        }
-        faltam.delete(ped.id);
-      }
-      aoAvancar({ ...p, erros: [...p.erros] });
-    }
-    if (faltam.size) await new Promise((res) => setTimeout(res, 2000));
-  }
-  return { p, semResposta: faltam.size };
-}
-
-function textoSemResposta(n: number): string {
-  return n ? ` ${n} não chegaram: o PC da fábrica precisa estar ligado e com o J: (tente de novo em instantes).` : "";
 }
 
 async function baixarPdfs(fonte: FonteCertificados, lista: Certificado[], aoAvancar: (p: Progresso) => void) {
@@ -311,31 +239,6 @@ async function baixarPdfs(fonte: FonteCertificados, lista: Certificado[], aoAvan
     erros: [...p.erros],
     fim: `${p.salvos} de ${p.total} PDF(s) salvos${pasta ? " na pasta escolhida" : ""}.${textoSemResposta(semResposta)}`,
   });
-}
-
-// Arrastar pro Acrobat (pedido do usuário: "Organizar páginas" → soltar o PDF
-// dentro do programa aberto). Chrome/Edge: o "DownloadURL" no arraste vira um
-// arquivo de verdade ao soltar fora do navegador. Como o navegador não espera
-// o download no meio do arraste, o PDF é preparado antes (URL assinada de 1 h).
-interface PdfPronto {
-  arquivo: string;
-  nri: string | null;
-  url: string;
-  expira: number;
-  expirou?: boolean; // marcado ao tentar arrastar depois da validade
-}
-const VALIDADE_URL_MS = 55 * 60 * 1000; // a rota assina por 60 min
-
-// false = o link já venceu (o arraste é cancelado).
-function arrastarPdf(e: React.DragEvent, pdf: PdfPronto): boolean {
-  if (Date.now() > pdf.expira) {
-    e.preventDefault();
-    return false;
-  }
-  e.dataTransfer.effectAllowed = "copy";
-  e.dataTransfer.setData("DownloadURL", `application/pdf:${nomeDoArquivo(pdf.arquivo)}:${pdf.url}`);
-  e.dataTransfer.setData("text/uri-list", pdf.url);
-  return true;
 }
 
 interface Resposta {
@@ -380,7 +283,7 @@ export default function Qualidade({
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [progresso, setProgresso] = useState<Progresso | null>(null);
   const baixando = !!progresso && !progresso.fim;
-  const [bandeja, setBandeja] = useState<PdfPronto[]>([]);
+  const [montando, setMontando] = useState(false);
   const maiorAviso = useRef(0);
 
   const aplicar = useCallback((d: Resposta) => {
@@ -440,28 +343,6 @@ export default function Qualidade({
       else n.add(arquivo);
       return n;
     });
-  }
-
-  function preparar(lista: Certificado[]) {
-    if (!lista.length || baixando) return;
-    const nri = new Map(lista.map((i) => [i.arquivo, i.nri]));
-    const chegaram: PdfPronto[] = [];
-    pedirPdfs(fonte, lista, setProgresso, async (arquivo, url) => {
-      chegaram.push({ arquivo, nri: nri.get(arquivo) ?? null, url, expira: Date.now() + VALIDADE_URL_MS });
-    })
-      .then(({ p, semResposta }) => {
-        // Na ordem da lista (a da tabela), sem repetir o que já estava na bandeja.
-        const ordem = lista.map((i) => i.arquivo);
-        chegaram.sort((a, b) => ordem.indexOf(a.arquivo) - ordem.indexOf(b.arquivo));
-        setBandeja((b) => [...b.filter((x) => !chegaram.some((c) => c.arquivo === x.arquivo)), ...chegaram]);
-        setProgresso({
-          ...p,
-          fim: `${p.salvos} de ${p.total} PDF(s) prontos na bandeja: arraste cada um pro Acrobat ou pra uma pasta.${textoSemResposta(semResposta)}`,
-        });
-      })
-      .catch((e) =>
-        setProgresso({ total: lista.length, salvos: 0, erros: [], fim: `Erro: ${e instanceof Error ? e.message : e}` }),
-      );
   }
 
   function baixar(lista: Certificado[]) {
@@ -593,66 +474,20 @@ export default function Qualidade({
             </button>
             <button
               type="button"
-              disabled={!selecionados.size || baixando}
-              onClick={() => preparar((itens ?? []).filter((i) => selecionados.has(i.arquivo)))}
-              title="Prepara os PDFs pra arrastar direto pro Acrobat (Organizar páginas) ou pra uma pasta — Chrome/Edge"
+              disabled={baixando}
+              onClick={() => setMontando(true)}
+              title="Abre a tela de montar o data book: miniaturas das páginas, arrastar os certificados selecionados, reordenar e salvar o PDF"
               className="h-9 rounded-lg border-2 border-green-700 px-3 text-sm font-bold text-green-800 disabled:opacity-40 dark:border-cyan-500 dark:text-cyan-300"
             >
-              ✋ Preparar pra arrastar ({selecionados.size})
+              📚 Montar data book{selecionados.size ? ` (${selecionados.size})` : ""}
             </button>
           </div>
-          {bandeja.length > 0 && (
-            <div className="rounded-xl border-2 border-dashed border-green-600 bg-green-50/60 p-3 dark:border-cyan-600 dark:bg-cyan-950/20">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <p className="mr-auto text-sm font-bold text-stone-900 dark:text-white">
-                  Bandeja · arraste cada PDF pro Acrobat (Organizar páginas) ou pra uma pasta
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setBandeja([])}
-                  className="text-xs font-semibold text-stone-500 underline dark:text-slate-400"
-                >
-                  esvaziar bandeja
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {bandeja.map((pdf) => {
-                  const expirou = !!pdf.expirou;
-                  return (
-                    <div
-                      key={pdf.arquivo}
-                      draggable={!expirou}
-                      onDragStart={(e) => {
-                        if (!arrastarPdf(e, pdf))
-                          setBandeja((b) => b.map((x) => (x.arquivo === pdf.arquivo ? { ...x, expirou: true } : x)));
-                      }}
-                      title={expirou ? "O link expirou (1 h): prepare de novo" : `Arraste ${nomeDoArquivo(pdf.arquivo)}`}
-                      className={`flex select-none items-center gap-2 rounded-lg border bg-white px-3 py-2 shadow-sm dark:bg-slate-900 ${expirou ? "cursor-not-allowed border-stone-300 opacity-50 dark:border-slate-700" : "cursor-grab border-green-600 active:cursor-grabbing dark:border-cyan-500"}`}
-                    >
-                      <span className="text-xl" aria-hidden>
-                        📄
-                      </span>
-                      <span className="leading-tight">
-                        <span className="block font-mono text-sm font-bold text-stone-900 dark:text-white">
-                          {pdf.nri ? `NRI ${pdf.nri}` : nomeDoArquivo(pdf.arquivo)}
-                        </span>
-                        <span className="block text-[10px] text-stone-500 dark:text-slate-400">
-                          {expirou ? "expirou — prepare de novo" : "arraste"}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setBandeja((b) => b.filter((x) => x.arquivo !== pdf.arquivo))}
-                        aria-label="Tirar da bandeja"
-                        className="ml-1 text-xs text-stone-400 hover:text-red-600"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {montando && (
+            <MontarDataBook
+              fonte={fonte}
+              certificados={(itens ?? []).filter((i) => selecionados.has(i.arquivo))}
+              onFechar={() => setMontando(false)}
+            />
           )}
           {progresso && (
             <div

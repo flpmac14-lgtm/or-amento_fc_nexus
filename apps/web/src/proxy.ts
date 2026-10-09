@@ -82,6 +82,8 @@ export const config = {
     // Slack gerando o preview do link) é redirecionado pra /login ao
     // pedir a imagem, e o preview nunca aparece — achado real testando o
     // link de compartilhamento.
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // .mjs: public/pdf.worker.min.mjs (PDF.js da tela "Montar data book") — conta
+    // restrita também precisa carregar.
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mjs)$).*)",
   ],
 };
