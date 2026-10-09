@@ -18,6 +18,7 @@ import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
 import { classeAbaSublinhada } from "@/components/AppShell";
+import Qualidade from "@/components/Qualidade";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
@@ -224,6 +225,7 @@ export default function ModuloFollowUp({
         </ProvedorPdfsCorte>
       )}
       {visao === "usinagem" && <ApontamentoSetor config={CONFIG_USINAGEM} />}
+      {visao === "qualidade" && <Qualidade />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

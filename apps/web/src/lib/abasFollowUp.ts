@@ -14,6 +14,8 @@ export const VISOES = [
   { valor: "corte", rotulo: "Corte" },
   // Líder da Usinagem aponta por pedido do Follow up (pedido do usuário).
   { valor: "usinagem", rotulo: "Usinagem" },
+  // Pedido do usuário (09/10/2026): aba nova, conteúdo ainda a definir.
+  { valor: "qualidade", rotulo: "QUALIDADE" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
@@ -35,7 +37,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
         ? v.valor === "usinagem"
         : perfil === "projeto"
           ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-          : v.valor === "usinagem"
+          : v.valor === "usinagem" || v.valor === "qualidade"
             ? perfil === "total"
             : v.valor !== "referencia" || comReferenciaPrecos,
   );
