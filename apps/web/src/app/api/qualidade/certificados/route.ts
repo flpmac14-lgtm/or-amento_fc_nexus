@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { podeVerQualidade } from "@/lib/acesso";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
+import { comRetentativa } from "@/lib/supabase/retentativa";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
 // Aba QUALIDADE — pedido explícito do usuário: a conta flpmac14 e o perfil
@@ -28,13 +29,17 @@ export async function GET(request: Request) {
   const [lista, notificacoes] = await Promise.all([
     soNotificacoes
       ? Promise.resolve({ data: null, error: null })
-      : admin.from("qualidade_certificados").select("dados, gerado_em").eq("id", ID_FONTE[fonte]).maybeSingle(),
-    admin
-      .from("qualidade_notificacoes")
-      .select("id, tipo, nri, arquivo, descricao, criado_em")
-      .eq("fonte", fonte)
-      .order("id", { ascending: false })
-      .limit(200),
+      : comRetentativa(() =>
+          admin.from("qualidade_certificados").select("dados, gerado_em").eq("id", ID_FONTE[fonte]).maybeSingle(),
+        ),
+    comRetentativa(() =>
+      admin
+        .from("qualidade_notificacoes")
+        .select("id, tipo, nri, arquivo, descricao, criado_em")
+        .eq("fonte", fonte)
+        .order("id", { ascending: false })
+        .limit(200),
+    ),
   ]);
   const erro = lista.error ?? notificacoes.error;
   if (erro) return NextResponse.json({ erro: erro.message }, { status: 500 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { podeVerQualidade } from "@/lib/acesso";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
+import { comRetentativa } from "@/lib/supabase/retentativa";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
 // Baixar o PDF do certificado (aba QUALIDADE: flpmac14 e perfil "qualidade") — pedido explícito
@@ -42,13 +43,15 @@ export async function POST(request: Request) {
   const admin = criarClienteSupabaseAdmin();
   // Já baixado há pouco (mesmo arquivo e mesma data): reaproveita o que está no bucket.
   const desde = new Date(Date.now() - REAPROVEITA_HORAS * 3600_000).toISOString();
-  const { data: prontos, error: erroProntos } = await admin
-    .from("qualidade_pdf_pedidos")
-    .select("id, arquivo, modificado")
-    .eq("status", "pronto")
-    .eq("fonte", fonte)
-    .gte("pronto_em", desde)
-    .in("arquivo", itens.map((i) => i.arquivo));
+  const { data: prontos, error: erroProntos } = await comRetentativa(() =>
+    admin
+      .from("qualidade_pdf_pedidos")
+      .select("id, arquivo, modificado")
+      .eq("status", "pronto")
+      .eq("fonte", fonte)
+      .gte("pronto_em", desde)
+      .in("arquivo", itens.map((i) => i.arquivo)),
+  );
   if (erroProntos) return NextResponse.json({ erro: erroProntos.message }, { status: 500 });
 
   const ids: Record<string, number> = {};
@@ -59,7 +62,10 @@ export async function POST(request: Request) {
     else novos.push(i);
   }
   if (novos.length) {
-    const { data, error } = await admin.from("qualidade_pdf_pedidos").insert(novos).select("id, arquivo");
+    // Com o erro passageiro o insert não acontece, então tentar de novo não duplica.
+    const { data, error } = await comRetentativa(() =>
+      admin.from("qualidade_pdf_pedidos").insert(novos).select("id, arquivo"),
+    );
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
     for (const r of data ?? []) ids[r.arquivo] = r.id;
   }
@@ -76,16 +82,17 @@ export async function GET(request: Request) {
   if (!ids.length) return NextResponse.json({ pedidos: [] });
 
   const admin = criarClienteSupabaseAdmin();
-  const { data, error } = await admin
-    .from("qualidade_pdf_pedidos")
-    .select("id, arquivo, status, objeto, erro")
-    .in("id", ids);
+  const { data, error } = await comRetentativa(() =>
+    admin.from("qualidade_pdf_pedidos").select("id, arquivo, status, objeto, erro").in("id", ids),
+  );
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
 
   const objetos = (data ?? []).filter((p) => p.status === "pronto" && p.objeto).map((p) => p.objeto as string);
   const urls: Record<string, string> = {};
   if (objetos.length) {
-    const { data: assinadas, error: erroUrl } = await admin.storage.from("certificados").createSignedUrls(objetos, 3600);
+    const { data: assinadas, error: erroUrl } = await comRetentativa(() =>
+      admin.storage.from("certificados").createSignedUrls(objetos, 3600),
+    );
     if (erroUrl) return NextResponse.json({ erro: erroUrl.message }, { status: 500 });
     for (const a of assinadas ?? []) if (a.path && a.signedUrl) urls[a.path] = a.signedUrl;
   }

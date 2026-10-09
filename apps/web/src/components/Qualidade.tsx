@@ -246,14 +246,20 @@ async function pedirPdfs(
 ): Promise<{ p: Progresso; semResposta: number }> {
   const p: Progresso = { total: lista.length, salvos: 0, erros: [] };
   aoAvancar({ ...p });
-  const r = await fetch(URL_PDF, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fonte, itens: lista.map((i) => ({ arquivo: i.arquivo, modificado: i.modificado })) }),
-  });
-  const corpo = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(corpo.erro ?? `Erro ${r.status}`);
-  const faltam = new Map<number, string>(Object.entries(corpo.ids as Record<string, number>).map(([a, id]) => [id, a]));
+  let corpo: { ids?: Record<string, number>; erro?: string } = {};
+  for (let tentativa = 1; ; tentativa++) {
+    const r = await fetch(URL_PDF, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fonte, itens: lista.map((i) => ({ arquivo: i.arquivo, modificado: i.modificado })) }),
+    });
+    corpo = await r.json().catch(() => ({}));
+    if (r.ok) break;
+    // Erro passageiro do Supabase: mais uma tentativa (403 = sem acesso, não adianta).
+    if (r.status === 403 || tentativa >= 2) throw new Error(corpo.erro ?? `Erro ${r.status}`);
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  const faltam = new Map<number, string>(Object.entries(corpo.ids ?? {}).map(([a, id]) => [id, a]));
   const inicio = Date.now();
   while (faltam.size && Date.now() - inicio < ESPERA_MAX_MS) {
     const g = await fetch(`${URL_PDF}?ids=${[...faltam.keys()].join(",")}`, { cache: "no-store" });
@@ -339,10 +345,17 @@ interface Resposta {
 }
 
 async function buscar(fonte: FonteCertificados, soNotificacoes: boolean): Promise<Resposta> {
-  const r = await fetch(`${URL_API}?fonte=${fonte}${soNotificacoes ? "&so_notificacoes=1" : ""}`, { cache: "no-store" });
-  const corpo = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(corpo.erro ?? `Erro ${r.status}`);
-  return corpo as Resposta;
+  // Mais uma tentativa aqui se o servidor ainda devolver o erro passageiro do
+  // Supabase ("JWT issued at future"), igual ao Financeiro.
+  for (let tentativa = 1; ; tentativa++) {
+    const r = await fetch(`${URL_API}?fonte=${fonte}${soNotificacoes ? "&so_notificacoes=1" : ""}`, {
+      cache: "no-store",
+    });
+    const corpo = await r.json().catch(() => ({}));
+    if (r.ok) return corpo as Resposta;
+    if (r.status === 403 || tentativa >= 2) throw new Error(corpo.erro ?? `Erro ${r.status}`);
+    await new Promise((res) => setTimeout(res, 1500));
+  }
 }
 
 // fonte/titulo/descricao: a mesma tela serve a aba QUALIDADE (pasta principal)
