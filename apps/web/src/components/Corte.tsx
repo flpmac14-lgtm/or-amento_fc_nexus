@@ -262,12 +262,18 @@ export default function Corte({
   }, [programas, agora]);
 
   const lista = useMemo(() => {
+    // O que está cortando sempre no topo (pedido do usuário); o resto segue
+    // a ordem do servidor (programa mais novo primeiro).
+    const cortandoPrimeiro = (l: ProgramaCorte[]) => [
+      ...l.filter((p) => situacao(p).texto === "Cortando"),
+      ...l.filter((p) => situacao(p).texto !== "Cortando"),
+    ];
     if (numero)
-      return programas
-        .filter((p) => p.programa.startsWith(numero))
-        .slice(0, 60);
+      return cortandoPrimeiro(
+        programas.filter((p) => p.programa.startsWith(numero)).slice(0, 60),
+      );
     const limite = agora - DIAS_RECENTES * 86400000;
-    return programas.filter((p) => {
+    return cortandoPrimeiro(programas.filter((p) => {
       if (filtro === "todos") return true;
       if (filtro === "finalizados") return !!p.finalizado_em;
       if (p.finalizado_em) return false;
@@ -279,7 +285,7 @@ export default function Corte({
         p.manual ||
         (!!p.liberado_em && new Date(p.liberado_em).getTime() >= limite)
       );
-    });
+    }));
   }, [programas, numero, filtro, agora]);
 
   function digitar(valor: string) {
