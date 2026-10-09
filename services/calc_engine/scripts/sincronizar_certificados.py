@@ -1,24 +1,30 @@
-"""Aba QUALIDADE (só flpmac14) — pedido explícito do usuário: lista dos
-certificados de matéria-prima da pasta do Recebimento, com NRI, descrição
-do produto e tipo (tinta, insumo de solda etc.); e o sininho da aba avisa
-quando um PDF é adicionado, alterado ou excluído na pasta.
+"""Abas QUALIDADE e Backup Recebimento — pedido explícito do usuário: lista
+dos certificados de matéria-prima do Recebimento, com NRI, descrição do
+produto, tipo do material (tinta, insumo de solda etc.) e tipo de certificado
+(ultrassom, LP, certificado de material…); e o sininho avisa quando um PDF é
+adicionado, alterado ou excluído na pasta.
+
+Duas pastas (FONTES): a principal ("1. Certificados de Matéria-Prima_Ordenados
+pelo NRI", aba QUALIDADE) e o backup ("BACKUP RECEBIMENTO 20260828", aba
+Backup Recebimento).
 
 De onde vem cada coluna (estudado nos PDFs em 09/10/2026):
-- NRI: nome do arquivo ("NRI 26-5097.pdf"; na pasta do ultrassom vem
-  invertido, "NRI 0365-23"). Metade dos PDFs é digitalizada e cada
-  fornecedor tem um modelo, então NÃO se lê o conteúdo dos PDFs.
+- NRI: nome do arquivo ("NRI 26-5097.pdf"; no ultrassom e no backup vem
+  invertido, "NRI 0365-23 - CHAPA….pdf").
 - Descrição e fornecedor: aba GERAL da planilha "CONTROLE DE RECEBIMENTO E
-  ESTOQUE.xlsm" do Recebimento (uma linha por NRI) — cobre ~99,6% dos PDFs.
-- Tipo: código do material (coluna SECTRA = código do ERP, GGSSxxxx) →
-  grupo/subgrupo do ERP (MT_SUBGRUPO, só SELECT). Sem código, pelas
-  palavras da descrição.
+  ESTOQUE.xlsm" do Recebimento (uma linha por NRI); fora dela, o nome do arquivo.
+- Tipo (material): código do material (coluna SECTRA = código do ERP,
+  GGSSxxxx) → grupo/subgrupo do ERP (MT_SUBGRUPO, só SELECT). Sem código,
+  pelas palavras da descrição.
+- Tipo de certificado: conteúdo do PDF (texto ou OCR local), feito à parte por
+  classificar_certificados.py (cache local); aqui só junta.
 
 A pasta e o ERP só existem na rede da fábrica: roda nesta máquina (dentro do
 ciclo de 15 min, sincronizar_controle_obras.py). A cada ciclo confere os
 arquivos (nome, data, tamanho — é rápido); só relê a planilha e grava quando
-algo mudou. Lista em qualidade_certificados, avisos em qualidade_notificacoes
-(migration 0034, sem policy). O site lê pela rota /api/qualidade/certificados
-(só flpmac14).
+algo mudou. Lista em qualidade_certificados (id 1 = principal, 2 = backup),
+avisos em qualidade_notificacoes (migrations 0034/0036, sem policy). O site lê
+por /api/qualidade/certificados?fonte=… (flpmac14 e perfil "qualidade").
 
 Uso: python scripts/sincronizar_certificados.py [--simular] [--forcar]
 """
@@ -36,25 +42,43 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(RAIZ / ".env")
 
 from app.orcamentos_salvos import _conectar  # noqa: E402
+import classificar_certificados as classificar  # noqa: E402
 
 RECEBIMENTO = Path(r"J:\5 - Almoxarifado - Recebimento\ISO_SGQ\Recebimento")
-PASTA = RECEBIMENTO / "1. Certificados de Matéria-Prima_Ordenados pelo NRI"
 PLANILHA = RECEBIMENTO / "CONTROLE DE RECEBIMENTO E ESTOQUE.xlsm"
-# Pastas com um PDF por NRI. As "NRI ANO 2014…2020" juntam dezenas de NRIs
-# digitalizados num arquivo só ("NRI 119-2019 ATÉ NRI 001-2019") — ficam fora.
-SUBPASTAS = ["ultrasson de chapas", "_REVISAR"]
 
-# Última lista gravada (pra comparar e gerar os avisos) — fora do git.
-ESTADO = RAIZ / "sincronizar_certificados.estado.json"
+# id = linha em qualidade_certificados. subpastas: as que têm um PDF por NRI
+# (na principal, as "NRI ANO 2014…2020" juntam dezenas de NRIs digitalizados
+# num arquivo só — ficam fora). estado: última lista gravada (pros avisos), fora do git.
+FONTES = {
+    "principal": {
+        "id": 1,
+        "pasta": RECEBIMENTO / "1. Certificados de Matéria-Prima_Ordenados pelo NRI",
+        "subpastas": ["", "ultrasson de chapas", "_REVISAR"],
+        "estado": RAIZ / "sincronizar_certificados.estado.json",
+    },
+    "backup": {
+        "id": 2,
+        "pasta": RECEBIMENTO / "BACKUP RECEBIMENTO 20260828" / "NRI 20260828",
+        "subpastas": [""],
+        "estado": RAIZ / "sincronizar_certificados.backup.estado.json",
+    },
+}
+# Compatibilidade (servir_certificados.py antigo).
+PASTA = FONTES["principal"]["pasta"]
+ESTADO = FONTES["principal"]["estado"]
+
 # Mudança grande de uma vez (pasta renomeada, planilha reorganizada): um aviso
 # só, em vez de milhares.
 MAX_AVISOS = 150
+ANO_ATUAL = datetime.now().year % 100
 
 # Nome curto do tipo (pedido do usuário: "tinta, insumo de solda etc.") por
 # grupo+subgrupo do código do ERP. O que não está aqui usa o nome do subgrupo.
@@ -106,7 +130,7 @@ PALAVRAS = [
 
 
 def _nri_do_nome(nome: str) -> str | None:
-    """'NRI 26-5097.pdf' → '26-5097'; 'CHAPA … NRI 0365-23.pdf' → '23-0365'."""
+    """'NRI 26-5097.pdf' → '26-5097'; 'NRI 0365-23 - CHAPA….pdf' → '23-0365'."""
     m = re.match(r"NRI\s*(\d{2})-(\d{3,5})", nome, re.I)
     if m:
         return f"{m.group(1)}-{int(m.group(2)):04d}"
@@ -116,16 +140,26 @@ def _nri_do_nome(nome: str) -> str | None:
     return None
 
 
+def _descricao_do_nome(nome: str) -> str:
+    """'NRI 1051-23 - ARAME MIG ER70S-6.pdf' → 'ARAME MIG ER70S-6'."""
+    base = re.sub(r"\.pdf$", "", nome, flags=re.I)
+    # Só tira o prefixo "NRI …" quando o nome começa com ele.
+    m = re.match(r"(?:NRI\s*[\d-]+\s+)+-\s*(.+)$", base, re.I)
+    texto = m.group(1) if m else base
+    return re.sub(r"\s+", " ", re.sub(r"\s*-\s*C[oó]pia( \(\d+\))?$", "", texto, flags=re.I)).strip() or base
+
+
 def _nri_da_planilha(v) -> str | None:
     m = re.search(r"(\d{2})-(\d{3,5})", str(v or ""))
     return f"{m.group(1)}-{int(m.group(2)):04d}" if m else None
 
 
-def listar_pdfs() -> dict[str, dict]:
-    """'pasta/nome.pdf' → {nome, modificado, tamanho} (pasta e subpastas por NRI)."""
+def listar_pdfs(fonte: str) -> dict[str, dict]:
+    """'sub/nome.pdf' → {nome, modificado, mtime, tamanho} da pasta da fonte."""
+    cfg = FONTES[fonte]
     arquivos: dict[str, dict] = {}
-    for sub in [""] + SUBPASTAS:
-        base = PASTA / sub if sub else PASTA
+    for sub in cfg["subpastas"]:
+        base = cfg["pasta"] / sub if sub else cfg["pasta"]
         if not base.is_dir():
             continue
         with os.scandir(base) as it:
@@ -135,9 +169,25 @@ def listar_pdfs() -> dict[str, dict]:
                     arquivos[f"{sub}/{e.name}" if sub else e.name] = {
                         "nome": e.name,
                         "modificado": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(timespec="seconds"),
+                        "mtime": st.st_mtime,
                         "tamanho": st.st_size,
                     }
     return arquivos
+
+
+def caminho_do_pdf(fonte: str, arquivo: str) -> Path:
+    return FONTES[fonte]["pasta"] / arquivo
+
+
+def todos_os_pdfs() -> list[tuple[Path, float, int]]:
+    """(caminho, mtime, tamanho) de todos os PDFs das duas pastas — pro classificador."""
+    saida = []
+    for fonte, cfg in FONTES.items():
+        if not cfg["pasta"].is_dir():
+            continue
+        for caminho, a in listar_pdfs(fonte).items():
+            saida.append((caminho_do_pdf(fonte, caminho), a["mtime"], a["tamanho"]))
+    return saida
 
 
 def ler_planilha() -> dict[str, dict]:
@@ -215,25 +265,43 @@ def tipo_de(codigo: str | None, descricao: str, subgrupos: dict[str, str]) -> st
     return None
 
 
-def montar(arquivos: dict[str, dict]) -> list[dict]:
-    planilha = ler_planilha()
-    try:
-        subgrupos = subgrupos_erp()
-    except Exception as e:  # noqa: BLE001 — sem ERP, usa só os nomes fixos e as palavras
-        print(f"ERP indisponível ({e}); tipo só pelos nomes fixos/palavras.")
-        subgrupos = {}
+class _Fontes:
+    """Planilha e ERP lidos uma vez só por rodada (e só se alguma pasta mudou)."""
+
+    def __init__(self):
+        self._planilha = None
+        self._subgrupos = None
+
+    @property
+    def planilha(self) -> dict:
+        if self._planilha is None:
+            self._planilha = ler_planilha()
+        return self._planilha
+
+    @property
+    def subgrupos(self) -> dict:
+        if self._subgrupos is None:
+            try:
+                self._subgrupos = subgrupos_erp()
+            except Exception as e:  # noqa: BLE001 — sem ERP, usa só os nomes fixos e as palavras
+                print(f"ERP indisponível ({e}); tipo só pelos nomes fixos/palavras.")
+                self._subgrupos = {}
+        return self._subgrupos
+
+
+def montar(fonte: str, arquivos: dict[str, dict], dados: _Fontes, cache: dict) -> list[dict]:
     itens = []
     for caminho, arq in arquivos.items():
-        nri = _nri_do_nome(arq["nome"])
-        info = planilha.get(nri) if nri else None
-        descricao = " / ".join(info["descricao"]) if info and info["descricao"] else None
-        if not descricao:
-            # Fora da planilha: o nome do arquivo é o que temos.
-            descricao = re.sub(r"\.pdf$", "", arq["nome"], flags=re.I)
+        nome = arq["nome"]
+        nri = _nri_do_nome(nome)
+        info = dados.planilha.get(nri) if nri else None
+        descricao = " / ".join(info["descricao"]) if info and info["descricao"] else _descricao_do_nome(nome)
+        certificado = classificar.tipos_do_cache(cache, caminho_do_pdf(fonte, caminho), arq["mtime"], arq["tamanho"])
         itens.append({
             "nri": nri,
             "descricao": descricao,
-            "tipo": tipo_de(info["codigo"] if info else None, descricao, subgrupos),
+            "tipo": tipo_de(info["codigo"] if info else None, descricao, dados.subgrupos),
+            "certificado": certificado,  # None = ainda não analisado
             "fornecedor": info["fornecedor"] if info else None,
             "recebido": info["recebido"] if info else None,
             "codigo": info["codigo"] if info else None,
@@ -247,20 +315,23 @@ def montar(arquivos: dict[str, dict]) -> list[dict]:
         if not i["nri"]:
             return (1, 0, 0, i["arquivo"])
         ano, num = i["nri"].split("-")
-        return (0, -int(ano), -int(num), i["arquivo"])
+        # Ano depois do atual (ex.: "NRI 0092-91", digitado errado) vai pro fim.
+        return (0 if int(ano) <= ANO_ATUAL else 1, -int(ano), -int(num), i["arquivo"])
 
     itens.sort(key=ordem)  # mais novo primeiro; sem NRI no fim
     return itens
 
 
 def _assinatura(arquivos: dict[str, dict]) -> str:
-    """Muda quando a planilha ou algum PDF (nome, data, tamanho) mudou."""
+    """Muda quando a planilha, algum PDF (nome, data, tamanho) ou a classificação mudou."""
     base = json.dumps(sorted((k, v["modificado"], v["tamanho"]) for k, v in arquivos.items()))
-    return hashlib.sha256(f"{PLANILHA.stat().st_mtime_ns}|{base}".encode()).hexdigest()
+    cache = classificar.CACHE.stat().st_mtime_ns if classificar.CACHE.exists() else 0
+    return hashlib.sha256(f"{PLANILHA.stat().st_mtime_ns}|{cache}|{base}".encode()).hexdigest()
 
 
 def _avisos(antes: list[dict], depois: list[dict]) -> list[tuple]:
-    """(tipo, nri, arquivo, descricao) do que entrou, mudou ou saiu da pasta."""
+    """(tipo, nri, arquivo, descricao) do que entrou, mudou ou saiu da pasta.
+    O tipo de certificado não conta (ele chega aos poucos, pela classificação)."""
     a = {i["arquivo"]: i for i in antes}
     d = {i["arquivo"]: i for i in depois}
     avisos = []
@@ -281,44 +352,54 @@ def _avisos(antes: list[dict], depois: list[dict]) -> list[tuple]:
     return avisos
 
 
-def _ler_estado() -> dict:
+def _ler_estado(caminho: Path) -> dict:
     try:
-        return json.loads(ESTADO.read_text(encoding="utf-8"))
+        return json.loads(caminho.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def sincronizar(simular: bool = False, forcar: bool = False) -> str | None:
-    """Grava a lista e os avisos se a planilha ou algum PDF mudou (None = nada mudou)."""
-    if not PASTA.is_dir() or not PLANILHA.exists():
+    """Grava lista e avisos de cada pasta que mudou (None = nada mudou)."""
+    if not PLANILHA.exists():
         return None  # fora da rede da fábrica / J: desconectado
-    arquivos = listar_pdfs()
-    assinatura = _assinatura(arquivos)
-    estado = _ler_estado()
-    if not forcar and not simular and estado.get("assinatura") == assinatura:
-        return None
-    itens = montar(arquivos)
-    sem_planilha = sum(1 for i in itens if not i["na_planilha"])
-    sem_tipo = sum(1 for i in itens if not i["tipo"])
-    # 1ª vez (sem lista anterior): não avisa — senão seriam 7 mil "adicionados".
-    avisos = _avisos(estado["itens"], itens) if "itens" in estado else []
-    resumo = f"{len(itens)} certificados ({sem_planilha} fora da planilha, {sem_tipo} sem tipo), {len(avisos)} aviso(s)"
-    if simular:
-        return resumo + " — simulado, nada gravado"
-    agora = datetime.now(timezone.utc)
-    with _conectar() as conn, conn.cursor() as cur:
-        cur.execute(
-            """insert into qualidade_certificados (id, dados, gerado_em) values (1, %s, %s)
-               on conflict (id) do update set dados = excluded.dados, gerado_em = excluded.gerado_em""",
-            (json.dumps({"itens": itens}, ensure_ascii=False), agora),
-        )
-        if avisos:
-            cur.executemany(
-                "insert into qualidade_notificacoes (tipo, nri, arquivo, descricao, criado_em) values (%s, %s, %s, %s, %s)",
-                [(*a, agora) for a in avisos],
+    dados = _Fontes()
+    cache = classificar.ler_cache()
+    resumos = []
+    for fonte, cfg in FONTES.items():
+        if not cfg["pasta"].is_dir():
+            continue
+        arquivos = listar_pdfs(fonte)
+        assinatura = _assinatura(arquivos)
+        estado = _ler_estado(cfg["estado"])
+        if not forcar and not simular and estado.get("assinatura") == assinatura:
+            continue
+        itens = montar(fonte, arquivos, dados, cache)
+        sem_planilha = sum(1 for i in itens if not i["na_planilha"])
+        analisados = sum(1 for i in itens if i["certificado"])
+        # 1ª vez (sem lista anterior): não avisa — senão seriam 7 mil "adicionados".
+        avisos = _avisos(estado["itens"], itens) if "itens" in estado else []
+        resumo = (f"{fonte}: {len(itens)} certificados ({sem_planilha} fora da planilha, "
+                  f"{analisados} com tipo de certificado), {len(avisos)} aviso(s)")
+        if simular:
+            resumos.append(resumo + " — simulado")
+            continue
+        agora = datetime.now(timezone.utc)
+        with _conectar() as conn, conn.cursor() as cur:
+            cur.execute(
+                """insert into qualidade_certificados (id, dados, gerado_em) values (%s, %s, %s)
+                   on conflict (id) do update set dados = excluded.dados, gerado_em = excluded.gerado_em""",
+                (cfg["id"], json.dumps({"itens": itens}, ensure_ascii=False), agora),
             )
-    ESTADO.write_text(json.dumps({"assinatura": assinatura, "itens": itens}, ensure_ascii=False), encoding="utf-8")
-    return resumo + " — gravado"
+            if avisos:
+                cur.executemany(
+                    """insert into qualidade_notificacoes (fonte, tipo, nri, arquivo, descricao, criado_em)
+                       values (%s, %s, %s, %s, %s, %s)""",
+                    [(fonte, *a, agora) for a in avisos],
+                )
+        cfg["estado"].write_text(json.dumps({"assinatura": assinatura, "itens": itens}, ensure_ascii=False), encoding="utf-8")
+        resumos.append(resumo + " — gravado")
+    return " | ".join(resumos) or None
 
 
 # Nome usado no ciclo de 15 min (sincronizar_controle_obras.py).

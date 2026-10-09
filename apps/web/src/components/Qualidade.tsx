@@ -20,7 +20,13 @@ interface Certificado {
   arquivo: string; // caminho relativo do PDF na pasta
   modificado: string;
   na_planilha: boolean;
+  // Tipo de certificado pelo conteúdo do PDF (ultrassom, LP, material…);
+  // null = ainda não analisado (classificar_certificados.py, aos poucos).
+  certificado?: string[] | null;
 }
+
+// Pasta: a principal (aba QUALIDADE) ou o backup (aba Backup Recebimento).
+export type FonteCertificados = "principal" | "backup";
 
 interface Notificacao {
   id: number;
@@ -33,7 +39,9 @@ interface Notificacao {
 
 const URL_API = "/api/qualidade/certificados";
 const RECARREGAR_SINO_MS = 5 * 60 * 1000;
-const CHAVE_VISTO = "fcnexus.qualidade.notificacoes.vistoAte";
+const chaveVisto = (fonte: FonteCertificados) =>
+  fonte === "backup" ? "fcnexus.qualidade.backup.notificacoes.vistoAte" : "fcnexus.qualidade.notificacoes.vistoAte";
+const SEM_ANALISE = "Analisando…";
 const POR_PAGINA = 300;
 const SEM_TIPO = "Outros";
 
@@ -54,9 +62,9 @@ function data(iso: string | null): string {
   return `${d}/${m}/${a}`;
 }
 
-function lerVisto(): number {
+function lerVisto(chave: string): number {
   try {
-    return Number(localStorage.getItem(CHAVE_VISTO) ?? 0) || 0;
+    return Number(localStorage.getItem(chave) ?? 0) || 0;
   } catch {
     return 0;
   }
@@ -64,8 +72,16 @@ function lerVisto(): number {
 
 function baixarCsv(itens: Certificado[]) {
   const linhas = [
-    ["NRI", "Descrição", "Tipo", "Fornecedor", "Recebido", "Arquivo"],
-    ...itens.map((i) => [i.nri ?? "", i.descricao, i.tipo ?? SEM_TIPO, i.fornecedor ?? "", data(i.recebido), i.arquivo]),
+    ["NRI", "Descrição", "Tipo", "Tipo de certificado", "Fornecedor", "Recebido", "Arquivo"],
+    ...itens.map((i) => [
+      i.nri ?? "",
+      i.descricao,
+      i.tipo ?? SEM_TIPO,
+      i.certificado?.join(" + ") ?? "",
+      i.fornecedor ?? "",
+      data(i.recebido),
+      i.arquivo,
+    ]),
   ];
   const csv = linhas.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
   const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
@@ -76,10 +92,18 @@ function baixarCsv(itens: Certificado[]) {
   URL.revokeObjectURL(url);
 }
 
-function Sino({ lista, onAbrir }: { lista: Notificacao[]; onAbrir: (n: Notificacao) => void }) {
+function Sino({
+  lista,
+  onAbrir,
+  chave,
+}: {
+  lista: Notificacao[];
+  onAbrir: (n: Notificacao) => void;
+  chave: string;
+}) {
   // Só monta no navegador (depois do login), então já dá pra ler o localStorage.
-  const [vistoAte, setVistoAte] = useState(lerVisto);
-  const [destaqueAte, setDestaqueAte] = useState(lerVisto);
+  const [vistoAte, setVistoAte] = useState(() => lerVisto(chave));
+  const [destaqueAte, setDestaqueAte] = useState(() => lerVisto(chave));
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
 
@@ -98,7 +122,7 @@ function Sino({ lista, onAbrir }: { lista: Notificacao[]; onAbrir: (n: Notificac
     if (!aberto && lista.length) {
       const maior = Math.max(...lista.map((n) => n.id));
       try {
-        localStorage.setItem(CHAVE_VISTO, String(maior));
+        localStorage.setItem(chave, String(maior));
       } catch {
         // sem localStorage: o número volta na próxima visita
       }
@@ -215,6 +239,7 @@ async function salvar(pasta: PastaEscolhida | null, nome: string, blob: Blob) {
 // Pede os PDFs ao PC da fábrica e chama aoPronto(arquivo, url assinada) pra cada
 // um que chegar; devolve o progresso final (salvos = quantos aoPronto deu certo).
 async function pedirPdfs(
+  fonte: FonteCertificados,
   lista: Certificado[],
   aoAvancar: (p: Progresso) => void,
   aoPronto: (arquivo: string, url: string) => Promise<void>,
@@ -224,7 +249,7 @@ async function pedirPdfs(
   const r = await fetch(URL_PDF, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itens: lista.map((i) => ({ arquivo: i.arquivo, modificado: i.modificado })) }),
+    body: JSON.stringify({ fonte, itens: lista.map((i) => ({ arquivo: i.arquivo, modificado: i.modificado })) }),
   });
   const corpo = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(corpo.erro ?? `Erro ${r.status}`);
@@ -259,7 +284,7 @@ function textoSemResposta(n: number): string {
   return n ? ` ${n} não chegaram: o PC da fábrica precisa estar ligado e com o J: (tente de novo em instantes).` : "";
 }
 
-async function baixarPdfs(lista: Certificado[], aoAvancar: (p: Progresso) => void) {
+async function baixarPdfs(fonte: FonteCertificados, lista: Certificado[], aoAvancar: (p: Progresso) => void) {
   // Escolher a pasta tem que ser logo no clique (exigência do navegador).
   const escolher = (window as JanelaComPasta).showDirectoryPicker;
   let pasta: PastaEscolhida | null = null;
@@ -270,7 +295,7 @@ async function baixarPdfs(lista: Certificado[], aoAvancar: (p: Progresso) => voi
       return; // cancelou a escolha da pasta
     }
   }
-  const { p, semResposta } = await pedirPdfs(lista, aoAvancar, async (arquivo, url) => {
+  const { p, semResposta } = await pedirPdfs(fonte, lista, aoAvancar, async (arquivo, url) => {
     const arq = await fetch(url);
     if (!arq.ok) throw new Error(`download ${arq.status}`);
     await salvar(pasta, nomeDoArquivo(arquivo), await arq.blob());
@@ -313,20 +338,31 @@ interface Resposta {
   notificacoes: Notificacao[];
 }
 
-async function buscar(soNotificacoes: boolean): Promise<Resposta> {
-  const r = await fetch(soNotificacoes ? `${URL_API}?so_notificacoes=1` : URL_API, { cache: "no-store" });
+async function buscar(fonte: FonteCertificados, soNotificacoes: boolean): Promise<Resposta> {
+  const r = await fetch(`${URL_API}?fonte=${fonte}${soNotificacoes ? "&so_notificacoes=1" : ""}`, { cache: "no-store" });
   const corpo = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(corpo.erro ?? `Erro ${r.status}`);
   return corpo as Resposta;
 }
 
-export default function Qualidade() {
+// fonte/titulo/descricao: a mesma tela serve a aba QUALIDADE (pasta principal)
+// e a aba Backup Recebimento (pasta BACKUP RECEBIMENTO 20260828).
+export default function Qualidade({
+  fonte = "principal",
+  titulo = "Certificados de matéria-prima",
+  descricao = "Pasta do Recebimento ordenada pelo NRI",
+}: {
+  fonte?: FonteCertificados;
+  titulo?: string;
+  descricao?: string;
+}) {
   const [itens, setItens] = useState<Certificado[] | null>(null);
   const [geradoEm, setGeradoEm] = useState<string | null>(null);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState<string | null>(null);
+  const [tipoCert, setTipoCert] = useState<string | null>(null);
   const [limite, setLimite] = useState(POR_PAGINA);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [progresso, setProgresso] = useState<Progresso | null>(null);
@@ -344,20 +380,20 @@ export default function Qualidade() {
   }, []);
 
   useEffect(() => {
-    buscar(false)
+    buscar(fonte, false)
       .then(aplicar)
       .catch((e) => setErro(String(e.message ?? e)));
     // Sininho: só os avisos a cada 5 min; aviso novo → relê a lista uma vez.
     const id = setInterval(() => {
-      buscar(true)
+      buscar(fonte, true)
         .then((d) => {
           aplicar(d);
-          if ((d.notificacoes?.[0]?.id ?? 0) > maiorAviso.current) return buscar(false).then(aplicar);
+          if ((d.notificacoes?.[0]?.id ?? 0) > maiorAviso.current) return buscar(fonte, false).then(aplicar);
         })
         .catch(() => {}); // sininho não atrapalha a tela se falhar
     }, RECARREGAR_SINO_MS);
     return () => clearInterval(id);
-  }, [aplicar]);
+  }, [aplicar, fonte]);
 
   const contagem = useMemo(() => {
     const c = new Map<string, number>();
@@ -365,15 +401,24 @@ export default function Qualidade() {
     return [...c.entries()].sort((a, b) => b[1] - a[1]);
   }, [itens]);
 
+  const contagemCert = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const i of itens ?? []) for (const t of i.certificado ?? [SEM_ANALISE]) c.set(t, (c.get(t) ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]);
+  }, [itens]);
+
   const filtrados = useMemo(() => {
     const termos = semAcento(busca).split(/\s+/).filter(Boolean);
     return (itens ?? []).filter((i) => {
       if (tipo && (i.tipo ?? SEM_TIPO) !== tipo) return false;
+      if (tipoCert && !(i.certificado ?? [SEM_ANALISE]).includes(tipoCert)) return false;
       if (!termos.length) return true;
-      const texto = semAcento(`${i.nri ?? ""} ${i.descricao} ${i.fornecedor ?? ""} ${i.codigo ?? ""} ${i.arquivo}`);
+      const texto = semAcento(
+        `${i.nri ?? ""} ${i.descricao} ${i.fornecedor ?? ""} ${i.codigo ?? ""} ${i.arquivo} ${i.certificado?.join(" ") ?? ""}`,
+      );
       return termos.every((t) => texto.includes(t));
     });
-  }, [itens, busca, tipo]);
+  }, [itens, busca, tipo, tipoCert]);
 
   function alternarSelecao(arquivo: string) {
     setSelecionados((s) => {
@@ -388,7 +433,7 @@ export default function Qualidade() {
     if (!lista.length || baixando) return;
     const nri = new Map(lista.map((i) => [i.arquivo, i.nri]));
     const chegaram: PdfPronto[] = [];
-    pedirPdfs(lista, setProgresso, async (arquivo, url) => {
+    pedirPdfs(fonte, lista, setProgresso, async (arquivo, url) => {
       chegaram.push({ arquivo, nri: nri.get(arquivo) ?? null, url, expira: Date.now() + VALIDADE_URL_MS });
     })
       .then(({ p, semResposta }) => {
@@ -408,7 +453,7 @@ export default function Qualidade() {
 
   function baixar(lista: Certificado[]) {
     if (!lista.length || baixando) return;
-    baixarPdfs(lista, setProgresso).catch((e) =>
+    baixarPdfs(fonte, lista, setProgresso).catch((e) =>
       setProgresso({ total: lista.length, salvos: 0, erros: [], fim: `Erro: ${e instanceof Error ? e.message : e}` }),
     );
   }
@@ -424,10 +469,10 @@ export default function Qualidade() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto">
           <h2 className="text-lg font-extrabold tracking-wide text-stone-900 dark:text-white">
-            Certificados de matéria-prima
+            {titulo}
           </h2>
           <p className="text-xs text-stone-500 dark:text-slate-400">
-            Pasta do Recebimento ordenada pelo NRI · descrição pela planilha de recebimento · atualiza a cada 15 min
+            {descricao} · descrição pela planilha de recebimento · tipo de certificado lido no PDF · atualiza a cada 15 min
             {geradoEm &&
               ` · última mudança ${new Date(geradoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`}
           </p>
@@ -441,6 +486,7 @@ export default function Qualidade() {
           ⬇ Baixar lista (CSV)
         </button>
         <Sino
+          chave={chaveVisto(fonte)}
           lista={notificacoes}
           onAbrir={(n) => {
             setTipo(null);
@@ -481,6 +527,24 @@ export default function Qualidade() {
                 setLimite(POR_PAGINA);
               }}
               className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tipo === t ? "border-green-700 bg-green-700 text-white dark:border-cyan-600 dark:bg-cyan-600" : "border-stone-300 text-stone-700 dark:border-slate-600 dark:text-slate-300"}`}
+            >
+              {t} <span className="font-mono">{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {itens && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-bold uppercase text-stone-500 dark:text-slate-400">Certificado:</span>
+          {contagemCert.map(([t, n]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setTipoCert(tipoCert === t ? null : t);
+                setLimite(POR_PAGINA);
+              }}
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tipoCert === t ? "border-sky-700 bg-sky-700 text-white" : "border-sky-300 text-sky-800 dark:border-sky-700 dark:text-sky-300"}`}
             >
               {t} <span className="font-mono">{n}</span>
             </button>
@@ -627,6 +691,7 @@ export default function Qualidade() {
                   <th className="px-3 py-2">NRI</th>
                   <th className="px-3 py-2">Descrição / produto</th>
                   <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">Certificado</th>
                   <th className="hidden px-3 py-2 md:table-cell">Fornecedor</th>
                   <th className="hidden px-3 py-2 sm:table-cell">Recebido</th>
                   <th className="px-2 py-2 text-center">PDF</th>
@@ -661,6 +726,22 @@ export default function Qualidade() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-1.5 text-stone-700 dark:text-slate-300">
                       {i.tipo ?? <span className="text-stone-400 dark:text-slate-500">{SEM_TIPO}</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs">
+                      {i.certificado ? (
+                        <span className="flex flex-wrap gap-1">
+                          {i.certificado.map((t) => (
+                            <span
+                              key={t}
+                              className="whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-900 dark:bg-sky-950/60 dark:text-sky-200"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400 dark:text-slate-500">{SEM_ANALISE}</span>
+                      )}
                     </td>
                     <td className="hidden px-3 py-1.5 text-xs text-stone-600 md:table-cell dark:text-slate-400">
                       {i.fornecedor}

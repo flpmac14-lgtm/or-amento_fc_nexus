@@ -16,6 +16,8 @@ export const VISOES = [
   { valor: "usinagem", rotulo: "Usinagem" },
   // Certificados de matéria-prima do Recebimento — pedido do usuário (09/10/2026).
   { valor: "qualidade", rotulo: "QUALIDADE" },
+  // Mesma tela, pasta "BACKUP RECEBIMENTO 20260828" — pedido do usuário; mesmo acesso da QUALIDADE.
+  { valor: "backup", rotulo: "Backup Recebimento" },
   { valor: "referencia", rotulo: "Referência de preços" },
 ] as const;
 
@@ -34,7 +36,7 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
   return VISOES.filter((v) =>
-    v.valor === "qualidade"
+    v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
       : perfil === "qualidade"
         ? false

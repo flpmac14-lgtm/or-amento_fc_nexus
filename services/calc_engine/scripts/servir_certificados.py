@@ -11,7 +11,8 @@ Roda pela tarefa agendada "FCNexus - Certificados sob demanda" a cada 15 min:
 cada execução vigia por ~14 min e sai (se cair, a próxima volta sozinha;
 servir_certificados.bat). Confere o banco a cada 3 s se houve pedido nos
 últimos 10 min, senão a cada 10 s (consulta mínima — egress do Supabase).
-Só serve arquivo que está na lista atual (sincronizar_certificados.py).
+Só serve arquivo que está na lista atual da pasta pedida (principal ou
+backup — sincronizar_certificados.py).
 
 Uso: python scripts/servir_certificados.py [--uma-vez]
 """
@@ -35,7 +36,7 @@ load_dotenv(RAIZ / ".env")
 import httpx  # noqa: E402
 
 from app.orcamentos_salvos import _conectar  # noqa: E402
-from sincronizar_certificados import ESTADO, PASTA  # noqa: E402
+from sincronizar_certificados import FONTES, caminho_do_pdf  # noqa: E402
 
 BUCKET = "certificados"
 DURACAO_S = 14 * 60
@@ -53,22 +54,25 @@ def _storage() -> httpx.Client:
                         headers={"Authorization": f"Bearer {chave}", "apikey": chave})
 
 
-def _permitidos() -> set[str]:
-    """Caminhos que podem ser servidos: só os da lista atual (nada fora da pasta)."""
-    try:
-        return {i["arquivo"] for i in json.loads(ESTADO.read_text(encoding="utf-8"))["itens"]}
-    except (OSError, ValueError, KeyError):
-        return set()
+def _permitidos() -> set[tuple[str, str]]:
+    """(fonte, caminho) que podem ser servidos: só os das listas atuais (nada fora das pastas)."""
+    saida = set()
+    for fonte, cfg in FONTES.items():
+        try:
+            saida |= {(fonte, i["arquivo"]) for i in json.loads(cfg["estado"].read_text(encoding="utf-8"))["itens"]}
+        except (OSError, ValueError, KeyError):
+            pass
+    return saida
 
 
-def _servir(cur, st: httpx.Client, pedido_id: int, arquivo: str, permitidos: set[str]) -> None:
-    if arquivo not in permitidos:
+def _servir(cur, st: httpx.Client, pedido_id: int, fonte: str, arquivo: str, permitidos: set) -> None:
+    if (fonte, arquivo) not in permitidos:
         permitidos |= _permitidos()  # pode ter entrado agora na pasta
-    if arquivo not in permitidos:
+    if (fonte, arquivo) not in permitidos:
         cur.execute("update qualidade_pdf_pedidos set status = 'erro', erro = %s where id = %s",
                     ("Arquivo não está na pasta de certificados.", pedido_id))
         return
-    caminho = PASTA / arquivo
+    caminho = caminho_do_pdf(fonte, arquivo)
     try:
         conteudo = caminho.read_bytes()
     except OSError as e:
@@ -120,12 +124,12 @@ def vigiar(uma_vez: bool = False) -> None:
             while True:
                 # Pedidos parados há mais de 1 h (PC estava desligado): o site já desistiu.
                 cur.execute(
-                    """select id, arquivo from qualidade_pdf_pedidos
+                    """select id, fonte, arquivo from qualidade_pdf_pedidos
                        where status = 'pendente' and pedido_em > now() - interval '1 hour' order by id limit 50"""
                 )
                 pendentes = cur.fetchall()
-                for pedido_id, arquivo in pendentes:
-                    _servir(cur, st, pedido_id, arquivo, permitidos)
+                for pedido_id, fonte, arquivo in pendentes:
+                    _servir(cur, st, pedido_id, fonte, arquivo, permitidos)
                 agora = datetime.now(timezone.utc)
                 if pendentes:
                     ultimo_pedido = agora

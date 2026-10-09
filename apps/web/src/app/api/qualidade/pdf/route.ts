@@ -24,12 +24,19 @@ async function autorizado(): Promise<boolean> {
 export async function POST(request: Request) {
   if (!(await autorizado())) return NEGADO();
   const corpo = (await request.json().catch(() => null)) as {
+    fonte?: unknown;
     itens?: { arquivo?: unknown; modificado?: unknown }[];
   } | null;
+  // Pasta principal (aba QUALIDADE) ou backup (aba Backup Recebimento) — migration 0036.
+  const fonte = corpo?.fonte === "backup" ? "backup" : "principal";
   const itens = (corpo?.itens ?? [])
     .filter((i) => typeof i.arquivo === "string" && i.arquivo.length < 400)
     .slice(0, MAX_POR_VEZ)
-    .map((i) => ({ arquivo: i.arquivo as string, modificado: typeof i.modificado === "string" ? i.modificado : null }));
+    .map((i) => ({
+      fonte,
+      arquivo: i.arquivo as string,
+      modificado: typeof i.modificado === "string" ? i.modificado : null,
+    }));
   if (!itens.length) return NextResponse.json({ erro: "Nenhum certificado." }, { status: 400 });
 
   const admin = criarClienteSupabaseAdmin();
@@ -39,12 +46,13 @@ export async function POST(request: Request) {
     .from("qualidade_pdf_pedidos")
     .select("id, arquivo, modificado")
     .eq("status", "pronto")
+    .eq("fonte", fonte)
     .gte("pronto_em", desde)
     .in("arquivo", itens.map((i) => i.arquivo));
   if (erroProntos) return NextResponse.json({ erro: erroProntos.message }, { status: 500 });
 
   const ids: Record<string, number> = {};
-  const novos: { arquivo: string; modificado: string | null }[] = [];
+  const novos: { fonte: string; arquivo: string; modificado: string | null }[] = [];
   for (const i of itens) {
     const p = (prontos ?? []).find((x) => x.arquivo === i.arquivo && x.modificado === i.modificado);
     if (p) ids[i.arquivo] = p.id;

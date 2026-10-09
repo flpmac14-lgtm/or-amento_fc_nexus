@@ -235,7 +235,15 @@ export default function ModuloFollowUp({
         </ProvedorPdfsCorte>
       )}
       {visao === "usinagem" && <ApontamentoSetor config={CONFIG_USINAGEM} />}
-      {visao === "qualidade" && <Qualidade />}
+      {visao === "qualidade" && <Qualidade key="principal" />}
+      {visao === "backup" && (
+        <Qualidade
+          key="backup"
+          fonte="backup"
+          titulo="Backup Recebimento"
+          descricao="Pasta BACKUP RECEBIMENTO 20260828"
+        />
+      )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );
