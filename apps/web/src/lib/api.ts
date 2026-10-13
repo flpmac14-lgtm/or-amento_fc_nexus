@@ -1242,10 +1242,29 @@ export async function editarDatabook(
 // Registro do pedido no Data book (cada mudança com quem e quando).
 export async function historicoDatabook(
   itemId: string,
-): Promise<{ campo: string; de: string | null; para: string | null; por: string | null; em: string }[]> {
+): Promise<{ campo: string; de: string | null; para: string | null; por: string | null; em: string; desfeito: boolean }[]> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/${itemId}/historico`);
   if (!resposta.ok) throw new Error(`Falha ao carregar o histórico (${resposta.status}).`);
   return (await resposta.json()).historico;
+}
+
+// Exclui o ST.BOOK marcado errado: volta pro status anterior (com as datas).
+export async function excluirStatusDatabook(itemId: string, editadoPor: string | null): Promise<ItemDatabook> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/${itemId}/excluir-status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ editado_por: editadoPor }),
+  });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(detalhe || `Não excluiu (${resposta.status}).`);
+  }
+  return (await resposta.json()).item;
 }
 
 // Sininho do Data book — mesmo formato do sininho do Follow up.

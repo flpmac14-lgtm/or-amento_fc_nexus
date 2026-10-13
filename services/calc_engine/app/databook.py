@@ -386,9 +386,11 @@ def _normalizar_alteracoes(alteracoes: dict) -> dict:
 def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
     agora = datetime.now(timezone.utc)
     cur.execute(
-        f"select id, {', '.join(EDITAVEIS)} from databook_itens where id = any(%s::uuid[]) for update", (ids,)
+        f"select id, finalizado_em, finalizado_por, {', '.join(EDITAVEIS)} from databook_itens "
+        "where id = any(%s::uuid[]) for update",
+        (ids,),
     )
-    for item_id, *valores in cur.fetchall():
+    for item_id, fim_em, fim_por, *valores in cur.fetchall():
         atuais = dict(zip(EDITAVEIS, valores))
         sets = {c: v for c, v in normal.items() if v != atuais[c]}
         if not sets:
@@ -403,6 +405,12 @@ def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
                 sets.update(finalizado_em=agora, finalizado_por=editado_por)
             elif novo not in PRONTOS and st_atual in PRONTOS:
                 sets.update(finalizado_em=None, finalizado_por=None)
+                # Guarda a finalização apagada: "Excluir status" volta com ela (pedido do usuário).
+                if fim_em:
+                    cur.execute(
+                        "insert into databook_historico (item_id, campo, de, por, em) values (%s, 'finalizado_apagado', %s, %s, %s)",
+                        (item_id, f"{fim_em.isoformat()}|{fim_por or ''}", editado_por, agora),
+                    )
         # Registro de cada mudança (quem, quando, de → para) — pedido do usuário.
         cur.executemany(
             "insert into databook_historico (item_id, campo, de, para, por, em) values (%s, %s, %s, %s, %s, %s)",
@@ -415,14 +423,81 @@ def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
         )
 
 
+def excluir_status(item_id: str, por: str | None) -> dict | None:
+    """Exclui o ST.BOOK marcado errado (pedido do usuário): desfaz a última troca
+    de ST.BOOK ainda não desfeita — volta pro status anterior — e recalcula o
+    início (último FAZENDO) e a finalização (último pronto) pelo que sobrou do
+    histórico. Sem troca feita no app pra desfazer, só apaga o status."""
+    agora = datetime.now(timezone.utc)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select st_book from databook_itens where id = %s for update", (item_id,))
+        linha = cur.fetchone()
+        if not linha:
+            return None
+        atual = linha[0]
+        if atual is None:
+            raise ValueError("Esse pedido não tem ST.BOOK pra excluir.")
+        cur.execute(
+            """select id, de from databook_historico
+               where item_id = %s and campo = 'st_book' and not desfeito order by em desc, id desc limit 1""",
+            (item_id,),
+        )
+        ultima = cur.fetchone()
+        anterior = ultima[1] if ultima else None
+        if ultima:
+            cur.execute("update databook_historico set desfeito = true where id = %s", (ultima[0],))
+        # O que sobrou do histórico define as datas.
+        cur.execute(
+            """select para, por, em from databook_historico
+               where item_id = %s and campo = 'st_book' and not desfeito order by em, id""",
+            (item_id,),
+        )
+        trocas = cur.fetchall()
+        fazendo = next(((p, e) for s, p, e in reversed(trocas) if s == "FAZENDO"), None)
+        pronto = next(((p, e) for s, p, e in reversed(trocas) if s in PRONTOS), None)
+        sets: dict = {"st_book": anterior}
+        if ultima:
+            # Sem FAZENDO no histórico que sobrou: o início some (veio do que foi desfeito).
+            sets.update(fazendo_em=fazendo[1] if fazendo else None, fazendo_por=fazendo[0] if fazendo else None)
+        if anterior not in PRONTOS:
+            sets.update(finalizado_em=None, finalizado_por=None)
+        elif pronto and ultima:
+            sets.update(finalizado_em=pronto[1], finalizado_por=pronto[0])
+        elif ultima:
+            # Pronto que veio da planilha: volta a D.FINALIZAÇÃO/AUTOR que a troca errada apagou.
+            cur.execute(
+                """select de from databook_historico where item_id = %s and campo = 'finalizado_apagado'
+                   order by em desc, id desc limit 1""",
+                (item_id,),
+            )
+            apagado = cur.fetchone()
+            if apagado and apagado[0]:
+                em_txt, _, por_txt = apagado[0].partition("|")
+                sets.update(finalizado_em=datetime.fromisoformat(em_txt), finalizado_por=por_txt or None)
+        cur.execute(
+            f"update databook_itens set {', '.join(f'{c} = %s' for c in sets)}, editado_em = %s, editado_por = %s "
+            "where id = %s",
+            (*sets.values(), agora, por, item_id),
+        )
+        cur.execute(
+            "insert into databook_historico (item_id, campo, de, para, por, em) values (%s, 'st_book_excluido', %s, %s, %s, %s)",
+            (item_id, atual, anterior, por, agora),
+        )
+        conn.commit()
+        itens = _carregar(cur, [item_id])
+    return itens[0] if itens else None
+
+
 def historico(item_id: str) -> list[dict]:
     """Registro do pedido no Data book (mais recente primeiro)."""
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
-            "select campo, de, para, por, em from databook_historico where item_id = %s order by em desc, id desc limit 200",
+            """select campo, de, para, por, em, desfeito from databook_historico
+               where item_id = %s and campo <> 'finalizado_apagado' order by em desc, id desc limit 200""",
             (item_id,),
         )
-        return [{"campo": r[0], "de": r[1], "para": r[2], "por": r[3], "em": r[4].isoformat()} for r in cur.fetchall()]
+        return [{"campo": r[0], "de": r[1], "para": r[2], "por": r[3], "em": r[4].isoformat(), "desfeito": r[5]}
+                for r in cur.fetchall()]
 
 
 def editar_lote(ids: list[str], alteracoes: dict, editado_por: str | None = None) -> list[dict]:

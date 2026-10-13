@@ -9,7 +9,7 @@
 // ST.BOOK pronto grava D.FINALIZAÇÃO e AUTOR(A) (app/databook.py).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { editarDatabook, historicoDatabook, listarDatabook, listarNotificacoesDatabook, urlImagemFollowUp } from "@/lib/api";
+import { editarDatabook, excluirStatusDatabook, historicoDatabook, listarDatabook, listarNotificacoesDatabook, urlImagemFollowUp } from "@/lib/api";
 import { CLIENTES } from "@/lib/clientes";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { normalizarBusca } from "@/lib/followUp";
@@ -36,9 +36,14 @@ const SUGESTOES_FALTA = [
   "Peças ainda não pintadas",
 ];
 
-const NOME_CAMPO: Record<string, string> = { st_book: "ST.BOOK", falta: "Falta p/ finalizar", observacao: "Obs." };
+const NOME_CAMPO: Record<string, string> = {
+  st_book: "ST.BOOK",
+  st_book_excluido: "🗑 ST.BOOK excluído",
+  falta: "Falta p/ finalizar",
+  observacao: "Obs.",
+};
 
-type LinhaRegistro = { campo: string; de: string | null; para: string | null; por: string | null; em: string };
+type LinhaRegistro = { campo: string; de: string | null; para: string | null; por: string | null; em: string; desfeito: boolean };
 
 // Tempo do book (FAZENDO → PRONTO, ou até agora), só a jornada — igual à Croqui de corte.
 function tempoBook(i: ItemDatabook, agora: number): number | null {
@@ -152,6 +157,7 @@ export default function DataBook() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [aviso, setAviso] = useState("");
   const [destaque, setDestaque] = useState<string | null>(null);
+  const [confirmarExcluir, setConfirmarExcluir] = useState<string | null>(null); // 1º toque no 🗑
   const [agora, setAgora] = useState(0); // hora da última carga (Tempo de quem está FAZENDO)
   const [registro, setRegistro] = useState<{ item: ItemDatabook; linhas: LinhaRegistro[] | null } | null>(null);
   const linhaDestaque = useRef<HTMLTableRowElement | null>(null);
@@ -242,6 +248,26 @@ export default function DataBook() {
       setItens((l) => (l ?? []).map((i) => (porId.has(i.id) ? { ...i, ...porId.get(i.id) } : i)));
       setAviso(`✓ Salvo (${ids.length} pedido${ids.length > 1 ? "s" : ""})`);
       setTimeout(() => setAviso(""), 3000);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Excluir o ST.BOOK marcado errado (pedido do usuário): 1º toque pede confirmação, 2º exclui.
+  async function excluirStatus(i: ItemDatabook) {
+    if (confirmarExcluir !== i.id) {
+      setConfirmarExcluir(i.id);
+      setTimeout(() => setConfirmarExcluir((c) => (c === i.id ? null : c)), 4000);
+      return;
+    }
+    setConfirmarExcluir(null);
+    setErro("");
+    try {
+      const novo = await excluirStatusDatabook(i.id, usuario);
+      setItens((l) => (l ?? []).map((x) => (x.id === novo.id ? { ...x, ...novo } : x)));
+      setAviso(`🗑 Status excluído — ${i.po} voltou para ${novo.st_book ?? "sem ST.BOOK"}`);
+      setTimeout(() => setAviso(""), 5000);
+      if (registro?.item.id === i.id) abrirRegistro({ ...i, ...novo });
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -616,6 +642,18 @@ export default function DataBook() {
                       </option>
                     ))}
                   </select>
+                  {i.st_book && (
+                    <button
+                      type="button"
+                      onClick={() => excluirStatus(i)}
+                      title="Excluir o status marcado errado — volta pro status anterior"
+                      className={`ml-0.5 rounded px-1 text-[11px] font-bold ${
+                        confirmarExcluir === i.id ? "bg-red-600 text-white" : "text-stone-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                      }`}
+                    >
+                      {confirmarExcluir === i.id ? "Excluir?" : "🗑"}
+                    </button>
+                  )}
                 </td>
                 <td className={td}>
                   <CelulaTexto
@@ -681,6 +719,21 @@ export default function DataBook() {
               <div>
                 <h3 className="text-lg font-bold text-stone-900 dark:text-white">Registro — {registro.item.po}</h3>
                 <p className="text-xs text-stone-500 dark:text-slate-400">{registro.item.descricao}</p>
+                {registro.item.st_book && (
+                  <button
+                    type="button"
+                    onClick={() => excluirStatus(registro.item)}
+                    className={`mt-1 rounded-lg border px-2 py-1 text-xs font-bold ${
+                      confirmarExcluir === registro.item.id
+                        ? "border-red-600 bg-red-600 text-white"
+                        : "border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                    }`}
+                  >
+                    {confirmarExcluir === registro.item.id
+                      ? `Confirmar: excluir "${registro.item.st_book}"?`
+                      : `🗑 Excluir status "${registro.item.st_book}" (marcado errado)`}
+                  </button>
+                )}
               </div>
               <button type="button" onClick={() => setRegistro(null)} className="rounded px-2 text-lg text-stone-500">
                 ✕
@@ -711,7 +764,13 @@ export default function DataBook() {
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {registro.linhas.map((h, n) => (
-                  <li key={n} className="rounded border border-stone-200 px-2 py-1.5 text-sm text-stone-800 dark:border-slate-700 dark:text-slate-200">
+                  <li
+                    key={n}
+                    className={`rounded border px-2 py-1.5 text-sm text-stone-800 dark:text-slate-200 ${
+                      h.campo === "st_book_excluido" ? "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30" : "border-stone-200 dark:border-slate-700"
+                    } ${h.desfeito ? "line-through opacity-50" : ""}`}
+                    title={h.desfeito ? "Troca desfeita pelo Excluir status" : undefined}
+                  >
                     <span className="text-xs text-stone-500 dark:text-slate-400">
                       {quando(h.em)} · <strong>{h.por ?? "—"}</strong>
                     </span>
