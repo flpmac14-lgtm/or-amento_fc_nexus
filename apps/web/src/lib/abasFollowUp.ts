@@ -23,6 +23,8 @@ export const VISOES = [
   { valor: "consulta", rotulo: "Consulta" },
   // Jeferson e Diego apontam a fabricação (mesma tela da Usinagem) — pedido do usuário (13/10/2026).
   { valor: "caldeiraria", rotulo: "Caldeiraria" },
+  // Só a tela Coletas da Consulta — pedido do usuário (13/10/2026) pra Qualidade (ana, pedro, carol, lailto).
+  { valor: "coletas", rotulo: "Coletas" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -30,7 +32,7 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
 // "usinagem" (líder da Usinagem, saymon) = Usinagem + Consulta (coletas e previsões);
-// "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE;
+// "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Coletas;
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
 export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta";
@@ -43,7 +45,9 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
   if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria");
   return VISOES.filter((v) =>
-    v.valor === "qualidade" || v.valor === "backup"
+    v.valor === "coletas"
+      ? perfil === "qualidade"
+      : v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
       : perfil === "qualidade"
         ? false

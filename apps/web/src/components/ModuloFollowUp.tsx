@@ -249,7 +249,8 @@ export default function ModuloFollowUp({
         />
       )}
       {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
-      {visao === "consulta" && <Consulta inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
+      {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
+      {visao === "consulta" && <Consulta key="consulta" inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

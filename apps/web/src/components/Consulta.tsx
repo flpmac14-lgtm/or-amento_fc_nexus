@@ -674,7 +674,8 @@ function TelaColetas({ ativos }: { ativos: ItemFollowUp[] }) {
 
 // --- Tela ----------------------------------------------------------------------
 
-export default function Consulta({ inicial = "corte" }: { inicial?: Tela }) {
+// soColetas: aba "Coletas" da Qualidade — só essa tela, sem os 3 botões.
+export default function Consulta({ inicial = "corte", soColetas = false }: { inicial?: Tela; soColetas?: boolean }) {
   const [tela, setTela] = useState<Tela>(inicial);
   // Follow up: carrega só quando abre Pedidos/Coletas (é grande — ver
   // memória do egress do Supabase); recarrega no botão "Atualizar".
@@ -708,7 +709,7 @@ export default function Consulta({ inicial = "corte" }: { inicial?: Tela }) {
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
-      <div className="grid grid-cols-3 gap-2">
+      <div className={soColetas ? "hidden" : "grid grid-cols-3 gap-2"}>
         {TELAS.map((t) => (
           <button
             key={t.tela}
