@@ -20,7 +20,8 @@ export const ACESSO_USINAGEM = "usinagem";
 export const ACESSO_QUALIDADE = "qualidade";
 // Consulta (jeferson, diego) — pedido explícito do usuário: só a aba Consulta,
 // pelo celular: o que está sendo cortado e a sequência, pesquisar pedido
-// ativo (MAC/PO/desenho) e abrir os relatórios de coleta. Só olha, não edita.
+// ativo (MAC/PO/desenho) e abrir os relatórios de coleta (só olha). Depois
+// (pedido do usuário): também a aba Caldeiraria, onde apontam a fabricação.
 export const ACESSO_CONSULTA = "consulta";
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,

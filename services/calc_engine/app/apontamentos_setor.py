@@ -37,6 +37,13 @@ SETORES: dict[str, dict] = {
                    "falta_material": "Falta material"},
         "operadores": ["Cesar", "Alisson", "Robson", "Val", "Vanderson", "Deivid"],
     },
+    # Pedido do usuário (13/10/2026): jeferson e diego (caldeiraria) apontam a fabricação.
+    "caldeiraria": {
+        "nome": "Caldeiraria",
+        "status": {"em_andamento": "Início de fabricação", "pausado": "Pausa", "finalizado": "Fabricação finalizada",
+                   "falta_material": "Falta material"},
+        "operadores": ["Jeferson", "Diego"],
+    },
 }
 OBS_MAX = 1000
 DESCRICAO_MAX = 200

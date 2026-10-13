@@ -119,7 +119,7 @@ export default function ApontamentoHistorico({
               <div key={op} className="flex items-start gap-2 rounded-lg bg-stone-50 px-2 py-1.5 dark:bg-slate-800/50">
                 <span className="w-24 shrink-0 py-1 text-base font-bold text-stone-900 dark:text-white">{op}</span>
                 {lista.length === 0 ? (
-                  <span className="py-1 text-sm text-stone-400 dark:text-slate-500">nada usinando</span>
+                  <span className="py-1 text-sm text-stone-400 dark:text-slate-500">nada {config.fazendo}</span>
                 ) : (
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     {lista.map((a) => (

@@ -21,6 +21,8 @@ export const VISOES = [
   { valor: "referencia", rotulo: "Referência de preços" },
   // Só olhar, pelo celular (jeferson, diego) — pedido do usuário (13/10/2026).
   { valor: "consulta", rotulo: "Consulta" },
+  // Jeferson e Diego apontam a fabricação (mesma tela da Usinagem) — pedido do usuário (13/10/2026).
+  { valor: "caldeiraria", rotulo: "Caldeiraria" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -29,7 +31,8 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
 // "usinagem" (líder da Usinagem, saymon) = só Usinagem;
 // "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE;
-// "consulta" (jeferson, diego) = só Consulta (total e follow_up também veem).
+// "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
+// total e follow_up também veem a Consulta; a Caldeiraria, só o total.
 export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
@@ -38,7 +41,7 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
-  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta");
+  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria");
   return VISOES.filter((v) =>
     v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
@@ -50,7 +53,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
           ? v.valor === "usinagem"
           : perfil === "projeto"
             ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-            : v.valor === "usinagem"
+            : v.valor === "usinagem" || v.valor === "caldeiraria"
               ? perfil === "total"
               : v.valor === "consulta"
                 ? perfil === "total" || perfil === "follow_up"

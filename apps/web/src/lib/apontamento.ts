@@ -19,6 +19,9 @@ export interface ConfigSetor {
   opcoes: OpcaoApontamento[];
   // Toque rápido no campo de observação (pedido do usuário: exemplos do dia a dia).
   sugestoes: string[];
+  // Textos da tela: "Cesar está usinando…", "nada usinando" e o que é serviço interno.
+  fazendo: string;
+  servicoInterno: string;
 }
 
 export const CONFIG_USINAGEM: ConfigSetor = {
@@ -67,4 +70,58 @@ export const CONFIG_USINAGEM: ConfigSetor = {
     "Aguardando liberação da Engenharia",
     "Previsão de término amanhã",
   ],
+  fazendo: "usinando",
+  servicoInterno: "Usinagem pra uso da Macfab: manutenção, ferramental, dispositivos…",
+};
+
+// Caldeiraria — pedido do usuário (13/10/2026): jeferson e diego apontam a
+// fabricação pelo celular: Início de fabricação, Pausa, Falta material e
+// Fabricação finalizada (cada apontamento vira Registro diário do pedido).
+export const CONFIG_CALDEIRARIA: ConfigSetor = {
+  setor: "caldeiraria",
+  nome: "Caldeiraria",
+  opcoes: [
+    {
+      status: "em_andamento",
+      rotulo: "INÍCIO DE FABRICAÇÃO",
+      icone: "▶",
+      ligado: "bg-amber-400 text-stone-900 border-amber-500",
+      desligado: "border-amber-400 text-amber-700 dark:text-amber-300",
+      selo: "bg-amber-400 text-stone-900",
+    },
+    {
+      status: "pausado",
+      rotulo: "PAUSA",
+      icone: "⏸",
+      ligado: "bg-sky-600 text-white border-sky-700",
+      desligado: "border-sky-500 text-sky-700 dark:text-sky-300",
+      selo: "bg-sky-600 text-white",
+    },
+    {
+      status: "falta_material",
+      rotulo: "FALTA MATERIAL",
+      icone: "⚠",
+      ligado: "bg-red-600 text-white border-red-700",
+      desligado: "border-red-500 text-red-600 dark:text-red-400",
+      selo: "bg-red-600 text-white",
+    },
+    {
+      status: "finalizado",
+      rotulo: "FABRICAÇÃO FINALIZADA",
+      icone: "✔",
+      ligado: "bg-green-600 text-white border-green-700",
+      desligado: "border-green-600 text-green-700 dark:text-green-400",
+      selo: "bg-green-600 text-white",
+    },
+  ],
+  sugestoes: [
+    "Aguardando corte",
+    "Aguardando material",
+    "Montagem concluída, falta solda",
+    "Problema no desenho",
+    "Aguardando liberação da Engenharia",
+    "Previsão de término amanhã",
+  ],
+  fazendo: "fabricando",
+  servicoInterno: "Fabricação pra uso da Macfab: manutenção, dispositivos, suportes…",
 };

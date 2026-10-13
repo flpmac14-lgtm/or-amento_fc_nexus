@@ -21,7 +21,7 @@ import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
 import Qualidade from "@/components/Qualidade";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
-import { CONFIG_USINAGEM } from "@/lib/apontamento";
+import { CONFIG_CALDEIRARIA, CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
 import {
   EVENTO_ABA_MUDOU,
@@ -237,7 +237,8 @@ export default function ModuloFollowUp({
           <Corte comHistorico={perfil !== "corte"} />
         </ProvedorPdfsCorte>
       )}
-      {visao === "usinagem" && <ApontamentoSetor config={CONFIG_USINAGEM} />}
+      {visao === "usinagem" && <ApontamentoSetor key="usinagem" config={CONFIG_USINAGEM} />}
+      {visao === "caldeiraria" && <ApontamentoSetor key="caldeiraria" config={CONFIG_CALDEIRARIA} />}
       {visao === "qualidade" && <Qualidade key="principal" />}
       {visao === "backup" && (
         <Qualidade

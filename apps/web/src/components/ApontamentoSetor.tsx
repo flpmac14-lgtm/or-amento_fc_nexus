@@ -493,7 +493,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   ) : (
                     <>
                       <p className="text-2xl font-extrabold leading-tight text-stone-900 dark:text-white">Novo serviço interno</p>
-                      <p className="text-sm text-stone-600 dark:text-slate-400">Usinagem pra uso da Macfab: manutenção, ferramental, dispositivos…</p>
+                      <p className="text-sm text-stone-600 dark:text-slate-400">{config.servicoInterno}</p>
                     </>
                   )}
                 </div>
@@ -668,7 +668,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   >
                     <span className="text-2xl">{pausarOutros ? "☑" : "☐"}</span>
                     <span className="text-sm text-stone-800 dark:text-slate-200">
-                      <strong>{operador}</strong> está usinando: <strong>{usinandoAgora.map(nomeAlvo).join(", ")}</strong>.
+                      <strong>{operador}</strong> está {config.fazendo}: <strong>{usinandoAgora.map(nomeAlvo).join(", ")}</strong>.
                       <span className="block font-bold text-sky-700 dark:text-sky-300">⏸ Pausar automaticamente ao salvar</span>
                     </span>
                   </button>
