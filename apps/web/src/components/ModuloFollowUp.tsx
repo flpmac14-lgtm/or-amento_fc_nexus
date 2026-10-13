@@ -254,7 +254,13 @@ export default function ModuloFollowUp({
       {visao === "databook" && <DataBook />}
       {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
-      {visao === "consulta" && <Consulta key="consulta" inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
+      {visao === "consulta" && (
+        <Consulta
+          key="consulta"
+          inicial={perfil === "usinagem" ? "coletas" : perfil === "pintura" ? "pedidos" : "corte"}
+          semCorte={perfil === "pintura"}
+        />
+      )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

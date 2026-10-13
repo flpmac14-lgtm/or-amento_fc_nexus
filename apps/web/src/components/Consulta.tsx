@@ -675,7 +675,16 @@ function TelaColetas({ ativos }: { ativos: ItemFollowUp[] }) {
 // --- Tela ----------------------------------------------------------------------
 
 // soColetas: aba "Coletas" da Qualidade — só essa tela, sem os 3 botões.
-export default function Consulta({ inicial = "corte", soColetas = false }: { inicial?: Tela; soColetas?: boolean }) {
+// semCorte: felipe (Pintura) não vê a tela Corte — pedido do usuário (13/10/2026).
+export default function Consulta({
+  inicial = "corte",
+  soColetas = false,
+  semCorte = false,
+}: {
+  inicial?: Tela;
+  soColetas?: boolean;
+  semCorte?: boolean;
+}) {
   const [tela, setTela] = useState<Tela>(inicial);
   // Follow up: carrega só quando abre Pedidos/Coletas (é grande — ver
   // memória do egress do Supabase); recarrega no botão "Atualizar".
@@ -709,8 +718,8 @@ export default function Consulta({ inicial = "corte", soColetas = false }: { ini
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
-      <div className={soColetas ? "hidden" : "grid grid-cols-3 gap-2"}>
-        {TELAS.map((t) => (
+      <div className={soColetas ? "hidden" : `grid ${semCorte ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
+        {TELAS.filter((t) => !semCorte || t.tela !== "corte").map((t) => (
           <button
             key={t.tela}
             type="button"
