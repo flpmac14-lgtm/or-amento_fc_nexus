@@ -202,6 +202,14 @@ export default function DataBook() {
     return m;
   }, [lista]);
 
+  // Card "o que cada um está fazendo" (pedido do usuário): ST.BOOK FAZENDO por quem iniciou.
+  const fazendoPorPessoa = useMemo(() => {
+    const m = new Map<string, ItemDatabook[]>();
+    for (const i of lista)
+      if (i.st_book === "FAZENDO") m.set(i.fazendo_por ?? "—", [...(m.get(i.fazendo_por ?? "—") ?? []), i]);
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [lista]);
+
   const filtrados = useMemo(() => {
     const termo = normalizarBusca(busca);
     return lista
@@ -293,6 +301,63 @@ export default function DataBook() {
             setDestaque(id);
           }}
         />
+      </div>
+
+      <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-800 dark:bg-amber-950/20">
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+          ▶ O que cada um está fazendo agora
+        </p>
+        {fazendoPorPessoa.length === 0 ? (
+          <p className="text-sm text-stone-500 dark:text-slate-400">Ninguém com book em FAZENDO.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {fazendoPorPessoa.map(([pessoa, lista]) => (
+              <div key={pessoa} className="min-w-[13rem] max-w-xs flex-1 rounded-lg border border-amber-300 bg-white p-2 dark:border-amber-800 dark:bg-slate-900">
+                <p className="flex items-baseline justify-between gap-2">
+                  <span className="text-base font-extrabold capitalize text-stone-900 dark:text-white">
+                    {pessoa === "—" ? "Veio da planilha (sem nome)" : pessoa}
+                  </span>
+                  <span className="text-xs text-stone-500 dark:text-slate-400">{lista.length} book(s)</span>
+                </p>
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {lista.slice(0, 6).map((i) => (
+                    <li key={i.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBusca(i.po);
+                          setCliente("");
+                          setSt("");
+                          setStBook("");
+                          setDestaque(i.id);
+                        }}
+                        title={`${i.descricao ?? ""}${i.falta ? ` — falta: ${i.falta}` : ""}`}
+                        className="flex w-full items-baseline justify-between gap-2 rounded px-1 text-left text-xs hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                      >
+                        <span className="truncate font-mono font-semibold text-stone-800 dark:text-slate-200">
+                          {i.po} <span className="font-sans font-normal text-stone-500">{i.cliente}</span>
+                          {i.falta && <span className="ml-1 text-amber-700 dark:text-amber-300">⚠</span>}
+                        </span>
+                        <span className="shrink-0 font-mono text-stone-500 dark:text-slate-400">{textoTempo(i, agora)}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {lista.length > 6 && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => setStBook("FAZENDO")}
+                        className="px-1 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                      >
+                        … e mais {lista.length - 6} — ver todos
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Book pendente por cliente — pedido entregue com ST.BOOK vazio (como os contadores da planilha). */}
