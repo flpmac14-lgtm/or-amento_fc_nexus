@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { baixarEml, escaparHtml, imagemParaEml, type ImagemEml } from "@/lib/emailEml";
 import { corGrupoPintura } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
@@ -52,6 +53,19 @@ function agrupar(itens: ItemFollowUp[]): Grupo[] {
   return grupos.sort((a, b) => b.itens.length - a.itens.length || a.chave.localeCompare(b.chave));
 }
 
+// O Outlook não entende hsl() nem color-mix(): cor do grupo em #rrggbb,
+// clareada pro branco em `branco` (0 = cor pura, 1 = branco) pro fundo da faixa.
+function hslParaHex(hsl: string, branco = 0): string {
+  const [h, s, l] = (hsl.match(/[\d.]+/g) ?? ["0", "0", "80"]).map(Number);
+  const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+  const canal = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const v = l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round((v + (1 - v) * branco) * 255).toString(16).padStart(2, "0");
+  };
+  return `#${canal(0)}${canal(8)}${canal(4)}`;
+}
+
 function Relatorio() {
   const params = useSearchParams();
   const data = params.get("data") ?? "";
@@ -62,6 +76,7 @@ function Relatorio() {
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
   const [fracionado, setFracionado] = useState(() => params.get("fracionado") === "1");
   const [qtdColeta, setQtdColeta] = useState<Record<string, number>>({});
+  const [gerandoEmail, setGerandoEmail] = useState(false);
 
   useEffect(() => {
     document.title = `Coleta ${formatarDataBr(data)}${cliente ? ` - ${cliente}` : ""}`; // nome sugerido do PDF
@@ -94,6 +109,62 @@ function Relatorio() {
   const peso = naFolha.reduce((s, i) => s + pesoColeta(i), 0);
   const algumParcial = fracionado && itens.some((i) => qtd(i) !== (i.quantidade ?? 0));
 
+  // Pedido do usuário: igual ao alívio de tensão, o relatório já sai como
+  // e-mail do Outlook pra encaminhar (lib/emailEml.ts). Mesmo conteúdo da
+  // folha (com a Qtd fracionada), sem as colunas em branco de lote.
+  async function criarEmail() {
+    setGerandoEmail(true);
+    try {
+      const titulo = `Coleta para o dia ${formatarDataBr(data)}${cliente ? ` — Cliente ${cliente}` : ""}${algumParcial ? " (parcial)" : ""}`;
+      const cidDe = new Map(naFolha.map((i, n) => [i.id, `foto${n}@fcnexus`]));
+      const imagens = (
+        await Promise.all(
+          naFolha.map((i) => (i.imagens[0] ? imagemParaEml(urlImagemFollowUp(i.imagens[0].sha256), cidDe.get(i.id)!) : null)),
+        )
+      ).filter((im): im is ImagemEml => !!im);
+      const temCid = new Set(imagens.map((im) => im.cid));
+      const td = "border:1px solid #a8a29e;padding:3px 6px;font-size:12px;text-align:center";
+      const colunas = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem", "Peso (kg)"];
+      const linhas = grupos
+        .map((g) => {
+          const doGrupo = fracionado ? g.itens.filter((i) => qtd(i) > 0) : g.itens;
+          if (!doGrupo.length) return "";
+          const cor = g.indice ? hslParaHex(corGrupoPintura(g.indice)) : "#d6d3d1";
+          const fundo = g.indice ? hslParaHex(corGrupoPintura(g.indice), 0.7) : "#f5f5f4";
+          return [
+            `<tr><td colspan="${colunas.length}" style="${td};text-align:left;background:${fundo};border-left:8px solid ${cor}">` +
+              `<b>Pintura:</b> COR2 <b>${escaparHtml(g.cor2 || "—")}</b> · COR-2 <b>${escaparHtml(g.cor_2 || "—")}</b> · ` +
+              `Plano <b>${escaparHtml(g.plano || "—")}</b> — ${doGrupo.length} pedido(s) · ` +
+              `${formatarNumero(doGrupo.reduce((s, i) => s + qtd(i), 0), 0)} peça(s)</td></tr>`,
+            ...doGrupo.map((i) => {
+              const cid = cidDe.get(i.id);
+              const foto = cid && temCid.has(cid) ? `<img src="cid:${cid}" width="80" style="max-height:44px;object-fit:contain">` : "";
+              return (
+                `<tr><td style="${td}">${foto}</td><td style="${td}">${escaparHtml(i.po)}</td>` +
+                `<td style="${td}">${qtd(i)}${qtd(i) !== (i.quantidade ?? 0) ? ` <span style="color:#78716c">de ${i.quantidade ?? 0}</span>` : ""}</td>` +
+                `<td style="${td}">${escaparHtml(i.mac)}</td><td style="${td}">${escaparHtml(i.desenho)}</td>` +
+                `<td style="${td};text-align:left">${escaparHtml(i.descricao)}</td><td style="${td}">${escaparHtml(i.tipagem)}</td>` +
+                `<td style="${td}">${formatarNumero(pesoColeta(i), 2)}</td></tr>`
+              );
+            }),
+          ].join("");
+        })
+        .join("");
+      const html =
+        `<html><body style="font-family:Calibri,Arial,sans-serif;color:#1c1917">` +
+        `<p>Segue a relação de peças da coleta.</p>` +
+        `<h2 style="margin:8px 0 2px">${escaparHtml(titulo)}</h2>` +
+        `<p style="margin:0 0 8px"><b>${naFolha.length}</b> pedido(s) · <b>${formatarNumero(pecas, 0)}</b> peça(s) · ` +
+        `peso total <b>${formatarNumero(peso, 2)} kg</b></p>` +
+        `<table style="border-collapse:collapse"><thead><tr style="background:#f5f5f4">` +
+        colunas.map((c) => `<th style="${td};font-weight:bold">${c}</th>`).join("") +
+        `</tr></thead><tbody>${linhas}</tbody></table></body></html>`;
+      baixarEml(`Coleta ${formatarDataBr(data).replace(/\//g, ".")}${cliente ? ` - ${cliente}` : ""}`, titulo, html, imagens);
+    } finally {
+      setGerandoEmail(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">
       <div className="mx-auto mb-4 flex max-w-[297mm] items-center justify-end gap-2 print:hidden">
@@ -118,6 +189,15 @@ function Relatorio() {
             Voltar às quantidades inteiras
           </button>
         )}
+        <button
+          type="button"
+          onClick={criarEmail}
+          disabled={gerandoEmail || naFolha.length === 0}
+          title="Baixa um e-mail pronto (.eml): abra o arquivo e o Outlook cria a mensagem nova com o relatório — só pôr o destinatário e enviar"
+          className="rounded-lg border border-blue-600 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+        >
+          {gerandoEmail ? "Criando e-mail…" : "📧 Criar e-mail (Outlook)"}
+        </button>
         <button
           type="button"
           onClick={() => window.print()}
