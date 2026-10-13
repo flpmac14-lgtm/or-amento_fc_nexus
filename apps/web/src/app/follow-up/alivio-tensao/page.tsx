@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { baixarEml, escaparHtml, imagemParaEml, type ImagemEml } from "@/lib/emailEml";
 import { temAlivioTensao } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
@@ -56,6 +57,7 @@ function Relatorio() {
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
   const [fracionado, setFracionado] = useState(() => params.get("fracionado") === "1");
   const [qtdEnvio, setQtdEnvio] = useState<Record<string, number>>({});
+  const [gerandoEmail, setGerandoEmail] = useState(false);
 
   useEffect(() => {
     const lista = cliente.split(",").map((c) => c.trim()).filter(Boolean);
@@ -85,6 +87,68 @@ function Relatorio() {
   const peso = naFolha.reduce((s, i) => s + pesoEnvio(i), 0);
   const algumParcial = fracionado && itens.some((i) => qtd(i) !== (i.quantidade ?? 0));
 
+  // Pedido do usuário: o relatório já sai como e-mail do Outlook pra encaminhar
+  // (lib/emailEml.ts). Mesmo conteúdo da folha (com a Qtd fracionada), sem as
+  // colunas em branco de anotar à mão.
+  async function criarEmail() {
+    setGerandoEmail(true);
+    try {
+      const dataHoje = new Date().toLocaleDateString("pt-BR");
+      const titulo = `Alívio de tensão${clientes.length ? ` — ${clientes.length > 1 ? "Clientes" : "Cliente"} ${rotuloClientes}` : ""}${algumParcial ? " (parcial)" : ""}`;
+      const imagens = (
+        await Promise.all(
+          naFolha.map((i, n) => (i.imagens[0] ? imagemParaEml(urlImagemFollowUp(i.imagens[0].sha256), `foto${n}@fcnexus`) : null)),
+        )
+      ).filter((im): im is ImagemEml => !!im);
+      const cidDe = new Map(naFolha.map((i, n) => [i.id, `foto${n}@fcnexus`]));
+      const temCid = new Set(imagens.map((im) => im.cid));
+      const td = "border:1px solid #a8a29e;padding:3px 6px;font-size:12px;text-align:center";
+      const colunas = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem", "Peso (kg)", "Coleta"];
+      const linhas = grupos
+        .map((g) => {
+          const doGrupo = fracionado ? g.itens.filter((i) => qtd(i) > 0) : g.itens;
+          if (!doGrupo.length) return "";
+          const cli = clientesDoGrupo(g);
+          return [
+            `<tr style="background:#f0fdf4"><td colspan="${colunas.length}" style="${td};text-align:left">` +
+              `<b>MAC: ${escaparHtml(g.mac || "—")}</b>${cli.length ? ` · Cliente ${escaparHtml(cli.join(" / "))}` : ""}` +
+              ` — ${doGrupo.length} pedido(s) · ${formatarNumero(doGrupo.reduce((s, i) => s + qtd(i), 0), 0)} peça(s) · ` +
+              `${formatarNumero(doGrupo.reduce((s, i) => s + pesoEnvio(i), 0), 2)} kg</td></tr>`,
+            ...doGrupo.map((i) => {
+              const cid = cidDe.get(i.id);
+              const foto = cid && temCid.has(cid) ? `<img src="cid:${cid}" width="80" style="max-height:44px;object-fit:contain">` : "";
+              return (
+                `<tr><td style="${td}">${foto}</td><td style="${td}">${escaparHtml(i.po)}</td>` +
+                `<td style="${td}">${qtd(i)}${qtd(i) !== (i.quantidade ?? 0) ? ` <span style="color:#78716c">de ${i.quantidade ?? 0}</span>` : ""}</td>` +
+                `<td style="${td}">${escaparHtml(i.mac)}</td><td style="${td}">${escaparHtml(i.desenho)}</td>` +
+                `<td style="${td};text-align:left">${escaparHtml(i.descricao)}</td><td style="${td}">${escaparHtml(i.tipagem)}</td>` +
+                `<td style="${td}">${formatarNumero(pesoEnvio(i), 2)}</td>` +
+                `<td style="${td}">${escaparHtml(i.coleta_data ? formatarDataBr(i.coleta_data) : (i.coleta ?? ""))}</td></tr>`
+              );
+            }),
+          ].join("");
+        })
+        .join("");
+      const html =
+        `<html><body style="font-family:Calibri,Arial,sans-serif;color:#1c1917">` +
+        `<p>Segue a relação de peças para alívio de tensão.</p>` +
+        `<h2 style="margin:8px 0 2px">${escaparHtml(titulo)}</h2>` +
+        `<p style="margin:0 0 8px"><b>${naFolha.length}</b> pedido(s) · <b>${formatarNumero(pecas, 0)}</b> peça(s) · ` +
+        `peso total <b>${formatarNumero(peso, 2)} kg</b> · ${dataHoje}</p>` +
+        `<table style="border-collapse:collapse"><thead><tr style="background:#f5f5f4">` +
+        colunas.map((c) => `<th style="${td};font-weight:bold">${c}</th>`).join("") +
+        `</tr></thead><tbody>${linhas}</tbody></table></body></html>`;
+      baixarEml(
+        `Alivio de tensao ${dataHoje.replace(/\//g, ".")}${clientes.length ? ` - ${clientes.join(" + ")}` : ""}`,
+        `${titulo} — ${dataHoje}`,
+        html,
+        imagens,
+      );
+    } finally {
+      setGerandoEmail(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">
       <div className="mx-auto mb-4 flex max-w-[297mm] items-center justify-end gap-2 print:hidden">
@@ -109,6 +173,15 @@ function Relatorio() {
             Voltar às quantidades inteiras
           </button>
         )}
+        <button
+          type="button"
+          onClick={criarEmail}
+          disabled={gerandoEmail || naFolha.length === 0}
+          title="Baixa um e-mail pronto (.eml): abra o arquivo e o Outlook cria a mensagem nova com o relatório — só pôr o destinatário e enviar"
+          className="rounded-lg border border-blue-600 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+        >
+          {gerandoEmail ? "Criando e-mail…" : "📧 Criar e-mail (Outlook)"}
+        </button>
         <button
           type="button"
           onClick={() => window.print()}
