@@ -78,6 +78,11 @@ const COR_ST_BOOK: Record<string, string> = {
 // Situação do pedido na Controle de obras (coluna E).
 const ROTULO_ST: Record<string, string> = { A: "Ativo", E: "Entregue", C: "Cancelado" };
 
+function dataCurta(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 function quando(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -127,7 +132,7 @@ function CelulaTexto({
       title={valor}
       placeholder="—"
       list={sugestoes}
-      className={`w-56 rounded border px-1.5 py-1 text-xs outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
+      className={`w-32 rounded border px-1 py-0.5 text-[11px] outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
         destaque ? "bg-amber-100 font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" : "bg-transparent"
       } ${salvando ? "border-amber-400" : "border-transparent hover:border-stone-300 dark:hover:border-slate-600"}`}
     />
@@ -254,8 +259,9 @@ export default function DataBook() {
   if (!itens) return <p className="py-10 text-center text-stone-500">Carregando… (o servidor pode levar até 1 minuto para acordar)</p>;
 
   const visiveis = filtrados.slice(0, limite);
-  const th = "whitespace-nowrap border-b border-stone-200 px-2 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:border-slate-700 dark:text-slate-400";
-  const td = "whitespace-nowrap px-2 py-1.5 text-xs text-stone-700 dark:text-slate-300";
+  // Compacta (pedido do usuário): colunas estreitas, sem espaço em branco; texto longo inteiro no title.
+  const th = "whitespace-nowrap border-b border-stone-200 px-1 py-1 text-left text-[10px] font-bold uppercase text-stone-500 dark:border-slate-700 dark:text-slate-400";
+  const td = "whitespace-nowrap px-1 py-0.5 text-[11px] leading-tight text-stone-700 dark:text-slate-300";
   const classeFiltro =
     "rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500";
 
@@ -422,7 +428,7 @@ export default function DataBook() {
         novos primeiro
       </p>
       <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900/40">
-        <table className="w-full border-collapse">
+        <table className="w-max border-collapse">
           <thead className="bg-stone-50 dark:bg-slate-900">
             <tr>
               <th className={th}>
@@ -435,26 +441,26 @@ export default function DataBook() {
                   }
                 />
               </th>
-              <th className={th}>Início (FAZENDO)</th>
-              <th className={th}>D.Finalização</th>
-              <th className={th}>Autor(a)</th>
+              <th className={th}>Início</th>
+              <th className={th} title="D.Finalização (book pronto)">Final.</th>
+              <th className={th}>Autor</th>
               <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:17, sem almoço">Tempo</th>
               <th className={th} title="Foto do Follow up pelo PO (ou, sem foto, de outro pedido com o mesmo desenho)">Foto</th>
               <th className={th}>PO</th>
               <th className={th}>ST.BOOK</th>
-              <th className={th}>Falta p/ finalizar</th>
+              <th className={th} title="O que está faltando pra finalizar o book">Falta p/ finalizar</th>
               <th className={th}>Obs.</th>
-              <th className={th}>Registro</th>
-              <th className={th}>Cliente <IconeCadeado /></th>
+              <th className={th} title="Registro do pedido">🕘</th>
+              <th className={th} title="Cliente — colunas daqui pra frente vêm da Controle de obras">Cli <IconeCadeado /></th>
               <th className={th}>St</th>
-              <th className={th}>Qtd</th>
+              <th className={th}>Qt</th>
               <th className={th}>Desenho</th>
               <th className={th}>Descrição</th>
               <th className={th}>Rev</th>
               <th className={th}>MAC</th>
               <th className={th}>Cor-1</th>
               <th className={th}>Cor-2</th>
-              <th className={th}>Plano de pintura</th>
+              <th className={th}>Plano</th>
               <th className={th}>Prazo</th>
               <th className={th}>NF</th>
               <th className={th}>Meta</th>
@@ -472,17 +478,18 @@ export default function DataBook() {
                 <td className={td}>
                   <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => alternar(i.id)} aria-label={`Selecionar ${i.po}`} />
                 </td>
-                <td className={td}>
-                  {quando(i.fazendo_em)}
-                  {i.fazendo_por && <span className="block text-[10px] text-stone-500 dark:text-slate-400">{i.fazendo_por}</span>}
+                <td className={td} title={i.fazendo_em ? `${quando(i.fazendo_em)} · ${i.fazendo_por ?? ""}` : undefined}>
+                  {dataCurta(i.fazendo_em)}
                 </td>
-                <td className={td}>{quando(i.finalizado_em)}</td>
+                <td className={td} title={i.finalizado_em ? `${quando(i.finalizado_em)} · ${i.finalizado_por ?? ""}` : undefined}>
+                  {dataCurta(i.finalizado_em)}
+                </td>
                 {/* Autor = o usuário do book (pedido do usuário): quem finalizou, senão quem iniciou, senão quem mexeu. */}
-                <td className={`${td} font-semibold`} title={autorDica(i)}>
+                <td className={`${td} max-w-[5.5rem] truncate font-semibold`} title={autorDica(i)}>
                   {i.finalizado_por ?? i.fazendo_por ?? i.editado_por}
                 </td>
                 <td className={`${td} font-mono`}>{textoTempo(i, agora)}</td>
-                <td className="px-1 py-0.5">
+                <td className="px-0.5 py-0.5">
                   {i.foto ? (
                     <a
                       href={urlImagemFollowUp(i.foto)}
@@ -496,20 +503,20 @@ export default function DataBook() {
                         src={urlImagemFollowUp(i.foto)}
                         alt=""
                         loading="lazy"
-                        className="h-10 w-16 rounded border border-stone-200 bg-white object-contain dark:border-slate-700"
+                        className="h-8 w-12 rounded border border-stone-200 bg-white object-contain dark:border-slate-700"
                       />
                       {i.foto_por === "desenho" && (
                         <span className="absolute -right-1 -top-1 rounded bg-sky-600 px-0.5 text-[8px] font-bold text-white">DES</span>
                       )}
                     </a>
                   ) : (
-                    <span className="block h-10 w-16" />
+                    <span className="block h-8 w-12" />
                   )}
                 </td>
                 <td className={`${td} font-mono font-semibold text-stone-900 dark:text-white`}>
                   {i.po}
                   {i.origem === "controle_obras" && (
-                    <span className="ml-1 rounded bg-green-100 px-1 text-[9px] font-bold text-green-800 dark:bg-green-900/50 dark:text-green-300" title="Entrou sozinho da Controle de obras">
+                    <span className="ml-0.5 rounded bg-green-100 px-0.5 text-[8px] font-bold text-green-800 dark:bg-green-900/50 dark:text-green-300" title="Entrou sozinho da Controle de obras">
                       NOVO
                     </span>
                   )}
@@ -519,7 +526,7 @@ export default function DataBook() {
                     value={i.st_book ?? ""}
                     onChange={(e) => salvar([i.id], { st_book: e.target.value || null })}
                     title={i.editado_por ? `Última edição: ${i.editado_por} · ${quando(i.editado_em)}` : undefined}
-                    className={`rounded px-1.5 py-1 text-xs font-bold outline-none ${
+                    className={`w-[7.5rem] rounded px-1 py-0.5 text-[11px] font-bold outline-none ${
                       i.st_book ? (COR_ST_BOOK[i.st_book] ?? "bg-stone-200 text-stone-800") : "border border-dashed border-stone-300 bg-transparent text-stone-400 dark:border-slate-600"
                     }`}
                   >
@@ -547,7 +554,7 @@ export default function DataBook() {
                     type="button"
                     onClick={() => abrirRegistro(i)}
                     title="Ver o registro do pedido (quem mudou o quê e quando)"
-                    className="rounded px-1.5 py-0.5 text-sm hover:bg-stone-100 dark:hover:bg-slate-800"
+                    className="rounded px-0.5 text-xs hover:bg-stone-100 dark:hover:bg-slate-800"
                   >
                     🕘
                   </button>
@@ -555,7 +562,7 @@ export default function DataBook() {
                 <td className={td} title={i.cliente ? CLIENTES[i.cliente] : undefined}>{i.cliente}</td>
                 <td className={td} title={i.st ? ROTULO_ST[i.st] : undefined}>
                   <span
-                    className={`rounded px-1.5 py-0.5 font-bold ${
+                    className={`rounded px-1 font-bold ${
                       i.st === "A" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" : i.st === "C" ? "bg-stone-200 text-stone-600 line-through dark:bg-slate-700" : ""
                     }`}
                   >
@@ -563,14 +570,14 @@ export default function DataBook() {
                   </span>
                 </td>
                 <td className={`${td} text-right font-mono`}>{i.quantidade != null ? formatarNumero(i.quantidade, 0) : ""}</td>
-                <td className={`${td} font-mono`}>{i.desenho}</td>
-                <td className={`${td} max-w-[16rem] truncate`} title={i.descricao ?? undefined}>{i.descricao}</td>
+                <td className={`${td} max-w-[7rem] truncate font-mono`} title={i.desenho ?? undefined}>{i.desenho}</td>
+                <td className={`${td} max-w-[11rem] truncate`} title={i.descricao ?? undefined}>{i.descricao}</td>
                 <td className={td}>{i.revisao}</td>
                 <td className={`${td} font-mono`}>{i.mac}</td>
-                <td className={`${td} max-w-[8rem] truncate`} title={i.cor1 ?? undefined}>{i.cor1}</td>
-                <td className={`${td} max-w-[8rem] truncate`} title={i.cor2 ?? undefined}>{i.cor2}</td>
-                <td className={`${td} max-w-[14rem] truncate`} title={i.plano_pintura ?? undefined}>{i.plano_pintura}</td>
-                <td className={`${td} font-mono`}>{i.prazo_contratual ? formatarDataBr(i.prazo_contratual) : ""}</td>
+                <td className={`${td} max-w-[5rem] truncate`} title={i.cor1 ?? undefined}>{i.cor1}</td>
+                <td className={`${td} max-w-[5rem] truncate`} title={i.cor2 ?? undefined}>{i.cor2}</td>
+                <td className={`${td} max-w-[7rem] truncate`} title={i.plano_pintura ?? undefined}>{i.plano_pintura}</td>
+                <td className={`${td} font-mono`}>{i.prazo_contratual ? formatarDataBr(i.prazo_contratual).replace(/\/(\d{2})(\d{2})$/, "/$2") : ""}</td>
                 <td className={`${td} font-mono`}>{i.nf}</td>
                 <td className={`${td} font-mono`}>{i.meta}</td>
               </tr>
