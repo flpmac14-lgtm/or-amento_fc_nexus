@@ -19,6 +19,8 @@ export const VISOES = [
   // Mesma tela, pasta "BACKUP RECEBIMENTO 20260828" — pedido do usuário; mesmo acesso da QUALIDADE.
   { valor: "backup", rotulo: "Backup Recebimento" },
   { valor: "referencia", rotulo: "Referência de preços" },
+  // Só olhar, pelo celular (jeferson, diego) — pedido do usuário (13/10/2026).
+  { valor: "consulta", rotulo: "Consulta" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -26,8 +28,9 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
 // "usinagem" (líder da Usinagem, saymon) = só Usinagem;
-// "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade";
+// "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE;
+// "consulta" (jeferson, diego) = só Consulta (total e follow_up também veem).
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
@@ -35,6 +38,7 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
+  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta");
   return VISOES.filter((v) =>
     v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
@@ -48,6 +52,8 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
             ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
             : v.valor === "usinagem"
               ? perfil === "total"
+              : v.valor === "consulta"
+                ? perfil === "total" || perfil === "follow_up"
               : v.valor !== "referencia" || comReferenciaPrecos,
   );
 }

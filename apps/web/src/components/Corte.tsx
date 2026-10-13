@@ -18,6 +18,7 @@ import {
   salvarOrdemCorte,
   trocarMaquinaCorte,
 } from "@/lib/api";
+import { rotuloCliente } from "@/lib/clientes";
 import { MAQUINAS, infoMaquina, maquinaPadrao } from "@/lib/maquinaCorte";
 import { formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -36,21 +37,6 @@ function rotuloMac(mac: string | null): string | null {
   const m = mac?.trim();
   if (!m) return null;
   return /^mac/i.test(m) ? m : `MAC ${m}`;
-}
-
-// Código do cliente no Follow up → nome (pedido do usuário).
-const CLIENTES: Record<string, string> = {
-  A1: "Andritz",
-  A2: "Dana/AlSN",
-  W1: "WEIR",
-  F2: "FTSX",
-  S1: "Siemens",
-};
-
-function rotuloCliente(codigo: string | null): string | null {
-  const c = codigo?.trim().toUpperCase();
-  if (!c) return null;
-  return CLIENTES[c] ?? c;
 }
 
 function rotuloPeca(i: { mac: string | null; cliente: string | null }): string | null {

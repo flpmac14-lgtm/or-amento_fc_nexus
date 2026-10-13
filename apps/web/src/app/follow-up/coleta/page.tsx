@@ -5,7 +5,8 @@
 // cliente cuja COLETA é a data escolhida, agrupados por pintura igual
 // (Plano + COR2 + COR-2). Folha A4 paisagem pra imprimir / salvar em PDF
 // (Ctrl+P). Fica sob /follow-up, então a conta restrita também acessa.
-// Parâmetros: ?data=AAAA-MM-DD&cliente=W1 (cliente vazio = todos)&fracionado=1.
+// Parâmetros: ?data=AAAA-MM-DD&cliente=W1 (cliente vazio = todos)&fracionado=1
+// &ativos=1 (só pedidos ativos, ST = A — usado pela aba Consulta).
 // Coleta fracionada (pedido do usuário): botão discreto deixa editar a Qtd
 // de cada pedido só neste relatório; Qtd 0 tira o pedido da folha.
 
@@ -55,6 +56,7 @@ function Relatorio() {
   const params = useSearchParams();
   const data = params.get("data") ?? "";
   const cliente = params.get("cliente") ?? "";
+  const soAtivos = params.get("ativos") === "1";
   const [itens, setItens] = useState<ItemFollowUp[] | null>(null);
   const [erro, setErro] = useState("");
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
@@ -68,13 +70,15 @@ function Relatorio() {
       .then((r) => {
         if (!ativo) return;
         // Todos os pedidos com essa coleta (mesmo os que já saíram da planilha / ST ≠ A).
-        setItens(r.itens.filter((i) => i.coleta_data === data && (!cliente || i.cliente === cliente)));
+        setItens(
+          r.itens.filter((i) => i.coleta_data === data && (!cliente || i.cliente === cliente) && (!soAtivos || i.st === "A")),
+        );
       })
       .catch((e: Error) => ativo && setErro(e.message));
     return () => {
       ativo = false;
     };
-  }, [data, cliente]);
+  }, [data, cliente, soAtivos]);
 
   if (!data) return <p className="p-8 text-red-600">Informe a data da coleta.</p>;
   if (erro) return <p className="p-8 text-red-600">{erro}</p>;

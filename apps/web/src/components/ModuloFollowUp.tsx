@@ -17,6 +17,7 @@ import CroquiCorte from "@/components/CroquiCorte";
 import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
+import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
 import Qualidade from "@/components/Qualidade";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
@@ -42,12 +43,14 @@ export default function ModuloFollowUp({
   perfil?: PerfilModulo;
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
 }) {
-  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade";
+  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
   const [visaoEscolhida, setVisao] = useState<ValorVisao>(
     () =>
       abaDoEndereco() ??
-      (perfil === "corte"
+      (perfil === "consulta"
+        ? "consulta"
+        : perfil === "corte"
         ? "corte"
         : perfil === "usinagem"
           ? "usinagem"
@@ -244,6 +247,7 @@ export default function ModuloFollowUp({
           descricao="Pasta BACKUP RECEBIMENTO 20260828"
         />
       )}
+      {visao === "consulta" && <Consulta />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

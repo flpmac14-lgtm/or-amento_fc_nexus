@@ -18,6 +18,10 @@ export const ACESSO_USINAGEM = "usinagem";
 // Qualidade (ana, carol, pedro, lailto) — pedido explícito do usuário: só a aba
 // QUALIDADE (certificados de matéria-prima pra data book).
 export const ACESSO_QUALIDADE = "qualidade";
+// Consulta (jeferson, diego) — pedido explícito do usuário: só a aba Consulta,
+// pelo celular: o que está sendo cortado e a sequência, pesquisar pedido
+// ativo (MAC/PO/desenho) e abrir os relatórios de coleta. Só olha, não edita.
+export const ACESSO_CONSULTA = "consulta";
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,
 // conferido no proxy) e o marcelo (acesso "follow_up") abrem.
@@ -31,15 +35,17 @@ export function acessoSoFollowUp(user: Pick<User, "app_metadata"> | null | undef
     acesso === ACESSO_PROJETO ||
     acesso === ACESSO_CORTE ||
     acesso === ACESSO_USINAGEM ||
-    acesso === ACESSO_QUALIDADE
+    acesso === ACESSO_QUALIDADE ||
+    acesso === ACESSO_CONSULTA
   );
 }
 
 // Perfil dentro do módulo Follow up (quais abas aparecem).
 export function perfilModulo(
   user: Pick<User, "app_metadata"> | null | undefined,
-): "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" {
+): "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" {
   const acesso = user?.app_metadata?.acesso;
+  if (acesso === ACESSO_CONSULTA) return "consulta";
   if (acesso === ACESSO_QUALIDADE) return "qualidade";
   if (acesso === ACESSO_USINAGEM) return "usinagem";
   if (acesso === ACESSO_CORTE) return "corte";
