@@ -193,6 +193,20 @@ def marcar(programa: str, marca: str, valor: bool, por: str | None) -> dict:
         # Histórico de serviço (migration 0024) — pedido do usuário.
         cur.execute("insert into corte_historico (programa, marca, valor, por) values (%s, %s, %s, %s)",
                     (programa, marca, valor, por))
+        # Pedido do usuário: marcou Cortando = o material chegou → sai o Falta material.
+        if marca == "cortando" and valor:
+            cur.execute(
+                """update corte_programas set falta_material_em = null, falta_material_por = null
+                   where programa = %s and falta_material_em is not null returning programa""",
+                (programa,),
+            )
+            if cur.fetchone():
+                cur.execute("insert into corte_historico (programa, marca, valor, por) values (%s, 'falta_material', false, %s)",
+                            (programa, por))
+        # Pedido do usuário: finalizou → a ordem de corte (bolinha) some.
+        if marca == "finalizado" and valor:
+            cur.execute("update corte_programas set ordem = null, ordem_por = null, ordem_em = null where programa = %s",
+                        (programa,))
         conn.commit()
     return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})
 
