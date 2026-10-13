@@ -41,8 +41,8 @@ SETORES: dict[str, dict] = {
     # (migration 0040: "fundo" e "acabamento" contam como em andamento).
     "pintura": {
         "nome": "Pintura",
-        "status": {"em_andamento": "Iniciado", "fundo": "Pintura de fundo", "acabamento": "Acabamento",
-                   "pausado": "Pausa", "falta_material": "Falta material", "finalizado": "Pintura finalizada"},
+        # Pedido do usuário (13/10): só Iniciado, Pausado e Pintura finalizada.
+        "status": {"em_andamento": "Iniciado", "pausado": "Pausado", "finalizado": "Pintura finalizada"},
         "operadores": ["Felipe"],
     },
     # Pedido do usuário (13/10/2026): jeferson e diego (caldeiraria) apontam a fabricação.

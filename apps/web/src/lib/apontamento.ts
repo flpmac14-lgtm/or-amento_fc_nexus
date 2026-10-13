@@ -87,6 +87,7 @@ export const CONFIG_USINAGEM: ConfigSetor = {
 export const CONFIG_PINTURA: ConfigSetor = {
   setor: "pintura",
   nome: "Pintura",
+  // Pedido do usuário (13/10/2026): só Iniciado, Pausado e Pintura finalizada.
   opcoes: [
     {
       status: "em_andamento",
@@ -97,36 +98,12 @@ export const CONFIG_PINTURA: ConfigSetor = {
       selo: "bg-amber-400 text-stone-900",
     },
     {
-      status: "fundo",
-      rotulo: "PINTURA DE FUNDO",
-      icone: "🖌",
-      ligado: "bg-orange-500 text-white border-orange-600",
-      desligado: "border-orange-500 text-orange-700 dark:text-orange-300",
-      selo: "bg-orange-500 text-white",
-    },
-    {
-      status: "acabamento",
-      rotulo: "ACABAMENTO",
-      icone: "🎨",
-      ligado: "bg-violet-600 text-white border-violet-700",
-      desligado: "border-violet-500 text-violet-700 dark:text-violet-300",
-      selo: "bg-violet-600 text-white",
-    },
-    {
       status: "pausado",
-      rotulo: "PAUSA",
+      rotulo: "PAUSADO",
       icone: "⏸",
       ligado: "bg-sky-600 text-white border-sky-700",
       desligado: "border-sky-500 text-sky-700 dark:text-sky-300",
       selo: "bg-sky-600 text-white",
-    },
-    {
-      status: "falta_material",
-      rotulo: "FALTA MATERIAL",
-      icone: "⚠",
-      ligado: "bg-red-600 text-white border-red-700",
-      desligado: "border-red-500 text-red-600 dark:text-red-400",
-      selo: "bg-red-600 text-white",
     },
     {
       status: "finalizado",

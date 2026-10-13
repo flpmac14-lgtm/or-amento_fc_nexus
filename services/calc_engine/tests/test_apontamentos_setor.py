@@ -69,6 +69,8 @@ def test_muitos_pedidos_de_uma_vez():
 
 
 def test_pintura_operador_obrigatorio():
-    # Pintura (migration 0040): fundo/acabamento são status válidos; sem operador recusa.
+    # Pintura: só Iniciado / Pausado / Pintura finalizada; sem operador da Pintura recusa.
     with pytest.raises(ValueError, match="Escolha o operador"):
-        a.apontar("pintura", "x", "fundo", "Cesar", None, "felipe")
+        a.apontar("pintura", "x", "em_andamento", "Cesar", None, "felipe")
+    with pytest.raises(ValueError, match="Escolha uma das opções"):
+        a.apontar("pintura", "x", "fundo", "Felipe", None, "felipe")
