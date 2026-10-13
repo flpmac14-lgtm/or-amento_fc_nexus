@@ -211,6 +211,13 @@ export function itensDaObra(itens: ItemFollowUp[], tipo: TipoObra, valor: string
   return itens.filter((i) => normalizarBusca(String(i[tipo] ?? "")).startsWith(alvo));
 }
 
+// --- Relatório de alívio de tensão ---------------------------------------------
+// Pedido do usuário: pedidos com "alívio de tensão" anotado na Obs. Felipe/Marcelo
+// (com ou sem acento, maiúsculas, "alivio tensão").
+export function temAlivioTensao(item: ItemFollowUp): boolean {
+  return /alivio\s+(de\s+)?tens/.test(normalizarBusca(item.obs_felipe_marcelo ?? ""));
+}
+
 // Valor sugerido a partir de um item: PO sem o número do item / MAC com 2 partes.
 export function obraDoItem(item: ItemFollowUp, tipo: TipoObra): string {
   if (tipo === "po") return item.po.split("-")[0];

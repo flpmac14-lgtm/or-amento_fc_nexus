@@ -31,6 +31,7 @@ import type { ItemFollowUp, RespostaFollowUp } from "@/lib/types";
 import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } from "@/components/FollowUpDetalhe";
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
+import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
 import FollowUpSino from "@/components/FollowUpSino";
@@ -206,6 +207,7 @@ export default function FollowUp({
   // Qual Excel está sendo gerado: com a foto de cada pedido ou só a tabela.
   const [exportando, setExportando] = useState<"foto" | "tabela" | null>(null);
   const [relatorioColeta, setRelatorioColeta] = useState(false);
+  const [relatorioAlivio, setRelatorioAlivio] = useState(false);
   // Relatório por obra: aberto pela barra (vazio) ou pelo card (com o item).
   const [relatorioObra, setRelatorioObra] = useState<{ item: ItemFollowUp | null } | null>(null);
   // "Salvar tudo" — pedido do usuário: mesmo com cada campo salvando sozinho,
@@ -785,6 +787,15 @@ export default function FollowUp({
           </button>
           <button
             type="button"
+            onClick={() => setRelatorioAlivio(true)}
+            disabled={itens.length === 0}
+            title="Relatório dos pedidos com “alívio de tensão” na Obs. Felipe/Marcelo — A4 paisagem, agrupado por MAC"
+            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+          >
+            Relatório de alívio de tensão
+          </button>
+          <button
+            type="button"
             onClick={() => setRelatorioObra({ item: null })}
             disabled={itens.length === 0}
             title="Resumo de uma obra (por PO ou por MAC) numa folha A4"
@@ -1153,6 +1164,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
       )}
 
       {relatorioColeta && <FollowUpRelatorioColeta itens={itens} onFechar={() => setRelatorioColeta(false)} />}
+      {relatorioAlivio && <FollowUpRelatorioAlivio itens={itens} onFechar={() => setRelatorioAlivio(false)} />}
       {relatorioObra && (
         <FollowUpRelatorioObra itens={itens} itemInicial={relatorioObra.item} onFechar={() => setRelatorioObra(null)} />
       )}
