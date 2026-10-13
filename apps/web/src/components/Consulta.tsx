@@ -21,6 +21,9 @@ import { BarraEtapa, SeloPrazo } from "@/components/FollowUpDetalhe";
 
 const RECARREGAR_CORTE_MS = 2 * 60 * 1000;
 const LIMITE_RESULTADOS = 60;
+// "Cortados" (pedido do usuário): finalizados nos últimos dias, mais recente primeiro.
+const DIAS_CORTADOS = 7;
+const CORTADOS_INICIAL = 5;
 const TODOS = "*"; // botão "Todos" dos clientes
 
 type Tela = "corte" | "pedidos" | "coletas";
@@ -52,7 +55,7 @@ function horaAgora(): string {
 
 // --- Corte -------------------------------------------------------------------
 
-function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando" | "fila" | "falta" | "outro" }) {
+function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando" | "fila" | "falta" | "cortado" | "outro" }) {
   const [aberto, setAberto] = useState(false);
   const clientes = [...new Set(p.itens.map((i) => rotuloCliente(i.cliente)).filter(Boolean))].sort();
   const macs = [...new Set(p.itens.map((i) => i.mac?.trim()).filter(Boolean))].sort();
@@ -60,6 +63,7 @@ function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando
     cortando: "border-amber-400 bg-amber-50 dark:bg-amber-950/30",
     fila: "border-green-600 bg-white dark:border-cyan-600 dark:bg-slate-900",
     falta: "border-red-500 bg-red-50 dark:bg-red-950/30",
+    cortado: "border-green-300 bg-green-50/60 dark:border-green-900 dark:bg-green-950/20",
     outro: "border-stone-200 bg-white dark:border-slate-700 dark:bg-slate-900",
   }[destaque];
   return (
@@ -77,6 +81,8 @@ function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando
           <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-400 text-xl text-stone-900">
             ▶
           </span>
+        ) : destaque === "cortado" ? (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-600 text-xl font-bold text-white">✔</span>
         ) : destaque === "falta" ? (
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-600 text-xl text-white">⚠</span>
         ) : null}
@@ -85,6 +91,9 @@ function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando
             Programa
             {destaque === "cortando" && p.cortando_por ? ` · ${p.cortando_por} desde ${new Date(p.cortando_em!).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
             {destaque === "falta" ? " · falta material" : ""}
+            {destaque === "cortado" && p.finalizado_em
+              ? ` · cortado ${new Date(p.finalizado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${p.finalizado_por ? ` por ${p.finalizado_por}` : ""}`
+              : ""}
           </span>
           <span className="block font-mono text-3xl font-extrabold leading-tight text-stone-900 dark:text-white">{p.programa}</span>
         </span>
@@ -128,6 +137,8 @@ function TelaCorte() {
   const [erro, setErro] = useState("");
   const [atualizado, setAtualizado] = useState("");
   const [recarga, setRecarga] = useState(0);
+  const [agora, setAgora] = useState(0); // hora da última carga (base dos "últimos 7 dias")
+  const [verTodosCortados, setVerTodosCortados] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let ativo = true;
@@ -136,6 +147,7 @@ function TelaCorte() {
         .then((l) => {
           if (!ativo) return;
           setProgramas(l);
+          setAgora(Date.now());
           setAtualizado(horaAgora());
           setErro("");
         })
@@ -154,6 +166,10 @@ function TelaCorte() {
     return <p className="py-10 text-center text-stone-500">Carregando… (o servidor pode levar até 1 minuto para acordar)</p>;
 
   const abertos = programas.filter((p) => !p.finalizado_em);
+  const limiteCortados = agora - DIAS_CORTADOS * 86400000;
+  const cortadosRecentes = programas
+    .filter((p) => p.finalizado_em && new Date(p.finalizado_em).getTime() >= limiteCortados)
+    .sort((a, b) => b.finalizado_em!.localeCompare(a.finalizado_em!));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 text-xs text-stone-500 dark:text-slate-400">
@@ -171,6 +187,11 @@ function TelaCorte() {
         const cortando = daMaquina.filter((p) => p.cortando_em);
         const fila = daMaquina.filter((p) => !p.cortando_em && p.ordem).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
         const falta = daMaquina.filter((p) => !p.cortando_em && !p.ordem && p.falta_material_em);
+        const cortados = cortadosRecentes.filter((p) => p.maquina === m.maquina);
+        const mostrarCortados = verTodosCortados[m.maquina] ? cortados : cortados.slice(0, CORTADOS_INICIAL);
+        const cortadosHoje = cortados.filter(
+          (p) => new Date(p.finalizado_em!).toDateString() === new Date(agora).toDateString(),
+        ).length;
         return (
           <section key={m.maquina} className={`flex flex-col gap-3 rounded-2xl border-2 ${m.borda} bg-white/60 p-3 dark:bg-slate-900/30`}>
             <h2 className={`text-2xl font-extrabold ${m.titulo}`}>
@@ -209,6 +230,37 @@ function TelaCorte() {
                 ))}
               </div>
             )}
+
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-green-700 dark:text-green-400">
+                ✔ Cortados{" "}
+                <span className="font-normal normal-case text-stone-500 dark:text-slate-400">
+                  — hoje {cortadosHoje} · últimos {DIAS_CORTADOS} dias {cortados.length}
+                </span>
+              </h3>
+              {cortados.length === 0 ? (
+                <p className="rounded-xl bg-stone-100 p-3 text-center text-sm text-stone-500 dark:bg-slate-800 dark:text-slate-400">
+                  Nenhum programa cortado nos últimos {DIAS_CORTADOS} dias.
+                </p>
+              ) : (
+                <>
+                  {mostrarCortados.map((p) => (
+                    <CartaoPrograma key={p.programa} p={p} destaque="cortado" />
+                  ))}
+                  {cortados.length > CORTADOS_INICIAL && (
+                    <button
+                      type="button"
+                      onClick={() => setVerTodosCortados((v) => ({ ...v, [m.maquina]: !v[m.maquina] }))}
+                      className="rounded-xl border-2 border-dashed border-green-500 py-2 text-sm font-bold text-green-700 dark:text-green-400"
+                    >
+                      {verTodosCortados[m.maquina]
+                        ? "Mostrar menos ▴"
+                        : `Ver todos os ${cortados.length} cortados ▾`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </section>
         );
       })}
