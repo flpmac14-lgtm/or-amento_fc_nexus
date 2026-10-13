@@ -33,7 +33,7 @@ import {
   type ServicoInterno,
   type StatusApontamento,
 } from "@/lib/api";
-import type { ConfigSetor, OpcaoApontamento } from "@/lib/apontamento";
+import { emAndamento, type ConfigSetor, type OpcaoApontamento } from "@/lib/apontamento";
 import { normalizarBusca } from "@/lib/busca";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -47,7 +47,8 @@ type Filtro = "todos" | StatusApontamento;
 
 function textoBusca(i: ItemFollowUp): string {
   return normalizarBusca(
-    [i.po, i.mac, i.desenho, i.descricao, i.cliente, i.nf, i.prazo_contratual && formatarDataBr(i.prazo_contratual)]
+    [i.po, i.mac, i.desenho, i.descricao, i.cliente, i.nf, i.prazo_contratual && formatarDataBr(i.prazo_contratual),
+     i.cor2, i.cor_2, i.plano_pintura]
       .filter(Boolean)
       .join(" "),
   );
@@ -60,7 +61,25 @@ function chaveDesenho(d: string | null): string {
 
 // Primeiro o que está em andamento / com falta / pausado, depois o resto; finalizados no fim.
 function peso(s: StatusApontamento | undefined): number {
-  return s === "em_andamento" ? 0 : s === "falta_material" ? 1 : s === "pausado" ? 2 : s === "finalizado" ? 4 : 3;
+  return emAndamento(s) ? 0 : s === "falta_material" ? 1 : s === "pausado" ? 2 : s === "finalizado" ? 4 : 3;
+}
+
+// Pintura (pedido do usuário): plano de pintura e cores bem visíveis.
+function InfoPintura({ item, grande = false }: { item: ItemFollowUp; grande?: boolean }) {
+  if (!item.cor2 && !item.cor_2 && !item.plano_pintura) return null;
+  return (
+    <span className={`mt-1 flex flex-col gap-0.5 rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 dark:border-violet-800 dark:bg-violet-950/40 ${grande ? "text-sm" : "text-xs"}`}>
+      <span className="flex flex-wrap gap-x-3 font-bold text-violet-900 dark:text-violet-200">
+        <span>🎨 Cor 1: {item.cor2 || "—"}</span>
+        <span>Cor 2: {item.cor_2 || "—"}</span>
+      </span>
+      {item.plano_pintura && (
+        <span className={`${grande ? "" : "line-clamp-2"} leading-snug text-violet-800 dark:text-violet-300`}>
+          <strong>Plano:</strong> {item.plano_pintura}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
@@ -155,7 +174,15 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
   const porId = useMemo(() => new Map(itens.map((i) => [i.id, i])), [itens]);
 
   const contagem = useMemo(() => {
-    const c: Record<Filtro, number> = { todos: itens.length + servicos.length, em_andamento: 0, pausado: 0, finalizado: 0, falta_material: 0 };
+    const c: Record<Filtro, number> = {
+      todos: itens.length + servicos.length,
+      em_andamento: 0,
+      fundo: 0,
+      acabamento: 0,
+      pausado: 0,
+      finalizado: 0,
+      falta_material: 0,
+    };
     for (const id of [...itens.map((i) => i.id), ...servicos.map((s) => s.id)]) {
       const a = atuais[id];
       if (a) c[a.status]++;
@@ -203,11 +230,11 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
 
   // O que o operador escolhido já está usinando (vai pausar ao marcar Usinando).
   const usinandoAgora =
-    escolha !== "em_andamento" || !operador
+    !emAndamento(escolha ?? undefined) || !operador
       ? []
       : Object.values(atuais).filter((a) => {
           const k = chaveApontamento(a);
-          return a.status === "em_andamento" && a.operador === operador && k !== chaveAberta && !outros.has(k);
+          return emAndamento(a.status) && a.operador === operador && k !== chaveAberta && !outros.has(k);
         });
 
   function nomeAlvo(a: Apontamento): string {
@@ -264,7 +291,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
       operador,
       observacao: obs,
       por: usuario,
-      pausar_outros: escolha === "em_andamento" && pausarOutros,
+      pausar_outros: emAndamento(escolha ?? undefined) && pausarOutros,
     };
     try {
       let linhas: Apontamento[];
@@ -439,6 +466,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
               <span className="truncate text-xs text-stone-500 dark:text-slate-400">
                 {i.mac ?? "—"} · {formatarNumero(i.quantidade ?? 0, 0)} pç · PO {i.po}
               </span>
+              {config.comPintura && <InfoPintura item={i} />}
               <span className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
                 <SeloPrazo prazo={i.prazo_contratual} compacto />
                 <SeloAtual a={atuais[i.id]} opcao={opcao} />
@@ -481,6 +509,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                       <p className="text-xs text-stone-500 dark:text-slate-400">
                         {aberto.mac ?? "—"} · {formatarNumero(aberto.quantidade ?? 0, 0)} pç · PO {aberto.po}
                       </p>
+                      {config.comPintura && <InfoPintura item={aberto} grande />}
                     </>
                   ) : servicoAberto ? (
                     <>

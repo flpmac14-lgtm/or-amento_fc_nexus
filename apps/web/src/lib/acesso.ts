@@ -23,6 +23,9 @@ export const ACESSO_QUALIDADE = "qualidade";
 // ativo (MAC/PO/desenho) e abrir os relatórios de coleta (só olha). Depois
 // (pedido do usuário): também a aba Caldeiraria, onde apontam a fabricação.
 export const ACESSO_CONSULTA = "consulta";
+// Pintura (felipe) — pedido do usuário (13/10/2026): igual ao jeferson/diego,
+// mas aponta a Pintura (fundo, acabamento, finalização…) em vez da Caldeiraria.
+export const ACESSO_PINTURA = "pintura";
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,
 // conferido no proxy) e o marcelo (acesso "follow_up") abrem.
@@ -37,15 +40,17 @@ export function acessoSoFollowUp(user: Pick<User, "app_metadata"> | null | undef
     acesso === ACESSO_CORTE ||
     acesso === ACESSO_USINAGEM ||
     acesso === ACESSO_QUALIDADE ||
-    acesso === ACESSO_CONSULTA
+    acesso === ACESSO_CONSULTA ||
+    acesso === ACESSO_PINTURA
   );
 }
 
 // Perfil dentro do módulo Follow up (quais abas aparecem).
 export function perfilModulo(
   user: Pick<User, "app_metadata"> | null | undefined,
-): "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" {
+): "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura" {
   const acesso = user?.app_metadata?.acesso;
+  if (acesso === ACESSO_PINTURA) return "pintura";
   if (acesso === ACESSO_CONSULTA) return "consulta";
   if (acesso === ACESSO_QUALIDADE) return "qualidade";
   if (acesso === ACESSO_USINAGEM) return "usinagem";

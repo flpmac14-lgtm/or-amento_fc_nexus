@@ -820,7 +820,8 @@ export async function baixarExcelFollowUp(ids: string[], comFotos = true): Promi
 
 // --- Apontamento por setor (ex.: Usinagem) — ver app/apontamentos_setor.py ---
 
-export type StatusApontamento = "em_andamento" | "pausado" | "finalizado" | "falta_material";
+// fundo/acabamento: etapas da Pintura (migration 0040) — contam como em andamento.
+export type StatusApontamento = "em_andamento" | "fundo" | "acabamento" | "pausado" | "finalizado" | "falta_material";
 
 /** Cada apontamento é de um pedido do Follow up (item_id) OU de um serviço interno (servico_id). */
 export interface Apontamento {

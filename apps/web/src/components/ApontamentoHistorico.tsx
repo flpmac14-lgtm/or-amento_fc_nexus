@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Foto, FotoServico, quando, type Alvo } from "@/components/ApontamentoComum";
 import { buscarHistoricoSetor, type Apontamento } from "@/lib/api";
-import type { ConfigSetor } from "@/lib/apontamento";
+import { emAndamento, type ConfigSetor } from "@/lib/apontamento";
 import type { ItemFollowUp } from "@/lib/types";
 
 const PERIODOS = [
@@ -78,10 +78,10 @@ export default function ApontamentoHistorico({
   const agora = useMemo(() => {
     const m = new Map<string, Apontamento[]>();
     for (const a of Object.values(atuais)) {
-      if ((a.status !== "em_andamento" && a.status !== "pausado") || !a.operador) continue;
+      if ((!emAndamento(a.status) && a.status !== "pausado") || !a.operador) continue;
       m.set(a.operador, [...(m.get(a.operador) ?? []), a]);
     }
-    for (const l of m.values()) l.sort((x, y) => (x.status === y.status ? y.em.localeCompare(x.em) : x.status === "em_andamento" ? -1 : 1));
+    for (const l of m.values()) l.sort((x, y) => (x.status === y.status ? y.em.localeCompare(x.em) : emAndamento(x.status) ? -1 : 1));
     return m;
   }, [atuais]);
 

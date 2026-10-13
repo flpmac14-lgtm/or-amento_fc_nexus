@@ -22,7 +22,7 @@ import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
 import Qualidade from "@/components/Qualidade";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
-import { CONFIG_CALDEIRARIA, CONFIG_USINAGEM } from "@/lib/apontamento";
+import { CONFIG_CALDEIRARIA, CONFIG_PINTURA, CONFIG_USINAGEM } from "@/lib/apontamento";
 import { pedirLimparFiltros } from "@/lib/atalhoLimpar";
 import {
   EVENTO_ABA_MUDOU,
@@ -44,12 +44,12 @@ export default function ModuloFollowUp({
   perfil?: PerfilModulo;
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
 }) {
-  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta";
+  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
   const [visaoEscolhida, setVisao] = useState<ValorVisao>(
     () =>
       abaDoEndereco() ??
-      (perfil === "consulta"
+      (perfil === "consulta" || perfil === "pintura"
         ? "consulta"
         : perfil === "corte"
         ? "corte"
@@ -240,6 +240,7 @@ export default function ModuloFollowUp({
       )}
       {visao === "usinagem" && <ApontamentoSetor key="usinagem" config={CONFIG_USINAGEM} />}
       {visao === "caldeiraria" && <ApontamentoSetor key="caldeiraria" config={CONFIG_CALDEIRARIA} />}
+      {visao === "pintura" && <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} />}
       {visao === "qualidade" && <Qualidade key="principal" />}
       {visao === "backup" && (
         <Qualidade

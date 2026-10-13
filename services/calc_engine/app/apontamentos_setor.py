@@ -37,6 +37,14 @@ SETORES: dict[str, dict] = {
                    "falta_material": "Falta material"},
         "operadores": ["Cesar", "Alisson", "Robson", "Val", "Vanderson", "Deivid"],
     },
+    # Pedido do usuário (13/10/2026): felipe (pintura) aponta as etapas da pintura
+    # (migration 0040: "fundo" e "acabamento" contam como em andamento).
+    "pintura": {
+        "nome": "Pintura",
+        "status": {"em_andamento": "Iniciado", "fundo": "Pintura de fundo", "acabamento": "Acabamento",
+                   "pausado": "Pausa", "falta_material": "Falta material", "finalizado": "Pintura finalizada"},
+        "operadores": ["Felipe"],
+    },
     # Pedido do usuário (13/10/2026): jeferson e diego (caldeiraria) apontam a fabricação.
     "caldeiraria": {
         "nome": "Caldeiraria",
@@ -45,6 +53,8 @@ SETORES: dict[str, dict] = {
         "operadores": ["Jeferson", "Diego"],
     },
 }
+# Status "em andamento" (o operador está fazendo agora) — a Pintura tem etapas.
+ATIVOS = ("em_andamento", "fundo", "acabamento")
 OBS_MAX = 1000
 DESCRICAO_MAX = 200
 OUTROS_MAX = 50  # pedidos do mesmo desenho apontados junto
@@ -165,8 +175,8 @@ def _pausar_outros(cur, setor: str, cfg: dict, operador: str, exceto: set[str], 
              select distinct on (coalesce(item_id, servico_id)) item_id, servico_id, status, operador
              from apontamentos_setor where setor = %s
              order by coalesce(item_id, servico_id), em desc, id desc) u
-           where status = 'em_andamento' and operador = %s""",
-        (setor, operador),
+           where status = any(%s) and operador = %s""",
+        (setor, list(ATIVOS), operador),
     )
     ids = []
     obs = f"Pausado automaticamente: {operador} passou para {destino}"
@@ -203,7 +213,7 @@ def apontar(setor: str, item_id: str, status: str, operador: str | None, observa
             return None
         alvos = [a for a in alvos if a in achados]
         ids = []
-        if status == "em_andamento" and pausar_outros:
+        if status in ATIVOS and pausar_outros:
             _, desenho, po = achados[item_id]
             ids += _pausar_outros(cur, setor, cfg, operador, set(alvos), desenho or f"PO {po}", por)
         junto = f"apontado junto com mais {len(alvos) - 1} pedido(s) do mesmo desenho" if len(alvos) > 1 else None
@@ -226,7 +236,7 @@ def apontar_servico(setor: str, servico_id: str, status: str, operador: str | No
         if not r:
             return None
         ids = []
-        if status == "em_andamento" and pausar_outros:
+        if status in ATIVOS and pausar_outros:
             ids += _pausar_outros(cur, setor, cfg, operador, {servico_id}, f"serviço interno ({r[0]})", por)
         ids.append(_inserir(cur, setor, None, servico_id, status, operador, obs, por))
         linhas = _linhas(cur, ids)
@@ -265,7 +275,7 @@ def criar_servico(setor: str, descricao: str | None, quantidade, status: str, op
         )
         servico = _servico(cur.fetchone())
         ids = []
-        if status == "em_andamento" and pausar_outros:
+        if status in ATIVOS and pausar_outros:
             ids += _pausar_outros(cur, setor, cfg, operador, {servico["id"]}, f"serviço interno ({descricao})", por)
         ids.append(_inserir(cur, setor, None, servico["id"], status, operador, obs, por))
         linhas = _linhas(cur, ids)

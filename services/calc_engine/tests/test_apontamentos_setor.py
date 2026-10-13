@@ -7,7 +7,7 @@ from app import apontamentos_setor as a
 
 def test_setor_desconhecido():
     with pytest.raises(ValueError, match="Setor desconhecido"):
-        a.apontar("pintura", "x", "em_andamento", "Cesar", None, "saymon")
+        a.apontar("montagem", "x", "em_andamento", "Cesar", None, "saymon")
 
 
 def test_status_obrigatorio():
@@ -66,3 +66,9 @@ def test_muitos_pedidos_de_uma_vez():
     with pytest.raises(ValueError, match="Pedidos demais"):
         a.apontar("usinagem", "x", "finalizado", "Cesar", None, "saymon",
                   outros_itens=[str(n) for n in range(a.OUTROS_MAX + 1)])
+
+
+def test_pintura_operador_obrigatorio():
+    # Pintura (migration 0040): fundo/acabamento são status válidos; sem operador recusa.
+    with pytest.raises(ValueError, match="Escolha o operador"):
+        a.apontar("pintura", "x", "fundo", "Cesar", None, "felipe")

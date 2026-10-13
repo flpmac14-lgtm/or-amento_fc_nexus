@@ -3,6 +3,12 @@
 // SETORES de services/calc_engine/app/apontamentos_setor.py.
 import type { StatusApontamento } from "@/lib/api";
 
+// "Fazendo agora" (o operador está nele) — a Pintura tem etapas (fundo, acabamento).
+export const ATIVOS = new Set<StatusApontamento>(["em_andamento", "fundo", "acabamento"]);
+export function emAndamento(s: StatusApontamento | undefined): boolean {
+  return !!s && ATIVOS.has(s);
+}
+
 export interface OpcaoApontamento {
   status: StatusApontamento;
   rotulo: string;
@@ -22,6 +28,8 @@ export interface ConfigSetor {
   // Textos da tela: "Cesar está usinando…", "nada usinando" e o que é serviço interno.
   fazendo: string;
   servicoInterno: string;
+  // Pintura: plano de pintura e cores bem visíveis nos cartões e no apontamento.
+  comPintura?: boolean;
 }
 
 export const CONFIG_USINAGEM: ConfigSetor = {
@@ -72,6 +80,74 @@ export const CONFIG_USINAGEM: ConfigSetor = {
   ],
   fazendo: "usinando",
   servicoInterno: "Usinagem pra uso da Macfab: manutenção, ferramental, dispositivos…",
+};
+
+// Pintura — pedido do usuário (13/10/2026): o felipe aponta pelo celular as
+// etapas da pintura, com o plano de pintura e as cores à vista.
+export const CONFIG_PINTURA: ConfigSetor = {
+  setor: "pintura",
+  nome: "Pintura",
+  opcoes: [
+    {
+      status: "em_andamento",
+      rotulo: "INICIADO",
+      icone: "▶",
+      ligado: "bg-amber-400 text-stone-900 border-amber-500",
+      desligado: "border-amber-400 text-amber-700 dark:text-amber-300",
+      selo: "bg-amber-400 text-stone-900",
+    },
+    {
+      status: "fundo",
+      rotulo: "PINTURA DE FUNDO",
+      icone: "🖌",
+      ligado: "bg-orange-500 text-white border-orange-600",
+      desligado: "border-orange-500 text-orange-700 dark:text-orange-300",
+      selo: "bg-orange-500 text-white",
+    },
+    {
+      status: "acabamento",
+      rotulo: "ACABAMENTO",
+      icone: "🎨",
+      ligado: "bg-violet-600 text-white border-violet-700",
+      desligado: "border-violet-500 text-violet-700 dark:text-violet-300",
+      selo: "bg-violet-600 text-white",
+    },
+    {
+      status: "pausado",
+      rotulo: "PAUSA",
+      icone: "⏸",
+      ligado: "bg-sky-600 text-white border-sky-700",
+      desligado: "border-sky-500 text-sky-700 dark:text-sky-300",
+      selo: "bg-sky-600 text-white",
+    },
+    {
+      status: "falta_material",
+      rotulo: "FALTA MATERIAL",
+      icone: "⚠",
+      ligado: "bg-red-600 text-white border-red-700",
+      desligado: "border-red-500 text-red-600 dark:text-red-400",
+      selo: "bg-red-600 text-white",
+    },
+    {
+      status: "finalizado",
+      rotulo: "PINTURA FINALIZADA",
+      icone: "✔",
+      ligado: "bg-green-600 text-white border-green-700",
+      desligado: "border-green-600 text-green-700 dark:text-green-400",
+      selo: "bg-green-600 text-white",
+    },
+  ],
+  sugestoes: [
+    "Aguardando jato",
+    "Aguardando secagem",
+    "Falta tinta",
+    "Retoque",
+    "Aguardando inspeção de espessura",
+    "Previsão de término amanhã",
+  ],
+  fazendo: "pintando",
+  servicoInterno: "Pintura pra uso da Macfab: manutenção, dispositivos, suportes…",
+  comPintura: true,
 };
 
 // Caldeiraria — pedido do usuário (13/10/2026): jeferson e diego apontam a

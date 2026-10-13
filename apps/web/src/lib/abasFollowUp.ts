@@ -25,6 +25,8 @@ export const VISOES = [
   { valor: "consulta", rotulo: "Consulta" },
   // Jeferson e Diego apontam a fabricação (mesma tela da Usinagem) — pedido do usuário (13/10/2026).
   { valor: "caldeiraria", rotulo: "Caldeiraria" },
+  // Felipe aponta as etapas da pintura (mesma tela da Caldeiraria) — pedido do usuário (13/10/2026).
+  { valor: "pintura", rotulo: "Pintura" },
   // Só a tela Coletas da Consulta — pedido do usuário (13/10/2026) pra Qualidade (ana, pedro, carol, lailto).
   { valor: "coletas", rotulo: "Coletas" },
 ] as const;
@@ -37,7 +39,8 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Data book + Coletas;
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta";
+// "pintura" (felipe) = Consulta + Pintura.
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
@@ -46,6 +49,7 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
 export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
   if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria");
+  if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura");
   return VISOES.filter((v) =>
     v.valor === "coletas"
       ? perfil === "qualidade"
@@ -61,7 +65,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
           ? v.valor === "usinagem" || v.valor === "consulta" // saymon vê as coletas/previsões (pedido do usuário)
           : perfil === "projeto"
             ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
-            : v.valor === "usinagem" || v.valor === "caldeiraria"
+            : v.valor === "usinagem" || v.valor === "caldeiraria" || v.valor === "pintura"
               ? perfil === "total"
               : v.valor === "consulta"
                 ? perfil === "total" || perfil === "follow_up"

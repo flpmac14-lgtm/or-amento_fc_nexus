@@ -133,6 +133,7 @@ const ROTULO_PERFIL: Record<string, string> = {
   usinagem: "USINAGEM",
   qualidade: "QUALIDADE",
   consulta: "CONSULTA",
+  pintura: "PINTURA",
 };
 
 function montarMenu(user: User): Conta {
