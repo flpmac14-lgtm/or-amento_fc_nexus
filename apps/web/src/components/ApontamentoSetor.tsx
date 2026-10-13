@@ -681,7 +681,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                     onChange={(e) => setObs(e.target.value)}
                     rows={3}
                     maxLength={1000}
-                    placeholder="Ex.: Aguardando ferramenta"
+                    placeholder={`Ex.: ${config.sugestoes[0] ?? ""}`}
                     className="rounded-xl border-2 border-stone-300 bg-white p-3 text-lg text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
                   />
                 </label>
