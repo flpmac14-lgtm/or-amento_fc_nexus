@@ -248,7 +248,9 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
     setAba("apontar");
     setEscolha(null);
     // Quem já estava no pedido vem marcado (ex.: o mesmo operador dá o Fim de usinagem).
-    setOperador(novoAlvo.tipo === "novo" ? null : (atuais[novoAlvo.id]?.operador ?? null));
+    // Setor com um operador só (Pintura = Felipe, pedido do usuário): já vem escolhido.
+    const unico = operadores.length === 1 ? operadores[0] : null;
+    setOperador(unico ?? (novoAlvo.tipo === "novo" ? null : (atuais[novoAlvo.id]?.operador ?? null)));
     setObs("");
     setHistorico(null);
     setOutros(new Set());
@@ -663,7 +665,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-1">
+                <div className={`${operadores.length === 1 ? "hidden" : ""} flex flex-col gap-1`}>
                   <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">Quem está operando?</span>
                   <div className="grid grid-cols-3 gap-2">
                     {operadores.map((op) => (
