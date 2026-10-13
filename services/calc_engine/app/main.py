@@ -100,6 +100,7 @@ from app.cnpj import CnpjInvalido, CnpjNaoEncontrado, buscar_cnpj
 from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
+from app.recebimento_estoque import listar as listar_recebimento
 from app import apontamentos_setor, corte_pdfs
 from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
@@ -491,6 +492,15 @@ def controle_obras_listar() -> dict:
     (roda na máquina da empresa que enxerga o J:). Aqui só leitura."""
     try:
         return listar_controle_obras()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/recebimento")
+def recebimento_listar() -> dict:
+    """Espelho da aba GERAL (A:X) do CONTROLE DE RECEBIMENTO E ESTOQUE — só consulta (Qualidade)."""
+    try:
+        return listar_recebimento()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

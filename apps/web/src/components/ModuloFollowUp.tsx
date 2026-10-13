@@ -11,7 +11,7 @@
 // (some a barra do navegador); Esc volta.
 
 import { useEffect, useState } from "react";
-import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
+import ControleObras, { CONFIG_MATERIAL_COMPRA, CONFIG_RECEBIMENTO } from "@/components/ControleObras";
 import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
 import DataBook from "@/components/DataBook";
@@ -252,6 +252,7 @@ export default function ModuloFollowUp({
       )}
       {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
       {visao === "databook" && <DataBook />}
+      {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
       {visao === "consulta" && <Consulta key="consulta" inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}

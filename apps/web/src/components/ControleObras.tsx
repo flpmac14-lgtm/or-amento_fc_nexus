@@ -7,7 +7,7 @@
 // quem edita é a planilha.
 
 import { useEffect, useMemo, useState } from "react";
-import { listarControleObras, listarMaterialCompra } from "@/lib/api";
+import { listarControleObras, listarMaterialCompra, listarRecebimento } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca, situacaoPrazo } from "@/lib/followUp";
 import type { ColunaControleObras, RespostaControleObras, ValorControleObras } from "@/lib/types";
@@ -32,6 +32,9 @@ export interface ConfigEspelho {
   campoPrazo: string;
   rotuloPrazo: string;
   campoKg?: string;
+  // Recebimento (pedido do usuário): sem "prazo vencido", mais novos primeiro.
+  semVencido?: boolean;
+  maisNovosPrimeiro?: boolean;
 }
 
 export const CONFIG_CONTROLE_OBRAS: ConfigEspelho = {
@@ -59,6 +62,23 @@ export const CONFIG_MATERIAL_COMPRA: ConfigEspelho = {
   dicaBusca: "Pesquisar PO, descrição, MAC1, desenho, DesenhoCJ, código ou MP…",
   campoPrazo: "pzc",
   rotuloPrazo: "PZC",
+};
+
+// Recebimento — pedido do usuário (13/10/2026): aba GERAL (A:X) do CONTROLE DE
+// RECEBIMENTO E ESTOQUE, só consulta pra Qualidade (app/recebimento_estoque.py).
+export const CONFIG_RECEBIMENTO: ConfigEspelho = {
+  aba: "recebimento",
+  titulo: "Recebimento",
+  carregar: listarRecebimento,
+  arquivoPadrao: "J:\\5 - Almoxarifado - Recebimento\\ISO_SGQ\\Recebimento\\CONTROLE DE RECEBIMENTO E ESTOQUE.xlsm",
+  abaPadrao: "GERAL",
+  tarefa: "FCNexus - Sincronizar Controle de obras",
+  camposBusca: ["nri", "nri_2", "coluna1", "sectra", "desc_sectra", "descricao", "fornecedor", "cq", "oc", "nesting_pantografo", "descricao_2"],
+  dicaBusca: "Pesquisar NRI, MAC, SECTRA, descrição, fornecedor, CQ (certificado/lote), OC ou nesting…",
+  campoPrazo: "dt_receb",
+  rotuloPrazo: "DT RECEB.",
+  semVencido: true,
+  maisNovosPrimeiro: true,
 };
 
 const classeCampo =
@@ -167,6 +187,7 @@ export default function ControleObras({
       }
       return true;
     });
+    if (!ordem && config.maisNovosPrimeiro) lista.reverse();
     if (ordem) {
       lista.sort((a, b) => {
         const va = a.valores[ordem.indice];
@@ -259,7 +280,7 @@ export default function ControleObras({
           <p className="font-mono text-2xl font-bold text-stone-900 dark:text-white">{filtradas.length}</p>
           <p className="text-[11px] text-stone-500 dark:text-slate-500">de {linhas.length} na planilha</p>
         </div>
-        <div className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3">
+        <div className={`${config.semVencido ? "hidden" : ""} rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3`}>
           <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">{config.rotuloPrazo} vencido</p>
           <p className="font-mono text-2xl font-bold text-red-600 dark:text-red-400">{totais.vencidas}</p>
           <p className="text-[11px] text-stone-500 dark:text-slate-500">ST = A com prazo passado</p>
@@ -289,7 +310,7 @@ export default function ControleObras({
           </button>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          <label className={`${opcoes.st.length ? "" : "hidden"} flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400`}>
             ST
             <select
               value={st}
@@ -307,7 +328,7 @@ export default function ControleObras({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          <label className={`${opcoes.cl.length ? "" : "hidden"} flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400`}>
             CL (cliente)
             <select
               value={cl}

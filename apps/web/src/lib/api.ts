@@ -1147,6 +1147,16 @@ export async function listarMaterialCompra(): Promise<RespostaControleObras> {
   return resposta.json();
 }
 
+// Recebimento (aba GERAL A:X do CONTROLE DE RECEBIMENTO E ESTOQUE) — só consulta.
+export async function listarRecebimento(): Promise<RespostaControleObras> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/recebimento`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar o Recebimento (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
 export async function listarControleObras(): Promise<RespostaControleObras> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/controle-obras`);
   if (!resposta.ok) {

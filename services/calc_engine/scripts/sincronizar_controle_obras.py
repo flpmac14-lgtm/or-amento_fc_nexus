@@ -27,6 +27,8 @@ warnings.filterwarnings("ignore", module="openpyxl")
 from app.controle_obras import registrar_erro, sincronizar  # noqa: E402
 from app.follow_up_mae import propagar  # noqa: E402
 from app.databook import propagar as propagar_databook  # noqa: E402
+from app.recebimento_estoque import registrar_erro as registrar_erro_recebimento  # noqa: E402
+from app.recebimento_estoque import sincronizar as sincronizar_recebimento  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
@@ -35,6 +37,9 @@ from sincronizar_financeiro import sincronizar as sincronizar_financeiro  # noqa
 from sincronizar_certificados import sincronizar_se_mudou as sincronizar_certificados_se_mudou  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
+RECEBIMENTO = os.environ.get(
+    "RECEBIMENTO_PATH", r"J:\5 - Almoxarifado - Recebimento\ISO_SGQ\Recebimento\CONTROLE DE RECEBIMENTO E ESTOQUE.xlsm"
+)
 
 
 def main() -> int:
@@ -71,6 +76,23 @@ def main() -> int:
                       f"{d['atualizados']} atualizado(s) pela mãe")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Data book (mãe -> filha) - {type(e).__name__}: {e}")
+            return 1
+        # Recebimento (aba GERAL, A:X) só pra consulta da Qualidade — pedido do
+        # usuário (13/10/2026). Só relê quando o arquivo muda (hash).
+        try:
+            caminho_rec = Path(RECEBIMENTO)
+            r_rec = sincronizar_recebimento(
+                caminho_rec.read_bytes(), str(caminho_rec),
+                datetime.fromtimestamp(caminho_rec.stat().st_mtime, tz=timezone.utc), forcar="--forcar" in sys.argv,
+            )
+            if r_rec["alterado"]:
+                print(f"{agora} Recebimento - planilha alterada, {r_rec['linhas']} linhas gravadas")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO no Recebimento - {type(e).__name__}: {e}")
+            try:
+                registrar_erro_recebimento(f"{type(e).__name__}: {e}")
+            except Exception:  # noqa: BLE001
+                pass
             return 1
         # Fotos da aba Gerencia que ainda faltam nos pedidos (depois da
         # propagação, pra pedido novo já receber a foto). Só lê se o arquivo mudou.

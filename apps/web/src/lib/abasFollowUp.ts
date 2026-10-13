@@ -20,6 +20,8 @@ export const VISOES = [
   { valor: "backup", rotulo: "Backup Recebimento" },
   // Aba "Geral Data book" do Controle de databook.xlsm, filha da Controle de obras — pedido do usuário (13/10/2026).
   { valor: "databook", rotulo: "Data book" },
+  // Aba GERAL do CONTROLE DE RECEBIMENTO E ESTOQUE, só consulta — pedido do usuário (13/10/2026).
+  { valor: "recebimento", rotulo: "Recebimento" },
   { valor: "referencia", rotulo: "Referência de preços" },
   // Só olhar, pelo celular (jeferson, diego) — pedido do usuário (13/10/2026).
   { valor: "consulta", rotulo: "Consulta" },
@@ -53,7 +55,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
   return VISOES.filter((v) =>
     v.valor === "coletas"
       ? perfil === "qualidade"
-      : v.valor === "databook"
+      : v.valor === "databook" || v.valor === "recebimento"
         ? perfil === "qualidade" || perfil === "total"
       : v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
