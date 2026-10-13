@@ -101,6 +101,7 @@ from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
 from app.recebimento_estoque import listar as listar_recebimento
+from app.registro_geral import registro as registro_geral
 from app import apontamentos_setor, corte_pdfs
 from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
@@ -493,6 +494,15 @@ def controle_obras_listar() -> dict:
     (roda na máquina da empresa que enxerga o J:). Aqui só leitura."""
     try:
         return listar_controle_obras()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/registro")
+def registro_listar(dias: int = 1) -> dict:
+    """Registro geral (só o admin): tudo o que cada um apontou, por área — app/registro_geral.py."""
+    try:
+        return registro_geral(dias)
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

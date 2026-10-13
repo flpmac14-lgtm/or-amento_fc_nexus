@@ -21,6 +21,7 @@ import {
   listarNotificacoesCroquiCorte,
 } from "@/lib/api";
 import { perfilModulo } from "@/lib/acesso";
+import { usuarioEfetivo } from "@/lib/verComo";
 import { minutosUteis } from "@/lib/jornada";
 import { duracao } from "@/lib/painel";
 import { formatarNumero } from "@/lib/format";
@@ -253,7 +254,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
       .then(({ data }) => {
         if (!ativo || !data.user) return;
         if (data.user.email) setEditadoPor(emailParaLogin(data.user.email));
-        const perfil = perfilModulo(data.user);
+        const perfil = perfilModulo(usuarioEfetivo(data.user));
         setPodeCorrigir(perfil === "total" || perfil === "projeto");
       });
     const tique = setInterval(() => setTique((t) => t + 1), 60 * 1000);

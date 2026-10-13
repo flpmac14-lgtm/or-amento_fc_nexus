@@ -11,6 +11,7 @@ import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
 import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import { usuarioEfetivo } from "@/lib/verComo";
 
 export default function PaginaFollowUp() {
   const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean } | null>(null);
@@ -20,11 +21,13 @@ export default function PaginaFollowUp() {
       .auth.getUser()
       .then(({ data }) => {
         if (data.user) {
+          // Admin no "Ver como usuário": a tela sai como a da conta escolhida (lib/verComo.ts).
+          const user = usuarioEfetivo(data.user);
           setConta({
-            login: emailParaLogin(data.user.email ?? ""),
-            restrita: acessoSoFollowUp(data.user),
-            perfil: perfilModulo(data.user),
-            qualidade: podeVerQualidade(data.user),
+            login: emailParaLogin(user.email ?? ""),
+            restrita: acessoSoFollowUp(user),
+            perfil: perfilModulo(user),
+            qualidade: podeVerQualidade(user),
           });
         }
       });
@@ -35,6 +38,7 @@ export default function PaginaFollowUp() {
       <main className="mx-auto flex w-full max-w-[100rem] flex-col gap-4 px-3 py-3 sm:px-6 sm:py-5">
         {/* Só monta depois de saber quem é: projetista não pode nem carregar o Follow up. */}
         {conta && <ModuloFollowUp
+            key={`${conta.login}|${conta.perfil}`}
             comReferenciaPrecos={conta.perfil === "follow_up"}
             perfil={conta.perfil}
             comQualidade={conta.qualidade}

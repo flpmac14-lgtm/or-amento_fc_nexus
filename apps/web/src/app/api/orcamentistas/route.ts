@@ -40,6 +40,8 @@ export async function GET() {
       login: u.email ? emailParaLogin(u.email) : null,
       criado_em: u.created_at,
       ultimo_login_em: u.last_sign_in_at,
+      // Perfil (lib/acesso.ts) — usado pelo "Ver como usuário" do admin.
+      acesso: (u.app_metadata?.acesso as string | undefined) ?? null,
     }))
     .sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1));
 

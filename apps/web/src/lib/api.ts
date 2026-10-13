@@ -1273,3 +1273,32 @@ export async function listarNotificacoesDatabook(): Promise<NotificacaoFollowUp[
   if (!resposta.ok) throw new Error(`Falha ao carregar as notificações (${resposta.status}).`);
   return (await resposta.json()).notificacoes;
 }
+
+// Registro geral (só o admin): tudo o que cada um apontou, por área — app/registro_geral.py.
+export interface EventoRegistro {
+  area: "caldeiraria" | "usinagem" | "pintura" | "databook" | "corte" | "projeto";
+  em: string;
+  usuario: string;
+  acao: string;
+  alvo: string;
+  detalhe: string | null;
+  tipo: "andamento" | "fim" | "falta" | "pausa";
+}
+export interface RespostaRegistro {
+  desde: string;
+  dias: number;
+  areas: {
+    area: EventoRegistro["area"];
+    nome: string;
+    total: number;
+    concluidos: number;
+    pessoas: { usuario: string; total: number; fim: number; ultimo: string }[];
+  }[];
+  eventos: EventoRegistro[];
+}
+
+export async function buscarRegistro(dias: number): Promise<RespostaRegistro> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/registro?dias=${dias}`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar o registro (${resposta.status}).`);
+  return resposta.json();
+}

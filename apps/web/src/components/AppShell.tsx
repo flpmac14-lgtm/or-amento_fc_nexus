@@ -27,6 +27,7 @@ import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
 import { podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
 
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
@@ -136,7 +137,9 @@ const ROTULO_PERFIL: Record<string, string> = {
   pintura: "PINTURA",
 };
 
-function montarMenu(user: User): Conta {
+// real = a conta logada; o menu é montado "como" a conta escolhida no Ver como (só o admin).
+function montarMenu(real: User): Conta {
+  const user = usuarioEfetivo(real);
   const perfil = perfilModulo(user);
   const restrita = acessoSoFollowUp(user);
   const secoes: Conta["itens"] = [];
@@ -153,7 +156,14 @@ function montarMenu(user: User): Conta {
     subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
-  if (!restrita) secoes.push({ secao: "Administração", itens: [{ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" }] });
+  const admin: ItemMenu[] = [];
+  if (!restrita) admin.push({ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" });
+  // Só o flpmac14 (pedido do usuário): ver como cada um enxerga e o registro de tudo que apontam.
+  if (podeVerFinanceiro(real.email)) {
+    admin.push({ href: "/ver-como", rotulo: "Ver como usuário", icone: "usuarios" });
+    admin.push({ href: "/registro", rotulo: "Registro", icone: "painel" });
+  }
+  if (admin.length) secoes.push({ secao: "Administração", itens: admin });
   return { login: emailParaLogin(user.email ?? ""), perfil, itens: secoes };
 }
 
@@ -171,6 +181,7 @@ export default function AppShell({
   const router = useRouter();
   const caminho = usePathname();
   const [conta, setConta] = useState<Conta | null>(null);
+  const [verComo, setVerComo] = useState<VerComo | null>(null); // só o admin: faixa "Vendo como…"
   const [aberto, setAberto] = useState(false); // celular
   const [recolhido, setRecolhido] = useState(false); // PC
   // Sub-abas do Follow up no menu: aberto por padrão (lembrado), e qual aba está aberta.
@@ -211,7 +222,10 @@ export default function AppShell({
       .auth.getUser()
       .then(({ data }) => {
         if (!ativo) return;
-        if (data.user) setConta(montarMenu(data.user));
+        if (data.user) {
+          setConta(montarMenu(data.user));
+          setVerComo(podeVerFinanceiro(data.user.email) ? lerVerComo() : null);
+        }
         setAbaAtual((a) => a ?? abaDoEndereco());
         // Menu recolhido no PC (lembrado entre visitas).
         try {
@@ -221,8 +235,19 @@ export default function AppShell({
           // localStorage bloqueado: começa aberto
         }
       });
+    function mudouVerComo() {
+      criarClienteSupabaseNavegador()
+        .auth.getUser()
+        .then(({ data }) => {
+          if (!ativo || !data.user) return;
+          setConta(montarMenu(data.user));
+          setVerComo(podeVerFinanceiro(data.user.email) ? lerVerComo() : null);
+        });
+    }
+    window.addEventListener(EVENTO_VER_COMO, mudouVerComo);
     return () => {
       ativo = false;
+      window.removeEventListener(EVENTO_VER_COMO, mudouVerComo);
     };
   }, []);
 
@@ -390,6 +415,27 @@ export default function AppShell({
           <ThemeToggle embutido />
         </header>
 
+        {verComo && (
+          <div className="flex flex-wrap items-center gap-2 border-b-2 border-violet-500 bg-violet-100 px-4 py-2 text-sm text-violet-900 dark:bg-violet-950/60 dark:text-violet-100">
+            <span>
+              👁 Vendo como <strong>{verComo.login}</strong> ({ROTULO_PERFIL[verComo.acesso ?? "total"] ?? verComo.acesso}) — só a
+              tela; o que você salvar fica no seu nome (flpmac14).
+            </span>
+            <Link href="/ver-como" className="rounded-lg border border-violet-400 px-2 py-0.5 text-xs font-semibold hover:bg-violet-200 dark:hover:bg-violet-900">
+              Trocar usuário
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                gravarVerComo(null);
+                router.push("/ver-como");
+              }}
+              className="rounded-lg bg-violet-700 px-3 py-0.5 text-xs font-bold text-white hover:bg-violet-600"
+            >
+              ✕ Voltar à minha conta
+            </button>
+          </div>
+        )}
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </div>
