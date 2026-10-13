@@ -117,6 +117,7 @@ from app.croqui_corte import listar_notificacoes as listar_notificacoes_croqui
 from app.databook import CampoNaoEditavel as CampoNaoEditavelDatabook
 from app.databook import editar_lote as editar_lote_databook
 from app.databook import listar as listar_databook
+from app.databook import historico as historico_databook
 from app.databook import listar_notificacoes as listar_notificacoes_databook
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
@@ -695,6 +696,15 @@ def databook_listar() -> dict:
 def databook_notificacoes(limite: int = 200) -> dict:
     try:
         return {"notificacoes": listar_notificacoes_databook(limite)}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/databook/itens/{item_id}/historico")
+def databook_historico(item_id: str) -> dict:
+    """Registro do pedido: cada mudança de ST.BOOK / falta / obs. com quem e quando."""
+    try:
+        return {"historico": historico_databook(item_id)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

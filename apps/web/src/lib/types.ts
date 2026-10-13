@@ -826,6 +826,9 @@ export interface ItemDatabook {
   meta: string | null;
   st_book: string | null;
   observacao: string | null;
+  falta: string | null; // o que está faltando pra finalizar o book (migration 0039)
+  fazendo_em: string | null; // ST.BOOK FAZENDO = início do book
+  fazendo_por: string | null;
   finalizado_em: string | null; // D.FINALIZAÇÃO (book pronto)
   finalizado_por: string | null; // AUTOR(A)
   linha_planilha: number;

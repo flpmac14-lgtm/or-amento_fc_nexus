@@ -9,10 +9,12 @@
 // ST.BOOK pronto grava D.FINALIZAÇÃO e AUTOR(A) (app/databook.py).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { editarDatabook, listarDatabook, listarNotificacoesDatabook } from "@/lib/api";
+import { editarDatabook, historicoDatabook, listarDatabook, listarNotificacoesDatabook } from "@/lib/api";
 import { CLIENTES } from "@/lib/clientes";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { normalizarBusca } from "@/lib/followUp";
+import { minutosUteis } from "@/lib/jornada";
+import { duracao } from "@/lib/painel";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemDatabook } from "@/lib/types";
@@ -22,6 +24,47 @@ import { IconeCadeado } from "@/components/FollowUpEdicao";
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 const PAGINA = 200;
 const SEM_STATUS = "__sem__";
+const COM_FALTA = "__falta__";
+
+// Sugestões de um toque no "Falta p/ finalizar" (pedido do usuário: anotar o que falta pro book).
+const SUGESTOES_FALTA = [
+  "Falta certificado de material",
+  "Falta relatório de pintura",
+  "Falta relatório dimensional",
+  "Falta LP / ultrassom",
+  "Aguardando liberação do cliente",
+  "Peças ainda não pintadas",
+];
+
+const NOME_CAMPO: Record<string, string> = { st_book: "ST.BOOK", falta: "Falta p/ finalizar", observacao: "Obs." };
+
+type LinhaRegistro = { campo: string; de: string | null; para: string | null; por: string | null; em: string };
+
+// Tempo do book (FAZENDO → PRONTO, ou até agora), só a jornada — igual à Croqui de corte.
+function tempoBook(i: ItemDatabook, agora: number): number | null {
+  if (!i.fazendo_em) return null;
+  const fim = i.finalizado_em ?? (i.st_book === "FAZENDO" ? new Date(agora) : null);
+  return fim ? minutosUteis(i.fazendo_em, fim) : null;
+}
+
+function textoTempo(i: ItemDatabook, agora: number): string {
+  const m = tempoBook(i, agora);
+  return m === null ? "" : `${duracao(m)}${!i.finalizado_em ? " ▶" : ""}`;
+}
+
+function autorDica(i: ItemDatabook): string {
+  return [
+    i.fazendo_por && `Iniciou: ${i.fazendo_por}`,
+    i.finalizado_por && `Finalizou: ${i.finalizado_por}`,
+    i.editado_por && `Última edição: ${i.editado_por} · ${quando(i.editado_em)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function temFalta(i: ItemDatabook): boolean {
+  return !!i.falta?.trim() && !(i.st_book && ["PRONTO", "Pronto Aguardando Coleta"].includes(i.st_book));
+}
 
 // Cores do ST.BOOK (formatação condicional da planilha: "vazio" e "Pronto aguardando coleta" destacados).
 const COR_ST_BOOK: Record<string, string> = {
@@ -45,16 +88,26 @@ function pendente(i: ItemDatabook): boolean {
   return i.st === "E" && (!i.st_book || i.st_book === "Vazio");
 }
 
-function CelulaObs({ item, onSalvar }: { item: ItemDatabook; onSalvar: (valor: string) => Promise<void> }) {
-  const [valor, setValor] = useState(item.observacao ?? "");
-  const [de, setDe] = useState(item.observacao ?? "");
+function CelulaTexto({
+  atual,
+  onSalvar,
+  destaque = false,
+  sugestoes,
+}: {
+  atual: string | null;
+  onSalvar: (valor: string) => Promise<void>;
+  destaque?: boolean;
+  sugestoes?: string;
+}) {
+  const [valor, setValor] = useState(atual ?? "");
+  const [de, setDe] = useState(atual ?? "");
   const [salvando, setSalvando] = useState(false);
-  if (de !== (item.observacao ?? "")) {
-    setDe(item.observacao ?? "");
-    setValor(item.observacao ?? "");
+  if (de !== (atual ?? "")) {
+    setDe(atual ?? "");
+    setValor(atual ?? "");
   }
   async function salvar() {
-    if (valor.trim() === (item.observacao ?? "").trim()) return;
+    if (valor.trim() === (atual ?? "").trim()) return;
     setSalvando(true);
     try {
       await onSalvar(valor);
@@ -69,13 +122,14 @@ function CelulaObs({ item, onSalvar }: { item: ItemDatabook; onSalvar: (valor: s
       onBlur={salvar}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
-        if (e.key === "Escape") setValor(item.observacao ?? "");
+        if (e.key === "Escape") setValor(atual ?? "");
       }}
       title={valor}
       placeholder="—"
-      className={`w-56 rounded border bg-transparent px-1.5 py-1 text-xs outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
-        salvando ? "border-amber-400" : "border-transparent hover:border-stone-300 dark:hover:border-slate-600"
-      }`}
+      list={sugestoes}
+      className={`w-56 rounded border px-1.5 py-1 text-xs outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
+        destaque ? "bg-amber-100 font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" : "bg-transparent"
+      } ${salvando ? "border-amber-400" : "border-transparent hover:border-stone-300 dark:hover:border-slate-600"}`}
     />
   );
 }
@@ -93,6 +147,8 @@ export default function DataBook() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [aviso, setAviso] = useState("");
   const [destaque, setDestaque] = useState<string | null>(null);
+  const [agora, setAgora] = useState(0); // hora da última carga (Tempo de quem está FAZENDO)
+  const [registro, setRegistro] = useState<{ item: ItemDatabook; linhas: LinhaRegistro[] | null } | null>(null);
   const linhaDestaque = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
@@ -103,6 +159,7 @@ export default function DataBook() {
           if (!ativo) return;
           setItens(r.itens);
           setOpcoes(r.st_book_opcoes);
+          setAgora(Date.now());
           setErro("");
         })
         .catch((e: Error) => ativo && setErro(e.message));
@@ -136,6 +193,7 @@ export default function DataBook() {
   const contagemStBook = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of lista) m.set(i.st_book ?? SEM_STATUS, (m.get(i.st_book ?? SEM_STATUS) ?? 0) + 1);
+    m.set(COM_FALTA, lista.filter(temFalta).length);
     return m;
   }, [lista]);
 
@@ -145,9 +203,17 @@ export default function DataBook() {
       .filter((i) => {
         if (cliente && i.cliente !== cliente) return false;
         if (st && i.st !== st) return false;
-        if (stBook === "pendente" ? !pendente(i) : stBook === SEM_STATUS ? !!i.st_book : stBook && i.st_book !== stBook)
+        if (
+          stBook === "pendente"
+            ? !pendente(i)
+            : stBook === SEM_STATUS
+              ? !!i.st_book
+              : stBook === COM_FALTA
+                ? !temFalta(i)
+                : stBook && i.st_book !== stBook
+        )
           return false;
-        if (termo && ![i.po, i.mac, i.desenho, i.descricao, i.nf].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
+        if (termo && ![i.po, i.mac, i.desenho, i.descricao, i.nf, i.falta].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
           return false;
         return true;
       })
@@ -165,6 +231,13 @@ export default function DataBook() {
     } catch (e) {
       setErro((e as Error).message);
     }
+  }
+
+  function abrirRegistro(i: ItemDatabook) {
+    setRegistro({ item: i, linhas: null });
+    historicoDatabook(i.id)
+      .then((linhas) => setRegistro({ item: i, linhas }))
+      .catch((e: Error) => setErro(e.message));
   }
 
   function alternar(id: string) {
@@ -192,8 +265,9 @@ export default function DataBook() {
           <h2 className="text-lg font-bold text-stone-900 dark:text-white">Data book</h2>
           <p className="mt-0.5 max-w-3xl text-sm text-stone-600 dark:text-slate-400">
             Filha da <strong>Controle de obras</strong>: as colunas com <IconeCadeado /> vêm pelo PO e atualizam a cada 15
-            min; pedidos ativos novos entram sozinhos (sininho). Vocês preenchem o <strong>ST.BOOK</strong> e a{" "}
-            <strong>Obs.</strong> — salva na hora. ST.BOOK pronto grava a D.Finalização e o Autor.
+            min; pedidos ativos novos entram sozinhos (sininho). Vocês preenchem o <strong>ST.BOOK</strong>, o{" "}
+            <strong>Falta p/ finalizar</strong> e a <strong>Obs.</strong> — salva na hora. FAZENDO grava o início e PRONTO a
+            finalização (com quem); 🕘 mostra o registro do pedido.
           </p>
         </div>
         <FollowUpSino
@@ -296,7 +370,7 @@ export default function DataBook() {
 
       {/* ST.BOOK: filtro com a contagem de cada um. */}
       <div className="flex flex-wrap gap-1.5">
-        {[["", "Todos", lista.length] as const, ...opcoes.map((o) => [o, o, contagemStBook.get(o) ?? 0] as const), [SEM_STATUS, "Sem ST.BOOK", contagemStBook.get(SEM_STATUS) ?? 0] as const].map(
+        {[["", "Todos", lista.length] as const, ...opcoes.map((o) => [o, o, contagemStBook.get(o) ?? 0] as const), [SEM_STATUS, "Sem ST.BOOK", contagemStBook.get(SEM_STATUS) ?? 0] as const, [COM_FALTA, "⚠ Com falta p/ finalizar", contagemStBook.get(COM_FALTA) ?? 0] as const].map(
           ([valor, rotulo, n]) => (
             <button
               key={valor || "todos"}
@@ -307,7 +381,7 @@ export default function DataBook() {
               }}
               className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                 stBook === valor
-                  ? `border-transparent ${COR_ST_BOOK[valor] ?? "bg-green-600 text-white dark:bg-cyan-600"}`
+                  ? `border-transparent ${valor === COM_FALTA ? "bg-amber-500 text-white" : (COR_ST_BOOK[valor] ?? "bg-green-600 text-white dark:bg-cyan-600")}`
                   : "border-stone-300 text-stone-700 dark:border-slate-600 dark:text-slate-300"
               }`}
             >
@@ -360,11 +434,15 @@ export default function DataBook() {
                   }
                 />
               </th>
+              <th className={th}>Início (FAZENDO)</th>
               <th className={th}>D.Finalização</th>
               <th className={th}>Autor(a)</th>
+              <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:17, sem almoço">Tempo</th>
               <th className={th}>PO</th>
               <th className={th}>ST.BOOK</th>
+              <th className={th}>Falta p/ finalizar</th>
               <th className={th}>Obs.</th>
+              <th className={th}>Registro</th>
               <th className={th}>Cliente <IconeCadeado /></th>
               <th className={th}>St</th>
               <th className={th}>Qtd</th>
@@ -392,8 +470,16 @@ export default function DataBook() {
                 <td className={td}>
                   <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => alternar(i.id)} aria-label={`Selecionar ${i.po}`} />
                 </td>
+                <td className={td}>
+                  {quando(i.fazendo_em)}
+                  {i.fazendo_por && <span className="block text-[10px] text-stone-500 dark:text-slate-400">{i.fazendo_por}</span>}
+                </td>
                 <td className={td}>{quando(i.finalizado_em)}</td>
-                <td className={td}>{i.finalizado_por}</td>
+                {/* Autor = o usuário do book (pedido do usuário): quem finalizou, senão quem iniciou, senão quem mexeu. */}
+                <td className={`${td} font-semibold`} title={autorDica(i)}>
+                  {i.finalizado_por ?? i.fazendo_por ?? i.editado_por}
+                </td>
+                <td className={`${td} font-mono`}>{textoTempo(i, agora)}</td>
                 <td className={`${td} font-mono font-semibold text-stone-900 dark:text-white`}>
                   {i.po}
                   {i.origem === "controle_obras" && (
@@ -420,7 +506,25 @@ export default function DataBook() {
                   </select>
                 </td>
                 <td className={td}>
-                  <CelulaObs item={i} onSalvar={(v) => salvar([i.id], { observacao: v || null })} />
+                  <CelulaTexto
+                    atual={i.falta}
+                    destaque={temFalta(i)}
+                    sugestoes="databook-sugestoes-falta"
+                    onSalvar={(v) => salvar([i.id], { falta: v || null })}
+                  />
+                </td>
+                <td className={td}>
+                  <CelulaTexto atual={i.observacao} onSalvar={(v) => salvar([i.id], { observacao: v || null })} />
+                </td>
+                <td className={td}>
+                  <button
+                    type="button"
+                    onClick={() => abrirRegistro(i)}
+                    title="Ver o registro do pedido (quem mudou o quê e quando)"
+                    className="rounded px-1.5 py-0.5 text-sm hover:bg-stone-100 dark:hover:bg-slate-800"
+                  >
+                    🕘
+                  </button>
                 </td>
                 <td className={td} title={i.cliente ? CLIENTES[i.cliente] : undefined}>{i.cliente}</td>
                 <td className={td} title={i.st ? ROTULO_ST[i.st] : undefined}>
@@ -449,6 +553,67 @@ export default function DataBook() {
         </table>
         {filtrados.length === 0 && <p className="py-8 text-center text-sm text-stone-500">Nenhum pedido com esses filtros.</p>}
       </div>
+      <datalist id="databook-sugestoes-falta">
+        {SUGESTOES_FALTA.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+
+      {registro && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={() => setRegistro(null)}>
+          <div
+            className="flex max-h-[80vh] w-full max-w-lg flex-col gap-3 overflow-y-auto rounded-lg border border-stone-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-bold text-stone-900 dark:text-white">Registro — {registro.item.po}</h3>
+                <p className="text-xs text-stone-500 dark:text-slate-400">{registro.item.descricao}</p>
+              </div>
+              <button type="button" onClick={() => setRegistro(null)} className="rounded px-2 text-lg text-stone-500">
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs text-stone-800 dark:text-slate-200">
+              <p>
+                <span className="block font-semibold uppercase text-stone-500">Início (FAZENDO)</span>
+                {quando(registro.item.fazendo_em) || "—"} {registro.item.fazendo_por ?? ""}
+              </p>
+              <p>
+                <span className="block font-semibold uppercase text-stone-500">Finalização</span>
+                {quando(registro.item.finalizado_em) || "—"} {registro.item.finalizado_por ?? ""}
+              </p>
+              <p>
+                <span className="block font-semibold uppercase text-stone-500">Tempo</span>
+                {textoTempo(registro.item, agora) || "—"}
+              </p>
+              <p>
+                <span className="block font-semibold uppercase text-stone-500">Falta p/ finalizar</span>
+                {registro.item.falta || "—"}
+              </p>
+            </div>
+            {registro.linhas === null ? (
+              <p className="text-sm text-stone-500">Carregando…</p>
+            ) : registro.linhas.length === 0 ? (
+              <p className="text-sm text-stone-500">Nenhuma mudança registrada no app ainda (o que veio da planilha não tem histórico).</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {registro.linhas.map((h, n) => (
+                  <li key={n} className="rounded border border-stone-200 px-2 py-1.5 text-sm text-stone-800 dark:border-slate-700 dark:text-slate-200">
+                    <span className="text-xs text-stone-500 dark:text-slate-400">
+                      {quando(h.em)} · <strong>{h.por ?? "—"}</strong>
+                    </span>
+                    <span className="block">
+                      <strong>{NOME_CAMPO[h.campo] ?? h.campo}:</strong> {h.de ?? "—"} → <strong>{h.para ?? "(apagado)"}</strong>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       {filtrados.length > visiveis.length && (
         <button
           type="button"

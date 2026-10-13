@@ -1228,6 +1228,15 @@ export async function editarDatabook(
   return (await resposta.json()).itens;
 }
 
+// Registro do pedido no Data book (cada mudança com quem e quando).
+export async function historicoDatabook(
+  itemId: string,
+): Promise<{ campo: string; de: string | null; para: string | null; por: string | null; em: string }[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/${itemId}/historico`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar o histórico (${resposta.status}).`);
+  return (await resposta.json()).historico;
+}
+
 // Sininho do Data book — mesmo formato do sininho do Follow up.
 export async function listarNotificacoesDatabook(): Promise<NotificacaoFollowUp[]> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/databook/notificacoes`);

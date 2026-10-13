@@ -59,7 +59,8 @@ CAMPOS_MAE: dict[str, tuple[str, str]] = {
     "meta": ("meta", "texto"),
 }
 FIXOS = list(CAMPOS_MAE)
-EDITAVEIS = ["st_book", "observacao"]
+# falta (migration 0039): o que está faltando pra finalizar o book — pedido do usuário.
+EDITAVEIS = ["st_book", "observacao", "falta"]
 
 # Colunas da aba (0-based): A D.FINALIZAÇÃO, B AUTOR(A), C PO, D..O fixas, P ST.BOOK, Q obs, R META.
 _COLUNAS_PLANILHA = {
@@ -158,7 +159,7 @@ def ler_planilha(caminho_ou_bytes) -> list[dict]:
     return itens
 
 
-_COLUNAS_ITEM = ["po", *FIXOS, *EDITAVEIS, "finalizado_em", "finalizado_por", "linha_planilha"]
+_COLUNAS_ITEM = ["po", *FIXOS, "st_book", "observacao", "finalizado_em", "finalizado_por", "linha_planilha"]
 
 
 def importar(caminho_ou_bytes, forcar: bool = False) -> dict:
@@ -290,8 +291,8 @@ def propagar(forcar: bool = False) -> dict:
 
 # --- leitura / edição no app --------------------------------------------------
 
-_COLUNAS_LISTA = ["id", "po", *FIXOS, *EDITAVEIS, "finalizado_em", "finalizado_por", "linha_planilha", "origem",
-                  "editado_em", "editado_por"]
+_COLUNAS_LISTA = ["id", "po", *FIXOS, *EDITAVEIS, "fazendo_em", "fazendo_por", "finalizado_em", "finalizado_por",
+                  "linha_planilha", "origem", "editado_em", "editado_por"]
 
 
 def _json(v):
@@ -357,21 +358,44 @@ def _normalizar_alteracoes(alteracoes: dict) -> dict:
 
 def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
     agora = datetime.now(timezone.utc)
-    cur.execute("select id, st_book from databook_itens where id = any(%s::uuid[]) for update", (ids,))
-    for item_id, st_atual in cur.fetchall():
-        sets = dict(normal)
-        if "st_book" in normal:
-            novo = normal["st_book"]
+    cur.execute(
+        f"select id, {', '.join(EDITAVEIS)} from databook_itens where id = any(%s::uuid[]) for update", (ids,)
+    )
+    for item_id, *valores in cur.fetchall():
+        atuais = dict(zip(EDITAVEIS, valores))
+        sets = {c: v for c, v in normal.items() if v != atuais[c]}
+        if not sets:
+            continue
+        if "st_book" in sets:
+            novo, st_atual = sets["st_book"], atuais["st_book"]
+            # Como o projeto (Croqui de corte): FAZENDO grava o início do book.
+            if novo == "FAZENDO":
+                sets.update(fazendo_em=agora, fazendo_por=editado_por)
             # Book pronto: grava D.FINALIZAÇÃO e AUTOR(A); voltou pra não pronto: apaga.
             if novo in PRONTOS and st_atual not in PRONTOS:
                 sets.update(finalizado_em=agora, finalizado_por=editado_por)
             elif novo not in PRONTOS and st_atual in PRONTOS:
                 sets.update(finalizado_em=None, finalizado_por=None)
+        # Registro de cada mudança (quem, quando, de → para) — pedido do usuário.
+        cur.executemany(
+            "insert into databook_historico (item_id, campo, de, para, por, em) values (%s, %s, %s, %s, %s, %s)",
+            [(item_id, c, atuais[c], normal[c], editado_por, agora) for c in normal if normal[c] != atuais[c]],
+        )
         cur.execute(
             f"update databook_itens set {', '.join(f'{c} = %s' for c in sets)}, editado_em = %s, editado_por = %s "
             "where id = %s",
             (*sets.values(), agora, editado_por, item_id),
         )
+
+
+def historico(item_id: str) -> list[dict]:
+    """Registro do pedido no Data book (mais recente primeiro)."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select campo, de, para, por, em from databook_historico where item_id = %s order by em desc, id desc limit 200",
+            (item_id,),
+        )
+        return [{"campo": r[0], "de": r[1], "para": r[2], "por": r[3], "em": r[4].isoformat()} for r in cur.fetchall()]
 
 
 def editar_lote(ids: list[str], alteracoes: dict, editado_por: str | None = None) -> list[dict]:
