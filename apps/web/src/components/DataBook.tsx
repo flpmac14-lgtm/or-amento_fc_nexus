@@ -278,12 +278,6 @@ export default function DataBook() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-stone-900 dark:text-white">Data book</h2>
-          <p className="mt-0.5 max-w-3xl text-sm text-stone-600 dark:text-slate-400">
-            Filha da <strong>Controle de obras</strong>: as colunas com <IconeCadeado /> vêm pelo PO e atualizam a cada 15
-            min; pedidos ativos novos entram sozinhos (sininho). Vocês preenchem o <strong>ST.BOOK</strong>, o{" "}
-            <strong>Falta p/ finalizar</strong> e a <strong>Obs.</strong> — salva na hora. FAZENDO grava o início e PRONTO a
-            finalização (com quem); 🕘 mostra o registro do pedido.
-          </p>
         </div>
         <FollowUpSino
           carregar={listarNotificacoesDatabook}
