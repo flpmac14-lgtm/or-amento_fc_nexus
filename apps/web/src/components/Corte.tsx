@@ -15,6 +15,7 @@ import {
   listarProgramasCorte,
   marcarProgramaCorte,
   salvarNriCorte,
+  salvarOrdemCorte,
   trocarMaquinaCorte,
 } from "@/lib/api";
 import { MAQUINAS, infoMaquina, maquinaPadrao } from "@/lib/maquinaCorte";
@@ -124,6 +125,9 @@ function programaManual(programa: string): ProgramaCorte {
     maquina: maquinaPadrao(programa),
     maquina_trocada: false,
     maquina_por: null,
+    ordem: null,
+    ordem_por: null,
+    ordem_em: null,
   };
 }
 
@@ -191,6 +195,10 @@ export default function Corte({
   const [agora, setAgora] = useState(0);
   // NRI (pedido do usuário): anotado no apontamento; grava no "Salvar".
   const [nri, setNri] = useState("");
+  // Ordem de corte (pedido do usuário): bolinha no canto do cartão — toca,
+  // digita 1, 2, 3… e grava no Enter (ou ao sair do campo). Vazio apaga.
+  const [ordemEditando, setOrdemEditando] = useState<string | null>(null);
+  const [ordemValor, setOrdemValor] = useState("");
 
   useEffect(() => {
     let ativo = true;
@@ -262,12 +270,13 @@ export default function Corte({
   }, [programas, agora]);
 
   const lista = useMemo(() => {
-    // O que está cortando sempre no topo (pedido do usuário); o resto segue
-    // a ordem do servidor (programa mais novo primeiro).
-    const cortandoPrimeiro = (l: ProgramaCorte[]) => [
-      ...l.filter((p) => situacao(p).texto === "Cortando"),
-      ...l.filter((p) => situacao(p).texto !== "Cortando"),
-    ];
+    // O que está cortando sempre no topo (pedido do usuário); depois os que
+    // têm ordem de corte (1º, 2º…); o resto segue a ordem do servidor
+    // (programa mais novo primeiro).
+    const peso = (p: ProgramaCorte) =>
+      situacao(p).texto === "Cortando" ? -1 : (p.ordem ?? Infinity);
+    const cortandoPrimeiro = (l: ProgramaCorte[]) =>
+      [...l].sort((a, b) => peso(a) - peso(b) || 0);
     if (numero)
       return cortandoPrimeiro(
         programas.filter((p) => p.programa.startsWith(numero)).slice(0, 60),
@@ -332,6 +341,26 @@ export default function Corte({
     setNumero("");
     setFiltro("recentes");
   });
+
+  function editarOrdem(p: ProgramaCorte) {
+    setOrdemEditando(p.programa);
+    setOrdemValor(p.ordem ? String(p.ordem) : "");
+  }
+
+  async function salvarOrdem(p: ProgramaCorte) {
+    setOrdemEditando(null);
+    const ordem = ordemValor ? Number(ordemValor) || null : null;
+    if (ordem === p.ordem) return;
+    setErro("");
+    try {
+      const atualizado = await salvarOrdemCorte(p.programa, ordem, usuario);
+      setProgramas((l) =>
+        l.map((x) => (x.programa === atualizado.programa ? atualizado : x)),
+      );
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
 
   // Às vezes um corta o programa do outro (pedido do usuário).
   async function trocarMaquina(p: ProgramaCorte, maquina: MaquinaCorte) {
@@ -494,8 +523,45 @@ export default function Corte({
                     {daMaquina.map((p) => {
                       const s = situacao(p);
                       return (
+                        <div key={p.programa} className="relative min-w-0">
+                        {ordemEditando === p.programa ? (
+                          <input
+                            autoFocus
+                            value={ordemValor}
+                            onChange={(e) =>
+                              setOrdemValor(e.target.value.replace(/\D/g, "").slice(0, 3))
+                            }
+                            onBlur={() => salvarOrdem(p)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur();
+                              if (e.key === "Escape") setOrdemEditando(null);
+                            }}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoComplete="off"
+                            aria-label={`Ordem de corte do programa ${p.programa}`}
+                            className="absolute right-1.5 top-1.5 z-10 h-11 w-11 rounded-full border-2 border-green-600 bg-white text-center font-mono text-lg font-extrabold text-stone-900 outline-none dark:border-cyan-400 dark:bg-slate-950 dark:text-white"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => editarOrdem(p)}
+                            title={
+                              p.ordem
+                                ? `${p.ordem}º a cortar${p.ordem_por ? ` · por ${p.ordem_por}` : ""} — toque para mudar`
+                                : "Toque para pôr a ordem de corte (1, 2, 3…)"
+                            }
+                            aria-label={`Ordem de corte do programa ${p.programa}`}
+                            className={`absolute right-1.5 top-1.5 z-10 flex h-11 w-11 items-center justify-center rounded-full font-mono font-extrabold active:scale-95 ${
+                              p.ordem
+                                ? "bg-green-700 text-lg text-white shadow dark:bg-cyan-500 dark:text-slate-950"
+                                : "border-2 border-dashed border-stone-300 text-sm text-stone-400 dark:border-slate-600 dark:text-slate-500"
+                            }`}
+                          >
+                            {p.ordem ? `${p.ordem}º` : "#"}
+                          </button>
+                        )}
                         <button
-                          key={p.programa}
                           type="button"
                           onClick={(e) => cliqueCartao(p.programa, e.detail)}
                           onDoubleClick={() => duploCliqueCartao(p.programa)}
@@ -504,7 +570,7 @@ export default function Corte({
                               ? "Toque para apontar · duplo clique abre o PDF"
                               : undefined
                           }
-                          className="flex min-w-0 flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
+                          className="flex h-full w-full min-w-0 flex-col gap-1 rounded-xl border-2 border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 pr-14 text-left active:scale-[0.98] hover:border-green-600 dark:hover:border-cyan-500"
                         >
                           <span className="font-mono text-2xl font-bold leading-tight text-stone-900 dark:text-white">
                             <NumeroPrograma programa={p.programa} />
@@ -551,6 +617,7 @@ export default function Corte({
                             {p.itens.length} item(ns)
                           </span>
                         </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -607,6 +674,11 @@ export default function Corte({
                     {infoMaquina(aberto.maquina).icone}{" "}
                     {infoMaquina(aberto.maquina).rotulo}
                   </span>
+                  {aberto.ordem && (
+                    <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-white dark:bg-cyan-500 dark:text-slate-950">
+                      {aberto.ordem}º a cortar
+                    </span>
+                  )}
                 </p>
                 <p
                   className="font-mono text-5xl font-extrabold leading-none text-stone-900 dark:text-white"

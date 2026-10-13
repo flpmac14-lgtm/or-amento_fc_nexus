@@ -1003,6 +1003,24 @@ export async function salvarNriCorte(
   return resposta.json();
 }
 
+// Nº sequencial de corte (bolinha no cartão); vazio apaga.
+export async function salvarOrdemCorte(
+  programa: string,
+  ordem: number | null,
+  por: string | null,
+): Promise<ProgramaCorte> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas/${encodeURIComponent(programa)}/ordem`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ordem, por }),
+  });
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`A ordem de corte não salvou (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
 export async function trocarMaquinaCorte(
   programa: string,
   maquina: MaquinaCorte,

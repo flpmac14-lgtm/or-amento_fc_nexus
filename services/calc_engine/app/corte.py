@@ -82,7 +82,8 @@ def listar() -> dict:
         itens = cur.fetchall()
         cur.execute(
             """select programa, cortando_em, cortando_por, finalizado_em, finalizado_por,
-                      falta_material_em, falta_material_por, nri, nri_por, nri_em, maquina, maquina_por from corte_programas"""
+                      falta_material_em, falta_material_por, nri, nri_por, nri_em, maquina, maquina_por,
+                      ordem, ordem_por, ordem_em from corte_programas"""
         )
         marcas = {r[0]: r for r in cur.fetchall()}
         # Cliente de cada MAC (A1, A2, W1, F2…) vem do Follow up — pedido do
@@ -131,6 +132,8 @@ def listar() -> dict:
         prog["maquina"] = (m[10] if m and m[10] else None) or maquina_padrao(p)
         prog["maquina_trocada"] = bool(m and m[10] and m[10] != maquina_padrao(p))
         prog["maquina_por"] = m[11] if prog["maquina_trocada"] else None
+        # Ordem de corte (bolinha no cartão) — migration 0037.
+        prog["ordem"], prog["ordem_por"], prog["ordem_em"] = (m[12], m[13], _iso(m[14])) if m else (None, None, None)
         lista.append(prog)
     lista.sort(key=lambda x: int(x["programa"]), reverse=True)
     return {"programas": lista}
@@ -210,6 +213,28 @@ def salvar_nri(programa: str, nri: str | None, por: str | None) -> dict:
                on conflict (programa) do update set
                  nri = excluded.nri, nri_por = excluded.nri_por, nri_em = excluded.nri_em, atualizado_em = now()""",
             (programa, nri, por if nri else None, nri),
+        )
+        conn.commit()
+    return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})
+
+
+def salvar_ordem(programa: str, ordem, por: str | None) -> dict:
+    """Grava o nº sequencial de corte do programa (1 = 1º…; vazio apaga). Devolve o programa atualizado."""
+    programa = str(programa).strip()
+    if not re.fullmatch(r"\d+", programa):
+        raise ValueError("Número de programa inválido.")
+    ordem = re.sub(r"\s", "", str(ordem if ordem is not None else ""))
+    if ordem and not re.fullmatch(r"\d{1,3}", ordem):
+        raise ValueError("A ordem deve ser um número de 1 a 999.")
+    ordem = int(ordem) if ordem and int(ordem) > 0 else None
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into corte_programas (programa, ordem, ordem_por, ordem_em, atualizado_em)
+               values (%s, %s, %s, case when %s::int is not null then now() end, now())
+               on conflict (programa) do update set
+                 ordem = excluded.ordem, ordem_por = excluded.ordem_por, ordem_em = excluded.ordem_em,
+                 atualizado_em = now()""",
+            (programa, ordem, por if ordem else None, ordem),
         )
         conn.commit()
     return next((p for p in listar()["programas"] if p["programa"] == programa), {"programa": programa})

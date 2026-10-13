@@ -105,6 +105,7 @@ from app.corte import historico as historico_corte
 from app.corte import listar as listar_corte
 from app.corte import marcar as marcar_corte
 from app.corte import salvar_nri as salvar_nri_corte
+from app.corte import salvar_ordem as salvar_ordem_corte
 from app.corte import trocar_maquina as trocar_maquina_corte
 from app.croqui_corte import CampoNaoEditavel as CampoNaoEditavelCorte
 from app.croqui_corte import editar as editar_croqui_corte
@@ -640,6 +641,17 @@ def corte_nri(programa: str, pedido: dict) -> dict:
     """Grava o número do NRI do programa (anotado pelo operador ao apontar)."""
     try:
         return salvar_nri_corte(programa, pedido.get("nri"), pedido.get("por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/corte/programas/{programa}/ordem")
+def corte_ordem(programa: str, pedido: dict) -> dict:
+    """Grava o nº sequencial de corte do programa (bolinha no cartão: 1 = 1º…)."""
+    try:
+        return salvar_ordem_corte(programa, pedido.get("ordem"), pedido.get("por"))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:

@@ -748,6 +748,9 @@ export interface ProgramaCorte {
   maquina: MaquinaCorte; // trocada pelo operador ou pela regra dos algarismos
   maquina_trocada: boolean;
   maquina_por: string | null;
+  ordem: number | null; // nº sequencial de corte (1 = 1º…) — bolinha no cartão
+  ordem_por: string | null;
+  ordem_em: string | null;
 }
 
 export type MarcaCorte = "cortando" | "finalizado" | "falta_material";
