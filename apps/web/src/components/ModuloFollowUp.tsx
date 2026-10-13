@@ -248,7 +248,8 @@ export default function ModuloFollowUp({
           descricao="Pasta BACKUP RECEBIMENTO 20260828"
         />
       )}
-      {visao === "consulta" && <Consulta />}
+      {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
+      {visao === "consulta" && <Consulta inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
     </div>
   );

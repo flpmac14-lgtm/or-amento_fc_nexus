@@ -29,7 +29,7 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
-// "usinagem" (líder da Usinagem, saymon) = só Usinagem;
+// "usinagem" (líder da Usinagem, saymon) = Usinagem + Consulta (coletas e previsões);
 // "qualidade" (ana, carol, pedro, lailto) = só QUALIDADE;
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
@@ -50,7 +50,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
         : perfil === "corte"
         ? v.valor === "corte"
         : perfil === "usinagem"
-          ? v.valor === "usinagem"
+          ? v.valor === "usinagem" || v.valor === "consulta" // saymon vê as coletas/previsões (pedido do usuário)
           : perfil === "projeto"
             ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
             : v.valor === "usinagem" || v.valor === "caldeiraria"

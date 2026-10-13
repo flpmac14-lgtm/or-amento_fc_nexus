@@ -674,14 +674,20 @@ function TelaColetas({ ativos }: { ativos: ItemFollowUp[] }) {
 
 // --- Tela ----------------------------------------------------------------------
 
-export default function Consulta() {
-  const [tela, setTela] = useState<Tela>("corte");
+export default function Consulta({ inicial = "corte" }: { inicial?: Tela }) {
+  const [tela, setTela] = useState<Tela>(inicial);
   // Follow up: carrega só quando abre Pedidos/Coletas (é grande — ver
   // memória do egress do Supabase); recarrega no botão "Atualizar".
   const [ativos, setAtivos] = useState<ItemFollowUp[] | null>(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [atualizado, setAtualizado] = useState("");
+
+  // Abrindo direto em Pedidos/Coletas: já carrega o Follow up.
+  useEffect(() => {
+    if (inicial !== "corte") carregarFollowUp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só na 1ª vez
+  }, []);
 
   function carregarFollowUp() {
     setCarregando(true);
