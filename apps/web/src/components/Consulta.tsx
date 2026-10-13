@@ -55,7 +55,29 @@ function horaAgora(): string {
 
 // --- Corte -------------------------------------------------------------------
 
-function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando" | "fila" | "falta" | "cortado" | "outro" }) {
+type Destaque = "cortando" | "fila" | "falta" | "cortado" | "outro";
+
+// Situação do programa (lupa de pesquisa mostra todos, inclusive os já cortados).
+function destaqueDe(p: ProgramaCorte): Destaque {
+  if (p.finalizado_em) return "cortado";
+  if (p.cortando_em) return "cortando";
+  if (p.ordem) return "fila";
+  if (p.falta_material_em) return "falta";
+  return "outro";
+}
+
+// achou: peças que bateram com a pesquisa; comMaquina: mostra Laser/Oxicorte (na pesquisa).
+function CartaoPrograma({
+  p,
+  destaque,
+  achou,
+  comMaquina = false,
+}: {
+  p: ProgramaCorte;
+  destaque: Destaque;
+  achou?: string[];
+  comMaquina?: boolean;
+}) {
   const [aberto, setAberto] = useState(false);
   const clientes = [...new Set(p.itens.map((i) => rotuloCliente(i.cliente)).filter(Boolean))].sort();
   const macs = [...new Set(p.itens.map((i) => i.mac?.trim()).filter(Boolean))].sort();
@@ -89,6 +111,9 @@ function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">
             Programa
+            {comMaquina ? ` · ${MAQUINAS.find((m) => m.maquina === p.maquina)?.rotulo ?? ""}` : ""}
+            {destaque === "fila" && comMaquina ? ` · ${p.ordem}º da fila` : ""}
+            {destaque === "outro" ? " · a cortar" : ""}
             {destaque === "cortando" && p.cortando_por ? ` · ${p.cortando_por} desde ${new Date(p.cortando_em!).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
             {destaque === "falta" ? " · falta material" : ""}
             {destaque === "cortado" && p.finalizado_em
@@ -106,6 +131,14 @@ function CartaoPrograma({ p, destaque }: { p: ProgramaCorte; destaque: "cortando
         <span className="text-base font-extrabold leading-tight text-green-800 dark:text-cyan-300">{clientes.join(" · ")}</span>
       )}
       {macs.length > 0 && <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">MAC {macs.join(" · ")}</span>}
+      {achou && achou.length > 0 && (
+        <span className="flex flex-col gap-0.5 rounded-lg bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">
+          {achou.slice(0, 4).map((a) => (
+            <span key={a}>🔎 {a}</span>
+          ))}
+          {achou.length > 4 && <span>… e mais {achou.length - 4} peça(s)</span>}
+        </span>
+      )}
       <span className="text-xs text-stone-500 dark:text-slate-400">
         {p.manual ? "ainda não está na Croqui" : p.mps.join(" · ") || "—"}
       </span>
@@ -139,6 +172,8 @@ function TelaCorte() {
   const [recarga, setRecarga] = useState(0);
   const [agora, setAgora] = useState(0); // hora da última carga (base dos "últimos 7 dias")
   const [verTodosCortados, setVerTodosCortados] = useState<Record<string, boolean>>({});
+  // Lupa (pedido do usuário): achar pelo programa, MAC, pedido (PO) ou desenho e ver se já foi cortado.
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     let ativo = true;
@@ -165,6 +200,18 @@ function TelaCorte() {
   if (!programas)
     return <p className="py-10 text-center text-stone-500">Carregando… (o servidor pode levar até 1 minuto para acordar)</p>;
 
+  const termo = normalizarBusca(busca);
+  const resultados = termo
+    ? programas
+        .map((p) => {
+          const achou = p.itens
+            .filter((i) => [i.mac, i.pedido, i.desenho].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
+            .map((i) => [i.desenho, i.pedido && `PO ${i.pedido}`, i.mac && `MAC ${i.mac}`].filter(Boolean).join(" · "));
+          return { p, achou, peloNumero: p.programa.startsWith(termo) };
+        })
+        .filter((r) => r.peloNumero || r.achou.length > 0)
+        .sort((a, b) => Number(b.peloNumero) - Number(a.peloNumero) || Number(b.p.programa) - Number(a.p.programa))
+    : [];
   const abertos = programas.filter((p) => !p.finalizado_em);
   const limiteCortados = agora - DIAS_CORTADOS * 86400000;
   const cortadosRecentes = programas
@@ -182,7 +229,42 @@ function TelaCorte() {
           ↻ Atualizar
         </button>
       </div>
-      {MAQUINAS.map((m) => {
+      <div className="flex gap-2">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="🔎 Programa, MAC, pedido ou desenho"
+          autoComplete="off"
+          enterKeyHint="search"
+          aria-label="Pesquisar no corte"
+          className="h-14 min-w-0 flex-1 rounded-2xl border-2 border-stone-300 bg-white px-4 text-lg font-semibold text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+        />
+        {busca && (
+          <button
+            type="button"
+            onClick={() => setBusca("")}
+            aria-label="Limpar"
+            className="h-14 w-14 shrink-0 rounded-2xl border-2 border-stone-300 text-xl text-stone-600 dark:border-slate-600 dark:text-slate-300"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {termo ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-stone-700 dark:text-slate-300">
+            {resultados.length === 0
+              ? "Nenhum programa encontrado. O projetista pode ainda não ter feito o programa."
+              : resultados.length > LIMITE_RESULTADOS
+                ? `Mostrando ${LIMITE_RESULTADOS} de ${resultados.length} programas — digite mais para achar mais rápido.`
+                : `${resultados.length} programa(s)`}
+          </p>
+          {resultados.slice(0, LIMITE_RESULTADOS).map(({ p, achou }) => (
+            <CartaoPrograma key={p.programa} p={p} destaque={destaqueDe(p)} achou={achou} comMaquina />
+          ))}
+        </div>
+      ) : (
+      MAQUINAS.map((m) => {
         const daMaquina = abertos.filter((p) => p.maquina === m.maquina);
         const cortando = daMaquina.filter((p) => p.cortando_em);
         const fila = daMaquina.filter((p) => !p.cortando_em && p.ordem).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
@@ -263,7 +345,7 @@ function TelaCorte() {
             </div>
           </section>
         );
-      })}
+      }))}
     </div>
   );
 }
