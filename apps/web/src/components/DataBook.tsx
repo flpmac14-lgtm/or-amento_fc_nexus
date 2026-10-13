@@ -9,7 +9,7 @@
 // ST.BOOK pronto grava D.FINALIZAÇÃO e AUTOR(A) (app/databook.py).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { editarDatabook, historicoDatabook, listarDatabook, listarNotificacoesDatabook } from "@/lib/api";
+import { editarDatabook, historicoDatabook, listarDatabook, listarNotificacoesDatabook, urlImagemFollowUp } from "@/lib/api";
 import { CLIENTES } from "@/lib/clientes";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { normalizarBusca } from "@/lib/followUp";
@@ -225,7 +225,8 @@ export default function DataBook() {
     try {
       const atualizados = await editarDatabook(ids, alteracoes, usuario);
       const porId = new Map(atualizados.map((i) => [i.id, i]));
-      setItens((l) => (l ?? []).map((i) => porId.get(i.id) ?? i));
+      // A resposta da edição não traz a foto (vem do Follow up): mantém a que já estava.
+      setItens((l) => (l ?? []).map((i) => (porId.has(i.id) ? { ...i, ...porId.get(i.id) } : i)));
       setAviso(`✓ Salvo (${ids.length} pedido${ids.length > 1 ? "s" : ""})`);
       setTimeout(() => setAviso(""), 3000);
     } catch (e) {
@@ -438,6 +439,7 @@ export default function DataBook() {
               <th className={th}>D.Finalização</th>
               <th className={th}>Autor(a)</th>
               <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:17, sem almoço">Tempo</th>
+              <th className={th} title="Foto do Follow up pelo PO (ou, sem foto, de outro pedido com o mesmo desenho)">Foto</th>
               <th className={th}>PO</th>
               <th className={th}>ST.BOOK</th>
               <th className={th}>Falta p/ finalizar</th>
@@ -480,6 +482,30 @@ export default function DataBook() {
                   {i.finalizado_por ?? i.fazendo_por ?? i.editado_por}
                 </td>
                 <td className={`${td} font-mono`}>{textoTempo(i, agora)}</td>
+                <td className="px-1 py-0.5">
+                  {i.foto ? (
+                    <a
+                      href={urlImagemFollowUp(i.foto)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={i.foto_por === "desenho" ? "Foto de outro pedido com o mesmo desenho (Follow up)" : "Foto do Follow up (mesmo PO)"}
+                      className="relative block"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- imagem servida pelo calc_engine */}
+                      <img
+                        src={urlImagemFollowUp(i.foto)}
+                        alt=""
+                        loading="lazy"
+                        className="h-10 w-16 rounded border border-stone-200 bg-white object-contain dark:border-slate-700"
+                      />
+                      {i.foto_por === "desenho" && (
+                        <span className="absolute -right-1 -top-1 rounded bg-sky-600 px-0.5 text-[8px] font-bold text-white">DES</span>
+                      )}
+                    </a>
+                  ) : (
+                    <span className="block h-10 w-16" />
+                  )}
+                </td>
                 <td className={`${td} font-mono font-semibold text-stone-900 dark:text-white`}>
                   {i.po}
                   {i.origem === "controle_obras" && (

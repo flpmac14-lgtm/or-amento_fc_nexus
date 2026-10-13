@@ -833,6 +833,8 @@ export interface ItemDatabook {
   finalizado_por: string | null; // AUTOR(A)
   linha_planilha: number;
   origem: "importacao_planilha" | "controle_obras";
+  foto: string | null; // sha256 da 1ª foto do Follow up (pelo PO, senão pelo desenho)
+  foto_por: "po" | "desenho" | null;
   editado_em: string | null;
   editado_por: string | null;
 }

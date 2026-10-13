@@ -314,9 +314,36 @@ def _carregar(cur, ids: list[str] | None = None) -> list[dict]:
     return itens
 
 
+def _fotos_do_follow_up(cur) -> tuple[dict[str, str], dict[str, str]]:
+    """1ª foto de cada pedido do Follow up, por PO e por desenho (pedido do
+    usuário: a coluna Foto do Data book vem do Follow up pelo PO; sem foto
+    no PO, a de outro pedido com o mesmo desenho)."""
+    cur.execute(
+        """select distinct on (f.id) upper(f.po), upper(f.desenho), i.midia_sha256
+           from follow_up_imagens i join follow_up_itens f on f.id = i.item_id
+           order by f.id, i.ordem"""
+    )
+    por_po: dict[str, str] = {}
+    por_desenho: dict[str, str] = {}
+    for po, desenho, sha in cur.fetchall():
+        if po:
+            por_po.setdefault(po, sha)
+        if desenho:
+            por_desenho.setdefault(desenho, sha)
+    return por_po, por_desenho
+
+
 def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         itens = _carregar(cur)
+        por_po, por_desenho = _fotos_do_follow_up(cur)
+    for i in itens:
+        sha = por_po.get(str(i["po"]).upper())
+        i["foto_por"] = "po" if sha else None
+        if not sha and i["desenho"]:
+            sha = por_desenho.get(str(i["desenho"]).upper())
+            i["foto_por"] = "desenho" if sha else None
+        i["foto"] = sha
     return {"itens": itens, "st_book_opcoes": ST_BOOK}
 
 
