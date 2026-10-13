@@ -1,0 +1,463 @@
+"use client";
+
+// Aba Data book — pedido explícito do usuário (13/10/2026): a aba "Geral
+// Data book" de "J:\6 - PCP\Controle de databook.xlsm" passa a ser apontada
+// aqui pela Qualidade (ana, carol, pedro). É "filha" da Controle de obras:
+// as colunas D até O (PROCV pelo PO) vêm travadas e atualizam a cada 15 min;
+// a Qualidade preenche o ST.BOOK (coluna P) e a observação. Pedido ativo que
+// ainda não estava aqui entra sozinho e aparece no sininho.
+// ST.BOOK pronto grava D.FINALIZAÇÃO e AUTOR(A) (app/databook.py).
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { editarDatabook, listarDatabook, listarNotificacoesDatabook } from "@/lib/api";
+import { CLIENTES } from "@/lib/clientes";
+import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { normalizarBusca } from "@/lib/followUp";
+import { emailParaLogin } from "@/lib/loginInterno";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import type { ItemDatabook } from "@/lib/types";
+import FollowUpSino from "@/components/FollowUpSino";
+import { IconeCadeado } from "@/components/FollowUpEdicao";
+
+const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
+const PAGINA = 200;
+const SEM_STATUS = "__sem__";
+
+// Cores do ST.BOOK (formatação condicional da planilha: "vazio" e "Pronto aguardando coleta" destacados).
+const COR_ST_BOOK: Record<string, string> = {
+  PRONTO: "bg-green-600 text-white",
+  FAZENDO: "bg-amber-400 text-stone-900",
+  "SEM BOOK": "bg-stone-500 text-white",
+  Vazio: "bg-red-600 text-white",
+  "Pronto Aguardando Coleta": "bg-sky-600 text-white",
+};
+
+// Situação do pedido na Controle de obras (coluna E).
+const ROTULO_ST: Record<string, string> = { A: "Ativo", E: "Entregue", C: "Cancelado" };
+
+function quando(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// Book pendente (como os contadores Y1:AE1 da planilha): pedido entregue sem book começado.
+function pendente(i: ItemDatabook): boolean {
+  return i.st === "E" && (!i.st_book || i.st_book === "Vazio");
+}
+
+function CelulaObs({ item, onSalvar }: { item: ItemDatabook; onSalvar: (valor: string) => Promise<void> }) {
+  const [valor, setValor] = useState(item.observacao ?? "");
+  const [de, setDe] = useState(item.observacao ?? "");
+  const [salvando, setSalvando] = useState(false);
+  if (de !== (item.observacao ?? "")) {
+    setDe(item.observacao ?? "");
+    setValor(item.observacao ?? "");
+  }
+  async function salvar() {
+    if (valor.trim() === (item.observacao ?? "").trim()) return;
+    setSalvando(true);
+    try {
+      await onSalvar(valor);
+    } finally {
+      setSalvando(false);
+    }
+  }
+  return (
+    <input
+      value={valor}
+      onChange={(e) => setValor(e.target.value)}
+      onBlur={salvar}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setValor(item.observacao ?? "");
+      }}
+      title={valor}
+      placeholder="—"
+      className={`w-56 rounded border bg-transparent px-1.5 py-1 text-xs outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
+        salvando ? "border-amber-400" : "border-transparent hover:border-stone-300 dark:hover:border-slate-600"
+      }`}
+    />
+  );
+}
+
+export default function DataBook() {
+  const [itens, setItens] = useState<ItemDatabook[] | null>(null);
+  const [opcoes, setOpcoes] = useState<string[]>([]);
+  const [erro, setErro] = useState("");
+  const [usuario, setUsuario] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [cliente, setCliente] = useState("");
+  const [st, setSt] = useState("");
+  const [stBook, setStBook] = useState(""); // "" = todos, SEM_STATUS, "pendente" ou uma opção
+  const [limite, setLimite] = useState(PAGINA);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [aviso, setAviso] = useState("");
+  const [destaque, setDestaque] = useState<string | null>(null);
+  const linhaDestaque = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    function buscar() {
+      listarDatabook()
+        .then((r) => {
+          if (!ativo) return;
+          setItens(r.itens);
+          setOpcoes(r.st_book_opcoes);
+          setErro("");
+        })
+        .catch((e: Error) => ativo && setErro(e.message));
+    }
+    buscar();
+    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    criarClienteSupabaseNavegador()
+      .auth.getUser()
+      .then(({ data }) => ativo && data.user?.email && setUsuario(emailParaLogin(data.user.email)));
+    return () => {
+      ativo = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    linhaDestaque.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [destaque]);
+
+  const lista = useMemo(() => itens ?? [], [itens]);
+  const clientes = useMemo(
+    () => [...new Set(lista.map((i) => i.cliente ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [lista],
+  );
+  // Contadores por cliente (como Y1:AE1): book pendente = entregue e Vazio / sem status.
+  const pendentesPorCliente = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of lista) if (pendente(i)) m.set(i.cliente ?? "—", (m.get(i.cliente ?? "—") ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [lista]);
+  const contagemStBook = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of lista) m.set(i.st_book ?? SEM_STATUS, (m.get(i.st_book ?? SEM_STATUS) ?? 0) + 1);
+    return m;
+  }, [lista]);
+
+  const filtrados = useMemo(() => {
+    const termo = normalizarBusca(busca);
+    return lista
+      .filter((i) => {
+        if (cliente && i.cliente !== cliente) return false;
+        if (st && i.st !== st) return false;
+        if (stBook === "pendente" ? !pendente(i) : stBook === SEM_STATUS ? !!i.st_book : stBook && i.st_book !== stBook)
+          return false;
+        if (termo && ![i.po, i.mac, i.desenho, i.descricao, i.nf].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
+          return false;
+        return true;
+      })
+      .sort((a, b) => b.linha_planilha - a.linha_planilha); // mais novos (fim da planilha) primeiro
+  }, [lista, busca, cliente, st, stBook]);
+
+  async function salvar(ids: string[], alteracoes: Record<string, string | null>) {
+    setErro("");
+    try {
+      const atualizados = await editarDatabook(ids, alteracoes, usuario);
+      const porId = new Map(atualizados.map((i) => [i.id, i]));
+      setItens((l) => (l ?? []).map((i) => porId.get(i.id) ?? i));
+      setAviso(`✓ Salvo (${ids.length} pedido${ids.length > 1 ? "s" : ""})`);
+      setTimeout(() => setAviso(""), 3000);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  function alternar(id: string) {
+    setSelecionados((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  if (erro && !itens) return <p className="rounded-lg bg-red-50 p-4 text-red-700 dark:bg-red-950/40 dark:text-red-300">{erro}</p>;
+  if (!itens) return <p className="py-10 text-center text-stone-500">Carregando… (o servidor pode levar até 1 minuto para acordar)</p>;
+
+  const visiveis = filtrados.slice(0, limite);
+  const th = "whitespace-nowrap border-b border-stone-200 px-2 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:border-slate-700 dark:text-slate-400";
+  const td = "whitespace-nowrap px-2 py-1.5 text-xs text-stone-700 dark:text-slate-300";
+  const classeFiltro =
+    "rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-stone-900 dark:text-white">Data book</h2>
+          <p className="mt-0.5 max-w-3xl text-sm text-stone-600 dark:text-slate-400">
+            Filha da <strong>Controle de obras</strong>: as colunas com <IconeCadeado /> vêm pelo PO e atualizam a cada 15
+            min; pedidos ativos novos entram sozinhos (sininho). Vocês preenchem o <strong>ST.BOOK</strong> e a{" "}
+            <strong>Obs.</strong> — salva na hora. ST.BOOK pronto grava a D.Finalização e o Autor.
+          </p>
+        </div>
+        <FollowUpSino
+          carregar={listarNotificacoesDatabook}
+          chaveVisto="fcnexus.databook.notificacoes.vistoAte"
+          titulo="Data book — pedidos da Controle de obras"
+          dica="Pedidos ativos novos que entraram no Data book e pedidos que saíram de ativo (atualiza a cada 15 min)"
+          vazio="Nenhum ainda. Aparecem aqui os pedidos ativos novos e os encerrados a cada atualização (15 min)."
+          onAbrirItem={(id) => {
+            const item = itens.find((i) => i.id === id);
+            if (!item) return;
+            setBusca(item.po);
+            setCliente("");
+            setSt("");
+            setStBook("");
+            setDestaque(id);
+          }}
+        />
+      </div>
+
+      {/* Book pendente por cliente — pedido entregue com ST.BOOK vazio (como os contadores da planilha). */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setStBook(stBook === "pendente" ? "" : "pendente")}
+          title="Pedidos entregues (ST = E) com ST.BOOK Vazio ou sem status"
+          className={`rounded-lg border px-3 py-1.5 text-left ${
+            stBook === "pendente" && !cliente
+              ? "border-red-600 bg-red-600 text-white"
+              : "border-red-300 bg-white text-red-700 dark:border-red-800 dark:bg-slate-900 dark:text-red-300"
+          }`}
+        >
+          <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-80">Book pendente</span>
+          <span className="font-mono text-lg font-bold">{pendentesPorCliente.reduce((s, [, n]) => s + n, 0)}</span>
+        </button>
+        {pendentesPorCliente.map(([c, n]) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => {
+              const ativo = stBook === "pendente" && cliente === c;
+              setStBook(ativo ? "" : "pendente");
+              setCliente(ativo || c === "—" ? "" : c);
+            }}
+            title={`${n} book(s) pendente(s) de ${CLIENTES[c] ?? c}`}
+            className={`rounded-lg border px-3 py-1.5 text-left ${
+              stBook === "pendente" && cliente === c
+                ? "border-red-600 bg-red-600 text-white"
+                : "border-stone-300 bg-white text-stone-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            }`}
+          >
+            <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-80">{c}</span>
+            <span className="font-mono text-lg font-bold">{n}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={busca}
+          onChange={(e) => {
+            setBusca(e.target.value);
+            setLimite(PAGINA);
+          }}
+          placeholder="🔎 PO, MAC, desenho, descrição ou NF"
+          className={`${classeFiltro} w-72`}
+        />
+        <select value={cliente} onChange={(e) => setCliente(e.target.value)} className={classeFiltro} aria-label="Cliente">
+          <option value="">Todos os clientes</option>
+          {clientes.map((c) => (
+            <option key={c} value={c}>
+              {c}
+              {CLIENTES[c] ? ` — ${CLIENTES[c]}` : ""}
+            </option>
+          ))}
+        </select>
+        <select value={st} onChange={(e) => setSt(e.target.value)} className={classeFiltro} aria-label="Status do pedido">
+          <option value="">Status: todos</option>
+          <option value="A">A — Ativo</option>
+          <option value="E">E — Entregue</option>
+          <option value="C">C — Cancelado</option>
+        </select>
+        {(busca || cliente || st || stBook) && (
+          <button
+            type="button"
+            onClick={() => {
+              setBusca("");
+              setCliente("");
+              setSt("");
+              setStBook("");
+              setDestaque(null);
+            }}
+            className="rounded-lg px-2 py-1.5 text-sm text-stone-500 hover:bg-stone-100 dark:text-slate-400 dark:hover:bg-slate-800"
+          >
+            ✕ Limpar filtros
+          </button>
+        )}
+        {aviso && <span className="text-sm font-semibold text-green-700 dark:text-green-400">{aviso}</span>}
+      </div>
+
+      {/* ST.BOOK: filtro com a contagem de cada um. */}
+      <div className="flex flex-wrap gap-1.5">
+        {[["", "Todos", lista.length] as const, ...opcoes.map((o) => [o, o, contagemStBook.get(o) ?? 0] as const), [SEM_STATUS, "Sem ST.BOOK", contagemStBook.get(SEM_STATUS) ?? 0] as const].map(
+          ([valor, rotulo, n]) => (
+            <button
+              key={valor || "todos"}
+              type="button"
+              onClick={() => {
+                setStBook(valor);
+                setLimite(PAGINA);
+              }}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                stBook === valor
+                  ? `border-transparent ${COR_ST_BOOK[valor] ?? "bg-green-600 text-white dark:bg-cyan-600"}`
+                  : "border-stone-300 text-stone-700 dark:border-slate-600 dark:text-slate-300"
+              }`}
+            >
+              {rotulo} ({formatarNumero(n, 0)})
+            </button>
+          ),
+        )}
+      </div>
+
+      {selecionados.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-green-600 bg-green-50 px-3 py-2 text-sm dark:border-cyan-600 dark:bg-cyan-950/40">
+          <strong>{selecionados.size} selecionado(s)</strong> — ST.BOOK pra todos:
+          {opcoes.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => salvar([...selecionados], { st_book: o }).then(() => setSelecionados(new Set()))}
+              className={`rounded px-2 py-1 text-xs font-bold ${COR_ST_BOOK[o] ?? "bg-stone-200"}`}
+            >
+              {o}
+            </button>
+          ))}
+          <button type="button" onClick={() => setSelecionados(new Set())} className="ml-auto text-xs text-stone-500 dark:text-slate-400">
+            Desmarcar
+          </button>
+        </div>
+      )}
+
+      {erro && (
+        <p className="rounded-lg border border-red-300 bg-red-50 p-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+          {erro}
+        </p>
+      )}
+
+      <p className="text-xs text-stone-500 dark:text-slate-400">
+        {formatarNumero(filtrados.length, 0)} pedido(s){filtrados.length > visiveis.length ? ` — mostrando ${visiveis.length}` : ""} · mais
+        novos primeiro
+      </p>
+      <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900/40">
+        <table className="w-full border-collapse">
+          <thead className="bg-stone-50 dark:bg-slate-900">
+            <tr>
+              <th className={th}>
+                <input
+                  type="checkbox"
+                  aria-label="Selecionar todos os mostrados"
+                  checked={visiveis.length > 0 && visiveis.every((i) => selecionados.has(i.id))}
+                  onChange={(e) =>
+                    setSelecionados(e.target.checked ? new Set([...selecionados, ...visiveis.map((i) => i.id)]) : new Set())
+                  }
+                />
+              </th>
+              <th className={th}>D.Finalização</th>
+              <th className={th}>Autor(a)</th>
+              <th className={th}>PO</th>
+              <th className={th}>ST.BOOK</th>
+              <th className={th}>Obs.</th>
+              <th className={th}>Cliente <IconeCadeado /></th>
+              <th className={th}>St</th>
+              <th className={th}>Qtd</th>
+              <th className={th}>Desenho</th>
+              <th className={th}>Descrição</th>
+              <th className={th}>Rev</th>
+              <th className={th}>MAC</th>
+              <th className={th}>Cor-1</th>
+              <th className={th}>Cor-2</th>
+              <th className={th}>Plano de pintura</th>
+              <th className={th}>Prazo</th>
+              <th className={th}>NF</th>
+              <th className={th}>Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visiveis.map((i) => (
+              <tr
+                key={i.id}
+                ref={destaque === i.id ? linhaDestaque : undefined}
+                className={`border-b border-stone-100 dark:border-slate-800 ${
+                  destaque === i.id ? "bg-yellow-100 dark:bg-yellow-900/30" : selecionados.has(i.id) ? "bg-green-50 dark:bg-cyan-950/20" : ""
+                }`}
+              >
+                <td className={td}>
+                  <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => alternar(i.id)} aria-label={`Selecionar ${i.po}`} />
+                </td>
+                <td className={td}>{quando(i.finalizado_em)}</td>
+                <td className={td}>{i.finalizado_por}</td>
+                <td className={`${td} font-mono font-semibold text-stone-900 dark:text-white`}>
+                  {i.po}
+                  {i.origem === "controle_obras" && (
+                    <span className="ml-1 rounded bg-green-100 px-1 text-[9px] font-bold text-green-800 dark:bg-green-900/50 dark:text-green-300" title="Entrou sozinho da Controle de obras">
+                      NOVO
+                    </span>
+                  )}
+                </td>
+                <td className={td}>
+                  <select
+                    value={i.st_book ?? ""}
+                    onChange={(e) => salvar([i.id], { st_book: e.target.value || null })}
+                    title={i.editado_por ? `Última edição: ${i.editado_por} · ${quando(i.editado_em)}` : undefined}
+                    className={`rounded px-1.5 py-1 text-xs font-bold outline-none ${
+                      i.st_book ? (COR_ST_BOOK[i.st_book] ?? "bg-stone-200 text-stone-800") : "border border-dashed border-stone-300 bg-transparent text-stone-400 dark:border-slate-600"
+                    }`}
+                  >
+                    <option value="">—</option>
+                    {opcoes.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className={td}>
+                  <CelulaObs item={i} onSalvar={(v) => salvar([i.id], { observacao: v || null })} />
+                </td>
+                <td className={td} title={i.cliente ? CLIENTES[i.cliente] : undefined}>{i.cliente}</td>
+                <td className={td} title={i.st ? ROTULO_ST[i.st] : undefined}>
+                  <span
+                    className={`rounded px-1.5 py-0.5 font-bold ${
+                      i.st === "A" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" : i.st === "C" ? "bg-stone-200 text-stone-600 line-through dark:bg-slate-700" : ""
+                    }`}
+                  >
+                    {i.st}
+                  </span>
+                </td>
+                <td className={`${td} text-right font-mono`}>{i.quantidade != null ? formatarNumero(i.quantidade, 0) : ""}</td>
+                <td className={`${td} font-mono`}>{i.desenho}</td>
+                <td className={`${td} max-w-[16rem] truncate`} title={i.descricao ?? undefined}>{i.descricao}</td>
+                <td className={td}>{i.revisao}</td>
+                <td className={`${td} font-mono`}>{i.mac}</td>
+                <td className={`${td} max-w-[8rem] truncate`} title={i.cor1 ?? undefined}>{i.cor1}</td>
+                <td className={`${td} max-w-[8rem] truncate`} title={i.cor2 ?? undefined}>{i.cor2}</td>
+                <td className={`${td} max-w-[14rem] truncate`} title={i.plano_pintura ?? undefined}>{i.plano_pintura}</td>
+                <td className={`${td} font-mono`}>{i.prazo_contratual ? formatarDataBr(i.prazo_contratual) : ""}</td>
+                <td className={`${td} font-mono`}>{i.nf}</td>
+                <td className={`${td} font-mono`}>{i.meta}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtrados.length === 0 && <p className="py-8 text-center text-sm text-stone-500">Nenhum pedido com esses filtros.</p>}
+      </div>
+      {filtrados.length > visiveis.length && (
+        <button
+          type="button"
+          onClick={() => setLimite((l) => l + PAGINA)}
+          className="mx-auto rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 dark:border-slate-600 dark:text-slate-300"
+        >
+          Mostrar mais {Math.min(PAGINA, filtrados.length - visiveis.length)} ▾
+        </button>
+      )}
+    </div>
+  );
+}

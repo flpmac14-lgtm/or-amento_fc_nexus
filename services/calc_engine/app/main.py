@@ -114,6 +114,10 @@ from app.croqui_corte import editar_tempos as editar_tempos_croqui_corte
 from app.croqui_corte import excluir_tempos as excluir_tempos_croqui_corte
 from app.croqui_corte import listar as listar_croqui_corte
 from app.croqui_corte import listar_notificacoes as listar_notificacoes_croqui
+from app.databook import CampoNaoEditavel as CampoNaoEditavelDatabook
+from app.databook import editar_lote as editar_lote_databook
+from app.databook import listar as listar_databook
+from app.databook import listar_notificacoes as listar_notificacoes_databook
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -676,6 +680,37 @@ def croqui_corte_notificacoes(limite: int = 200) -> dict:
         return {"notificacoes": listar_notificacoes_croqui(limite)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/databook")
+def databook_listar() -> dict:
+    """Data book (filha da Controle de obras) — ver app/databook.py."""
+    try:
+        return listar_databook()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/databook/notificacoes")
+def databook_notificacoes(limite: int = 200) -> dict:
+    try:
+        return {"notificacoes": listar_notificacoes_databook(limite)}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/databook/itens/lote")
+def databook_editar_lote(pedido: dict) -> dict:
+    """ST.BOOK / observação numa ou em várias linhas (ST.BOOK pronto grava D.FINALIZAÇÃO e AUTOR)."""
+    try:
+        itens = editar_lote_databook(pedido.get("ids") or [], pedido.get("alteracoes") or {}, pedido.get("editado_por"))
+    except CampoNaoEditavelDatabook as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"itens": itens}
 
 
 @app.post("/croqui-corte/itens/lote")

@@ -26,6 +26,7 @@ warnings.filterwarnings("ignore", module="openpyxl")
 
 from app.controle_obras import registrar_erro, sincronizar  # noqa: E402
 from app.follow_up_mae import propagar  # noqa: E402
+from app.databook import propagar as propagar_databook  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
@@ -60,6 +61,16 @@ def main() -> int:
                       f"{p['atualizados']} atualizado(s) pela mãe")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Follow up (mãe -> filha) - {type(e).__name__}: {e}")
+            return 1
+        # Data book também é filha (pedido do usuário, 13/10/2026): fixas da
+        # mãe + pedidos ST = A que ainda não estão lá (vão pro sininho).
+        try:
+            d = propagar_databook(forcar="--forcar" in sys.argv)
+            if d.get("atualizados") or d.get("novos"):
+                print(f"{agora} Data book - {d['novos']} pedido(s) novo(s), {d.get('encerrados', 0)} encerrado(s), "
+                      f"{d['atualizados']} atualizado(s) pela mãe")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO no Data book (mãe -> filha) - {type(e).__name__}: {e}")
             return 1
         # Fotos da aba Gerencia que ainda faltam nos pedidos (depois da
         # propagação, pra pedido novo já receber a foto). Só lê se o arquivo mudou.

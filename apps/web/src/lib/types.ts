@@ -805,3 +805,31 @@ export interface ItemFollowUpCompleto {
     linha_controle_obras: number | null;
   };
 }
+
+// Data book (filha da Controle de obras) — ver services/calc_engine/app/databook.py.
+// Fixas (PROCV pelo PO): cliente..meta. Editáveis: st_book, observacao.
+export interface ItemDatabook {
+  id: string;
+  po: string;
+  cliente: string | null;
+  st: string | null;
+  quantidade: number | null;
+  desenho: string | null;
+  descricao: string | null;
+  revisao: string | null;
+  mac: string | null;
+  cor1: string | null;
+  cor2: string | null;
+  plano_pintura: string | null;
+  prazo_contratual: string | null;
+  nf: string | null;
+  meta: string | null;
+  st_book: string | null;
+  observacao: string | null;
+  finalizado_em: string | null; // D.FINALIZAÇÃO (book pronto)
+  finalizado_por: string | null; // AUTOR(A)
+  linha_planilha: number;
+  origem: "importacao_planilha" | "controle_obras";
+  editado_em: string | null;
+  editado_por: string | null;
+}

@@ -16,6 +16,7 @@ import type {
   HistoricoCorte,
   ProgramaCorte,
   ItemCroquiCorte,
+  ItemDatabook,
   RespostaCroquiCorte,
   ItemPedidoWeir,
   ItemContingenciamento,
@@ -1192,4 +1193,44 @@ export async function buscarItemFollowUpCompleto(itemId: string): Promise<ItemFo
   const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/itens/${itemId}/completo`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o item");
   return resposta.json();
+}
+
+// Data book (filha da Controle de obras) — ver app/databook.py.
+export async function listarDatabook(): Promise<{ itens: ItemDatabook[]; st_book_opcoes: string[] }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar o Data book (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
+// ST.BOOK / observação numa ou em várias linhas.
+export async function editarDatabook(
+  ids: string[],
+  alteracoes: Record<string, string | null>,
+  editadoPor: string | null,
+): Promise<ItemDatabook[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/lote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, alteracoes, editado_por: editadoPor }),
+  });
+  if (!resposta.ok) {
+    let detalhe = "";
+    try {
+      detalhe = (await resposta.json()).detail ?? "";
+    } catch {
+      detalhe = await resposta.text().catch(() => "");
+    }
+    throw new Error(detalhe || `Falha ao salvar (${resposta.status}).`);
+  }
+  return (await resposta.json()).itens;
+}
+
+// Sininho do Data book — mesmo formato do sininho do Follow up.
+export async function listarNotificacoesDatabook(): Promise<NotificacaoFollowUp[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/notificacoes`);
+  if (!resposta.ok) throw new Error(`Falha ao carregar as notificações (${resposta.status}).`);
+  return (await resposta.json()).notificacoes;
 }

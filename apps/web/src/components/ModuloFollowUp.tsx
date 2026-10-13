@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
 import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
+import DataBook from "@/components/DataBook";
 import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
@@ -249,6 +250,7 @@ export default function ModuloFollowUp({
         />
       )}
       {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
+      {visao === "databook" && <DataBook />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
       {visao === "consulta" && <Consulta key="consulta" inicial={perfil === "usinagem" ? "coletas" : "corte"} />}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
