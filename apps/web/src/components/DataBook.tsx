@@ -226,7 +226,7 @@ export default function DataBook() {
                 : stBook && i.st_book !== stBook
         )
           return false;
-        if (termo && ![i.po, i.mac, i.desenho, i.descricao, i.nf, i.falta].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
+        if (termo && ![i.po, i.mac, i.desenho, i.descricao, i.nf, i.falta, i.st_book, i.observacao].some((v) => normalizarBusca(String(v ?? "")).includes(termo)))
           return false;
         return true;
       })
@@ -404,7 +404,7 @@ export default function DataBook() {
             setBusca(e.target.value);
             setLimite(PAGINA);
           }}
-          placeholder="🔎 PO, MAC, desenho, descrição ou NF"
+          placeholder="🔎 PO, MAC, desenho, descrição, NF ou ST.BOOK"
           className={`${classeFiltro} w-72`}
         />
         <select value={cliente} onChange={(e) => setCliente(e.target.value)} className={classeFiltro} aria-label="Cliente">
@@ -415,6 +415,26 @@ export default function DataBook() {
               {CLIENTES[c] ? ` — ${CLIENTES[c]}` : ""}
             </option>
           ))}
+        </select>
+        {/* Todos os ST.BOOK na barra de filtro (pedido do usuário) — mesmo filtro dos botões abaixo. */}
+        <select
+          value={stBook}
+          onChange={(e) => {
+            setStBook(e.target.value);
+            setLimite(PAGINA);
+          }}
+          className={classeFiltro}
+          aria-label="ST.BOOK"
+        >
+          <option value="">ST.BOOK: todos</option>
+          {opcoes.map((o) => (
+            <option key={o} value={o}>
+              {o} ({formatarNumero(contagemStBook.get(o) ?? 0, 0)})
+            </option>
+          ))}
+          <option value={SEM_STATUS}>Sem ST.BOOK ({formatarNumero(contagemStBook.get(SEM_STATUS) ?? 0, 0)})</option>
+          <option value={COM_FALTA}>⚠ Com falta p/ finalizar ({formatarNumero(contagemStBook.get(COM_FALTA) ?? 0, 0)})</option>
+          <option value="pendente">Book pendente (entregue sem book)</option>
         </select>
         <select value={st} onChange={(e) => setSt(e.target.value)} className={classeFiltro} aria-label="Status do pedido">
           <option value="">Status: todos</option>
