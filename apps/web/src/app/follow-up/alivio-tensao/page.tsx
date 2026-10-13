@@ -5,7 +5,8 @@
 // têm "alívio de tensão" anotado na Obs. Felipe/Marcelo, agrupados por MAC.
 // Folha A4 paisagem pra imprimir / salvar em PDF (Ctrl+P). Fica sob
 // /follow-up, então a conta restrita também acessa.
-// Parâmetros: ?cliente=W1 (vazio = todos)&fracionado=1.
+// Parâmetros: ?cliente=W1 ou cliente=A1,W1 (2+ clientes juntos — o alívio é
+// feito de uma vez; vazio = todos)&fracionado=1.
 // Envio fracionado: igual à coleta, a Qtd fica editável só neste relatório;
 // Qtd 0 tira o pedido da folha.
 
@@ -41,9 +42,15 @@ function agrupar(itens: ItemFollowUp[]): Grupo[] {
   return grupos.sort((a, b) => (!a.mac ? 1 : !b.mac ? -1 : a.mac.localeCompare(b.mac, "pt-BR", { numeric: true })));
 }
 
+function clientesDoGrupo(g: Grupo): string[] {
+  return [...new Set(g.itens.map((i) => i.cliente ?? "").filter(Boolean))].sort();
+}
+
 function Relatorio() {
   const params = useSearchParams();
   const cliente = params.get("cliente") ?? "";
+  const clientes = cliente.split(",").map((c) => c.trim()).filter(Boolean);
+  const rotuloClientes = clientes.join(" + ");
   const [itens, setItens] = useState<ItemFollowUp[] | null>(null);
   const [erro, setErro] = useState("");
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
@@ -51,12 +58,13 @@ function Relatorio() {
   const [qtdEnvio, setQtdEnvio] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    document.title = `Alívio de tensão ${new Date().toLocaleDateString("pt-BR").replace(/\//g, ".")}${cliente ? ` - ${cliente}` : ""}`; // nome sugerido do PDF
+    const lista = cliente.split(",").map((c) => c.trim()).filter(Boolean);
+    document.title = `Alívio de tensão ${new Date().toLocaleDateString("pt-BR").replace(/\//g, ".")}${lista.length ? ` - ${lista.join(" + ")}` : ""}`; // nome sugerido do PDF
     let ativo = true;
     listarFollowUp()
       .then((r) => {
         if (!ativo) return;
-        setItens(r.itens.filter((i) => temAlivioTensao(i) && (!cliente || i.cliente === cliente)));
+        setItens(r.itens.filter((i) => temAlivioTensao(i) && (!lista.length || lista.includes(i.cliente ?? ""))));
       })
       .catch((e: Error) => ativo && setErro(e.message));
     return () => {
@@ -123,7 +131,12 @@ function Relatorio() {
             <p className="text-xs font-semibold uppercase tracking-widest text-green-800">FC Nexus · Follow up de obras</p>
             <h1 className="text-2xl font-bold">
               Alívio de tensão
-              {cliente && <span className="font-normal text-stone-600"> — Cliente {cliente}</span>}
+              {clientes.length > 0 && (
+                <span className="font-normal text-stone-600">
+                  {" "}
+                  — {clientes.length > 1 ? "Clientes" : "Cliente"} {rotuloClientes}
+                </span>
+              )}
               {algumParcial && <span className="font-normal text-amber-700"> (parcial)</span>}
             </h1>
           </div>
@@ -145,7 +158,7 @@ function Relatorio() {
 
         {itens.length === 0 ? (
           <p className="py-10 text-center text-stone-500">
-            Nenhum pedido{cliente ? ` do cliente ${cliente}` : ""} com “alívio de tensão” na Obs. Felipe/Marcelo.
+            Nenhum pedido{clientes.length ? ` de ${rotuloClientes}` : ""} com “alívio de tensão” na Obs. Felipe/Marcelo.
           </p>
         ) : (
           <table className="w-full border-collapse text-[10px]">
@@ -165,6 +178,10 @@ function Relatorio() {
                   <tr className="break-after-avoid bg-green-50">
                     <td colSpan={COLUNAS.length} className="border border-stone-400 px-2 py-1 text-[11px]">
                       <strong>MAC:</strong> <strong className="font-mono">{g.mac || "—"}</strong>
+                      {/* Com 2+ clientes juntos, mostra de quem é cada MAC. */}
+                      {clientesDoGrupo(g).length > 0 && (
+                        <span className="ml-2 text-stone-700">· Cliente {clientesDoGrupo(g).join(" / ")}</span>
+                      )}
                       <span className="float-right text-stone-600">
                         {doGrupo.length} pedido(s) · {formatarNumero(doGrupo.reduce((s, i) => s + qtd(i), 0), 0)} peça(s) ·{" "}
                         {formatarNumero(doGrupo.reduce((s, i) => s + pesoEnvio(i), 0), 2)} kg

@@ -2,7 +2,7 @@
 
 // Janela "Relatório de alívio de tensão" — pedido explícito do usuário: no
 // mesmo padrão do relatório de coleta, com os pedidos que têm "alívio de
-// tensão" anotado na Obs. Felipe/Marcelo. Pergunta o cliente e abre o
+// tensão" anotado na Obs. Felipe/Marcelo. Pergunta os clientes (1 ou mais) e abre o
 // relatório em A4 paisagem (app/follow-up/alivio-tensao/page.tsx).
 
 import { useEffect, useMemo, useState } from "react";
@@ -20,7 +20,15 @@ export default function FollowUpRelatorioAlivio({ itens, onFechar }: { itens: It
     for (const i of comAlivio) if (i.cliente) m.set(i.cliente, (m.get(i.cliente) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "pt-BR"));
   }, [comAlivio]);
-  const [cliente, setCliente] = useState(() => (clientes.length === 1 ? clientes[0][0] : ""));
+  // Pedido do usuário: o alívio é feito de uma vez, então dá pra juntar 2+
+  // clientes no mesmo relatório. Nenhum marcado = todos.
+  const [marcados, setMarcados] = useState<string[]>([]);
+  const total = marcados.length
+    ? clientes.filter(([c]) => marcados.includes(c)).reduce((s, [, n]) => s + n, 0)
+    : comAlivio.length;
+  function alternar(c: string) {
+    setMarcados((m) => (m.includes(c) ? m.filter((x) => x !== c) : [...m, c]));
+  }
 
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
@@ -33,7 +41,7 @@ export default function FollowUpRelatorioAlivio({ itens, onFechar }: { itens: It
   // fracionado: o relatório já abre com a Qtd editável (envio parcial).
   function gerar(fracionado = false) {
     const qs = new URLSearchParams();
-    if (cliente) qs.set("cliente", cliente);
+    if (marcados.length) qs.set("cliente", [...marcados].sort((a, b) => a.localeCompare(b, "pt-BR")).join(","));
     if (fracionado) qs.set("fracionado", "1");
     window.open(`/follow-up/alivio-tensao?${qs}`, "_blank");
     onFechar();
@@ -51,23 +59,48 @@ export default function FollowUpRelatorioAlivio({ itens, onFechar }: { itens: It
             Pedidos com “alívio de tensão” na Obs. Felipe/Marcelo, agrupados por MAC — folha A4 paisagem.
           </p>
         </div>
-        <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
-          Cliente
+        <div className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          Clientes <span>(marque um ou mais para juntar no mesmo relatório; nenhum marcado = todos)</span>
           {comAlivio.length > 0 ? (
-            <select value={cliente} onChange={(e) => setCliente(e.target.value)} className={classeCampo}>
-              <option value="">Todos os clientes — {comAlivio.length} pedido(s)</option>
+            <div className={`${classeCampo} flex max-h-60 flex-col gap-0.5 overflow-y-auto`}>
+              <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-stone-100 dark:hover:bg-slate-800">
+                <input
+                  type="checkbox"
+                  checked={marcados.length === 0}
+                  onChange={() => setMarcados([])}
+                  className="h-4 w-4 accent-green-600 dark:accent-cyan-500"
+                />
+                <span className="font-semibold">Todos os clientes</span>
+                <span className="ml-auto text-stone-500 dark:text-slate-400">{comAlivio.length} pedido(s)</span>
+              </label>
               {clientes.map(([c, n]) => (
-                <option key={c} value={c}>
-                  {c} — {n} pedido(s)
-                </option>
+                <label
+                  key={c}
+                  className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-stone-100 dark:hover:bg-slate-800"
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcados.includes(c)}
+                    onChange={() => alternar(c)}
+                    className="h-4 w-4 accent-green-600 dark:accent-cyan-500"
+                  />
+                  <span>{c}</span>
+                  <span className="ml-auto text-stone-500 dark:text-slate-400">{n} pedido(s)</span>
+                </label>
               ))}
-            </select>
+            </div>
           ) : (
             <span className="text-sm text-stone-600 dark:text-slate-400">
               Nenhum pedido com “alívio de tensão” na Obs. Felipe/Marcelo.
             </span>
           )}
-        </label>
+          {comAlivio.length > 0 && (
+            <span className="text-right font-semibold text-stone-700 dark:text-slate-300">
+              {marcados.length ? `${marcados.length} cliente(s) · ` : ""}
+              {total} pedido(s) no relatório
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
