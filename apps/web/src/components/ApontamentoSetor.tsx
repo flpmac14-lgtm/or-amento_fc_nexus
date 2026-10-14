@@ -27,9 +27,11 @@ import {
   buscarHistoricoApontamento,
   criarServicoInterno,
   listarFollowUp,
+  salvarLoteSetor,
   urlImagemFollowUp,
   type Apontamento,
   type DadosApontamento,
+  type LoteSetor,
   type ServicoInterno,
   type StatusApontamento,
 } from "@/lib/api";
@@ -126,6 +128,10 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
   const [pausarOutros, setPausarOutros] = useState(true);
   const [novaDescricao, setNovaDescricao] = useState("");
   const [novaQtd, setNovaQtd] = useState("");
+  // Lote (Pintura — pedido do usuário, 14/10/2026): igual ao NRI do Corte, um por pedido.
+  const [rotuloLote, setRotuloLote] = useState<string | null>(null);
+  const [lotes, setLotes] = useState<Record<string, LoteSetor>>({});
+  const [lote, setLote] = useState("");
 
   const opcao = useMemo(() => new Map(config.opcoes.map((o) => [o.status, o])), [config]);
 
@@ -139,6 +145,8 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
           setAtuais(a.atuais);
           setServicos(a.servicos ?? []);
           setOperadores(a.operadores);
+          setRotuloLote(a.lote ?? null);
+          setLotes(a.lotes ?? {});
           setErro("");
         })
         .catch((e: Error) => ativo && setErro(e.message))
@@ -257,6 +265,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
     setPausarOutros(true);
     setNovaDescricao("");
     setNovaQtd("");
+    setLote(novoAlvo.tipo === "pedido" ? (lotes[novoAlvo.id]?.lote ?? "") : "");
   }
 
   function fechar() {
@@ -274,7 +283,12 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
 
   const qtdNova = novaQtd.trim() ? Number(novaQtd) : null;
   const qtdInvalida = qtdNova !== null && (!Number.isInteger(qtdNova) || qtdNova <= 0);
-  const falta = !escolha
+  const loteNovo = lote.trim().replace(/\s+/g, " ").toUpperCase();
+  const loteMudou = !!aberto && !!rotuloLote && loteNovo !== (lotes[aberto.id]?.lote ?? "");
+  // Só o lote mudou: dá pra salvar sem marcar status (como o NRI no Corte).
+  const falta = !escolha && loteMudou
+    ? ""
+    : !escolha
     ? "Escolha uma opção acima"
     : !operador
       ? "Escolha o operador"
@@ -285,9 +299,35 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
           : "";
 
   async function salvar() {
-    if (!alvo || !escolha || !operador || falta) return;
+    if (!alvo || falta) return;
     setSalvando(true);
     setErro("");
+    const juntosLote = mesmoDesenho.filter((i) => outros.has(i.id)).map((i) => i.id);
+    if (loteMudou && alvo.tipo === "pedido") {
+      try {
+        const novos = await salvarLoteSetor(config.setor, alvo.id, loteNovo, usuario, juntosLote);
+        setLotes((m) => {
+          const n = { ...m };
+          for (const id of [alvo.id, ...juntosLote]) delete n[id];
+          return { ...n, ...novos };
+        });
+      } catch (e) {
+        setErro((e as Error).message);
+        setSalvando(false);
+        return;
+      }
+      if (!escolha) {
+        setSalvo(`✔ ${rotuloLote}: ${loteNovo || "apagado"} — ${aberto?.desenho ?? aberto?.po ?? ""}`);
+        setTimeout(() => setSalvo(""), 5000);
+        setSalvando(false);
+        fechar();
+        return;
+      }
+    }
+    if (!escolha || !operador) {
+      setSalvando(false);
+      return;
+    }
     const dados: DadosApontamento = {
       status: escolha,
       operador,
@@ -319,7 +359,9 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
       setVersao((v) => v + 1);
       const pausados = linhas.filter((l) => l.status === "pausado" && escolha !== "pausado").length;
       setSalvo(
-        `✔ Salvo: ${opcao.get(escolha)?.rotulo} (${operador}) — ${nome}` + (pausados ? ` · ${pausados} pausado(s)` : ""),
+        `✔ Salvo: ${opcao.get(escolha)?.rotulo} (${operador}) — ${nome}` +
+          (pausados ? ` · ${pausados} pausado(s)` : "") +
+          (loteMudou ? ` · ${rotuloLote}: ${loteNovo || "apagado"}` : ""),
       );
       setTimeout(() => setSalvo(""), 5000);
       fechar();
@@ -472,6 +514,11 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
               <span className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
                 <SeloPrazo prazo={i.prazo_contratual} compacto />
                 <SeloAtual a={atuais[i.id]} opcao={opcao} />
+                {lotes[i.id] && (
+                  <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-xs font-bold text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">
+                    Lote {lotes[i.id].lote}
+                  </span>
+                )}
               </span>
             </span>
           </button>
@@ -705,6 +752,34 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   </button>
                 )}
 
+                {aberto && rotuloLote && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">
+                      {rotuloLote}
+                      {lotes[aberto.id]?.por && (
+                        <span className="ml-2 font-normal text-stone-500 dark:text-slate-500">
+                          gravado por {lotes[aberto.id].por} · {quando(lotes[aberto.id].em)}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      value={lote}
+                      onChange={(e) => setLote(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !falta && !salvando) salvar();
+                      }}
+                      maxLength={40}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      placeholder="Digite o lote"
+                      className="h-20 w-full rounded-2xl border-4 border-stone-300 bg-white px-4 font-mono text-4xl font-bold text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+                    />
+                    {outros.size > 0 && loteMudou && (
+                      <span className="text-xs text-stone-500 dark:text-slate-400">Vale também pros {outros.size} pedido(s) marcados acima.</span>
+                    )}
+                  </label>
+                )}
+
                 <label className="flex flex-col gap-1">
                   <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">Adicionar registro/observação (opcional)</span>
                   <textarea
@@ -738,7 +813,14 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   onClick={salvar}
                   className="sticky bottom-3 h-16 w-full rounded-2xl bg-green-700 text-2xl font-extrabold text-white shadow-lg active:scale-[0.98] disabled:opacity-50 dark:bg-cyan-600"
                 >
-                  {salvando ? "Salvando…" : falta || (outros.size ? `💾 Salvar (${outros.size + 1} pedidos)` : "💾 Salvar")}
+                  {salvando
+                    ? "Salvando…"
+                    : falta ||
+                      (!escolha && loteMudou
+                        ? `💾 Salvar ${rotuloLote?.toLowerCase()}`
+                        : outros.size
+                          ? `💾 Salvar (${outros.size + 1} pedidos)`
+                          : "💾 Salvar")}
                 </button>
               </div>
             ) : (

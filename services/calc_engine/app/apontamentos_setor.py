@@ -21,10 +21,15 @@ Depois, também a pedido do usuário (migration 0027):
   dispositivos), sem pedido no Follow up — tabela servicos_internos.
 - Apontar de uma vez outros pedidos ativos com o mesmo desenho (uma linha por
   pedido, mesmo status/operador/observação).
+
+Lote (pedido do usuário, 14/10/2026 — migration 0043): igual ao NRI do Corte,
+a Pintura anota o lote de cada pedido (tabela lotes_setor, um por pedido;
+vazio apaga). Só nos setores com "lote" em SETORES.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 from app.orcamentos_salvos import _conectar
@@ -44,6 +49,7 @@ SETORES: dict[str, dict] = {
         # Pedido do usuário (13/10): só Iniciado, Pausado e Pintura finalizada.
         "status": {"em_andamento": "Iniciado", "pausado": "Pausado", "finalizado": "Pintura finalizada"},
         "operadores": ["Felipe"],
+        "lote": "Lote da pintura",
     },
     # Pedido do usuário (13/10/2026): jeferson e diego (caldeiraria) apontam a fabricação.
     "caldeiraria": {
@@ -56,6 +62,8 @@ SETORES: dict[str, dict] = {
 # Status "em andamento" (o operador está fazendo agora) — a Pintura tem etapas.
 ATIVOS = ("em_andamento", "fundo", "acabamento")
 OBS_MAX = 1000
+LOTE_MAX = 40
+_LOTE_OK = re.compile(r"[0-9A-Za-z][0-9A-Za-z ./-]*")
 DESCRICAO_MAX = 200
 OUTROS_MAX = 50  # pedidos do mesmo desenho apontados junto
 SERVICO_FINALIZADO_DIAS = 7  # serviço interno finalizado sai da lista depois disso
@@ -108,7 +116,55 @@ def situacao(setor: str) -> dict:
         if (a := por_alvo.get(s["id"])) is None or a["status"] != "finalizado"
         or datetime.fromisoformat(a["em"]) >= limite
     ]
-    return {"setor": setor, "operadores": cfg["operadores"], "atuais": por_alvo, "servicos": servicos}
+    return {"setor": setor, "operadores": cfg["operadores"], "atuais": por_alvo, "servicos": servicos,
+            "lote": cfg.get("lote"), "lotes": lotes(setor) if cfg.get("lote") else {}}
+
+
+def lotes(setor: str) -> dict[str, dict]:
+    """Lote gravado de cada pedido do setor (item_id → {lote, por, em})."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select item_id, lote, por, em from lotes_setor where setor = %s", (setor,))
+        return {str(i): {"lote": lote, "por": por, "em": em.isoformat()} for i, lote, por, em in cur.fetchall()}
+
+
+def salvar_lote(setor: str, item_id: str, lote: str | None, por: str | None,
+                outros_itens: list[str] | None = None) -> dict[str, dict] | None:
+    """Grava o lote do pedido (+ `outros_itens` do mesmo desenho apontados junto)
+    e anota no Registro diário. Vazio apaga. None = pedido não existe."""
+    cfg = _setor(setor)
+    if not cfg.get("lote"):
+        raise ValueError(f"{cfg['nome']} não tem lote.")
+    lote = re.sub(r"\s+", " ", str(lote or "")).strip().upper() or None
+    if lote and (len(lote) > LOTE_MAX or not _LOTE_OK.fullmatch(lote)):
+        raise ValueError(f"Lote inválido (letras, números, - . / e no máximo {LOTE_MAX} caracteres).")
+    alvos = list(dict.fromkeys([item_id, *(outros_itens or [])]))
+    if len(alvos) > OUTROS_MAX + 1:
+        raise ValueError(f"Pedidos demais de uma vez (máximo {OUTROS_MAX + 1}).")
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select id from follow_up_itens where id = any(%s::uuid[])", (alvos,))
+        achados = {str(r[0]) for r in cur.fetchall()}
+        if item_id not in achados:
+            return None
+        for alvo in [a for a in alvos if a in achados]:
+            cur.execute("select lote from lotes_setor where setor = %s and item_id = %s", (setor, alvo))
+            antes = (cur.fetchone() or [None])[0]
+            if antes == lote:
+                continue
+            if lote:
+                cur.execute(
+                    """insert into lotes_setor (setor, item_id, lote, por) values (%s, %s, %s, %s)
+                       on conflict (setor, item_id) do update set lote = excluded.lote, por = excluded.por, em = now()""",
+                    (setor, alvo, lote, por),
+                )
+            else:
+                cur.execute("delete from lotes_setor where setor = %s and item_id = %s", (setor, alvo))
+            texto = f"{cfg['nome']}: {cfg['lote']} {lote}" if lote else f"{cfg['nome']}: apagou o lote ({antes})"
+            cur.execute(
+                "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+                (alvo, datetime.now(_BRASILIA).date(), texto, por),
+            )
+        conn.commit()
+    return {a: l for a, l in lotes(setor).items() if a in alvos}
 
 
 def historico(setor: str, dias: int = 7) -> list[dict]:

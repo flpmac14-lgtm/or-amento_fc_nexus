@@ -91,6 +91,17 @@ def registro(dias: int = 1) -> dict:
                 or None,
                 _TIPO_STATUS.get(status, "andamento"), [] if servico else [(po, desenho)])
 
+        # Lote (Pintura) — só o valor atual fica gravado (lotes_setor).
+        cur.execute(
+            """select l.setor, l.em, l.por, l.lote, i.po, i.desenho from lotes_setor l
+               join follow_up_itens i on i.id = l.item_id where l.em >= %s""",
+            (ini,),
+        )
+        for setor, em, por, lote, po, desenho in cur.fetchall():
+            if setor in apontamentos_setor.SETORES:
+                add(setor, em, por, f"{apontamentos_setor.SETORES[setor].get('lote') or 'Lote'}: {lote}",
+                    f"{desenho or '—'} · PO {po or '—'}", None, "andamento", [(po, desenho)])
+
         cur.execute(
             """select h.em, h.por, h.campo, h.de, h.para, h.desfeito, d.po, d.cliente, d.descricao, d.desenho
                from databook_historico h join databook_itens d on d.id = h.item_id

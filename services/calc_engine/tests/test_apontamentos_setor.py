@@ -74,3 +74,14 @@ def test_pintura_operador_obrigatorio():
         a.apontar("pintura", "x", "em_andamento", "Cesar", None, "felipe")
     with pytest.raises(ValueError, match="Escolha uma das opções"):
         a.apontar("pintura", "x", "fundo", "Felipe", None, "felipe")
+
+
+def test_lote_so_na_pintura():
+    with pytest.raises(ValueError, match="não tem lote"):
+        a.salvar_lote("usinagem", "x", "123", "saymon")
+
+
+@pytest.mark.parametrize("lote", ["@@", "-12", "A" * (a.LOTE_MAX + 1)])
+def test_lote_invalido(lote):
+    with pytest.raises(ValueError, match="Lote inválido"):
+        a.salvar_lote("pintura", "x", lote, "felipe")

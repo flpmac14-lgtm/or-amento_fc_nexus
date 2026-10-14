@@ -585,6 +585,21 @@ def apontamentos_apontar(setor: str, item_id: str, pedido: dict) -> dict:
     return {"apontamentos": linhas}
 
 
+@app.post("/apontamentos/{setor}/itens/{item_id}/lote")
+def apontamentos_lote(setor: str, item_id: str, pedido: dict) -> dict:
+    """Lote do pedido no setor (Pintura) — igual ao NRI do Corte; vazio apaga."""
+    try:
+        lotes = apontamentos_setor.salvar_lote(setor, item_id, pedido.get("lote"), pedido.get("por"),
+                                               pedido.get("outros_itens") or [])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if lotes is None:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado no Follow up")
+    return {"lotes": lotes}
+
+
 @app.post("/apontamentos/{setor}/servicos")
 def apontamentos_criar_servico(setor: str, pedido: dict) -> dict:
     """Novo serviço interno Macfab (usinagem pra uso próprio) + 1º apontamento."""

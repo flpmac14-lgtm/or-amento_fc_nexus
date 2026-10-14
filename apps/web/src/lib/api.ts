@@ -855,7 +855,13 @@ export interface DadosApontamento {
 
 export async function buscarApontamentos(
   setor: string,
-): Promise<{ operadores: string[]; atuais: Record<string, Apontamento>; servicos: ServicoInterno[] }> {
+): Promise<{
+  operadores: string[];
+  atuais: Record<string, Apontamento>;
+  servicos: ServicoInterno[];
+  lote?: string | null; // rótulo do campo (ex.: "Lote da pintura"); null = setor sem lote
+  lotes?: Record<string, LoteSetor>; // item_id → lote gravado
+}> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar os apontamentos");
   return resposta.json();
@@ -895,6 +901,28 @@ export async function apontarItem(
     outros_itens: outrosItens,
   });
   return (await r.json()).apontamentos;
+}
+
+// Lote do pedido no setor (Pintura) — igual ao NRI do Corte; vazio apaga.
+export interface LoteSetor {
+  lote: string;
+  por: string | null;
+  em: string;
+}
+
+export async function salvarLoteSetor(
+  setor: string,
+  itemId: string,
+  lote: string,
+  por: string | null,
+  outrosItens: string[] = [],
+): Promise<Record<string, LoteSetor>> {
+  const r = await postarApontamento(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}/lote`, {
+    lote,
+    por,
+    outros_itens: outrosItens,
+  });
+  return (await r.json()).lotes;
 }
 
 export async function apontarServico(setor: string, servicoId: string, dados: DadosApontamento): Promise<Apontamento[]> {
