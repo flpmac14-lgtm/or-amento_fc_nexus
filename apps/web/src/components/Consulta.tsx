@@ -131,6 +131,9 @@ function CartaoPrograma({
         <span className="text-base font-extrabold leading-tight text-green-800 dark:text-cyan-300">{clientes.join(" · ")}</span>
       )}
       {macs.length > 0 && <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">MAC {macs.join(" · ")}</span>}
+      {p.nao_cortar && !p.finalizado_em && (
+        <span className="self-start rounded-lg bg-red-600 px-2 py-0.5 text-sm font-extrabold text-white">✕ NÃO É PARA CORTAR</span>
+      )}
       {achou && achou.length > 0 && (
         <span className="flex flex-col gap-0.5 rounded-lg bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">
           {achou.slice(0, 4).map((a) => (

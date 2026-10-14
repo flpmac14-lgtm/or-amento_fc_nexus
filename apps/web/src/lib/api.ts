@@ -1036,7 +1036,7 @@ export async function salvarNriCorte(
 // Nº sequencial de corte (bolinha no cartão); vazio apaga.
 export async function salvarOrdemCorte(
   programa: string,
-  ordem: number | null,
+  ordem: number | "X" | null, // "X" = não é para cortar
   por: string | null,
 ): Promise<ProgramaCorte> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/corte/programas/${encodeURIComponent(programa)}/ordem`, {

@@ -749,6 +749,7 @@ export interface ProgramaCorte {
   maquina_trocada: boolean;
   maquina_por: string | null;
   ordem: number | null; // nº sequencial de corte (1 = 1º…) — bolinha no cartão
+  nao_cortar: boolean; // X vermelho na bolinha: não é para cortar (migration 0045)
   ordem_por: string | null;
   ordem_em: string | null;
 }

@@ -112,6 +112,7 @@ function programaManual(programa: string): ProgramaCorte {
     maquina_trocada: false,
     maquina_por: null,
     ordem: null,
+    nao_cortar: false,
     ordem_por: null,
     ordem_em: null,
   };
@@ -259,8 +260,9 @@ export default function Corte({
     // O que está cortando sempre no topo (pedido do usuário); depois os que
     // têm ordem de corte (1º, 2º…); o resto segue a ordem do servidor
     // (programa mais novo primeiro).
+    // X (não é para cortar) vai pro fim.
     const peso = (p: ProgramaCorte) =>
-      situacao(p).texto === "Cortando" ? -1 : (p.ordem ?? Infinity);
+      situacao(p).texto === "Cortando" ? -1 : p.nao_cortar ? 2e9 : (p.ordem ?? 1e9);
     const cortandoPrimeiro = (l: ProgramaCorte[]) =>
       [...l].sort((a, b) => peso(a) - peso(b) || 0);
     if (numero)
@@ -330,13 +332,14 @@ export default function Corte({
 
   function editarOrdem(p: ProgramaCorte) {
     setOrdemEditando(p.programa);
-    setOrdemValor(p.ordem ? String(p.ordem) : "");
+    setOrdemValor(p.nao_cortar ? "X" : p.ordem ? String(p.ordem) : "");
   }
 
   async function salvarOrdem(p: ProgramaCorte) {
     setOrdemEditando(null);
-    const ordem = ordemValor ? Number(ordemValor) || null : null;
-    if (ordem === p.ordem) return;
+    // X = não é para cortar (pedido do usuário): bolinha com X vermelho.
+    const ordem = ordemValor === "X" ? "X" : ordemValor ? Number(ordemValor) || null : null;
+    if (ordem === "X" ? p.nao_cortar : !p.nao_cortar && ordem === p.ordem) return;
     setErro("");
     try {
       const atualizado = await salvarOrdemCorte(p.programa, ordem, usuario);
@@ -515,15 +518,17 @@ export default function Corte({
                             autoFocus
                             value={ordemValor}
                             onChange={(e) =>
-                              setOrdemValor(e.target.value.replace(/\D/g, "").slice(0, 3))
+                              setOrdemValor(
+                                /x/i.test(e.target.value)
+                                  ? "X"
+                                  : e.target.value.replace(/\D/g, "").slice(0, 3),
+                              )
                             }
                             onBlur={() => salvarOrdem(p)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.currentTarget.blur();
                               if (e.key === "Escape") setOrdemEditando(null);
                             }}
-                            inputMode="numeric"
-                            pattern="[0-9]*"
                             autoComplete="off"
                             aria-label={`Ordem de corte do programa ${p.programa}`}
                             className="absolute right-1.5 top-1.5 z-10 h-11 w-11 rounded-full border-2 border-green-600 bg-white text-center font-mono text-lg font-extrabold text-stone-900 outline-none dark:border-cyan-400 dark:bg-slate-950 dark:text-white"
@@ -533,18 +538,22 @@ export default function Corte({
                             type="button"
                             onClick={() => editarOrdem(p)}
                             title={
-                              p.ordem
+                              p.nao_cortar
+                                ? `Não é para cortar${p.ordem_por ? ` · por ${p.ordem_por}` : ""} — toque para mudar`
+                                : p.ordem
                                 ? `${p.ordem}º a cortar${p.ordem_por ? ` · por ${p.ordem_por}` : ""} — toque para mudar`
-                                : "Toque para pôr a ordem de corte (1, 2, 3…)"
+                                : "Toque para pôr a ordem de corte (1, 2, 3…) ou X = não cortar"
                             }
                             aria-label={`Ordem de corte do programa ${p.programa}`}
                             className={`absolute right-1.5 top-1.5 z-10 flex h-11 w-11 items-center justify-center rounded-full font-mono font-extrabold active:scale-95 ${
-                              p.ordem
+                              p.nao_cortar
+                                ? "bg-red-600 text-2xl text-white shadow"
+                                : p.ordem
                                 ? "bg-green-700 text-lg text-white shadow dark:bg-cyan-500 dark:text-slate-950"
                                 : "border-2 border-dashed border-stone-300 text-sm text-stone-400 dark:border-slate-600 dark:text-slate-500"
                             }`}
                           >
-                            {p.ordem ? `${p.ordem}º` : "#"}
+                            {p.nao_cortar ? "✕" : p.ordem ? `${p.ordem}º` : "#"}
                           </button>
                         )}
                         <button
@@ -660,6 +669,9 @@ export default function Corte({
                     {infoMaquina(aberto.maquina).icone}{" "}
                     {infoMaquina(aberto.maquina).rotulo}
                   </span>
+                  {aberto.nao_cortar && (
+                    <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-white">✕ não é para cortar</span>
+                  )}
                   {aberto.ordem && (
                     <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-white dark:bg-cyan-500 dark:text-slate-950">
                       {aberto.ordem}º a cortar
