@@ -20,6 +20,7 @@ import FollowUp from "@/components/FollowUp";
 import ApontamentoSetor from "@/components/ApontamentoSetor";
 import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
+import CortadosQualidade from "@/components/CortadosQualidade";
 import Qualidade from "@/components/Qualidade";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_CALDEIRARIA, CONFIG_PINTURA, CONFIG_USINAGEM } from "@/lib/apontamento";
@@ -254,6 +255,7 @@ export default function ModuloFollowUp({
       {visao === "databook" && <DataBook />}
       {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
+      {visao === "cortados" && <CortadosQualidade />}
       {visao === "consulta" && (
         <Consulta
           key="consulta"

@@ -31,6 +31,8 @@ export const VISOES = [
   { valor: "pintura", rotulo: "Pintura" },
   // Só a tela Coletas da Consulta — pedido do usuário (13/10/2026) pra Qualidade (ana, pedro, carol, lailto).
   { valor: "coletas", rotulo: "Coletas" },
+  // Programas já cortados com o NRI anotado no Corte, pro data book — pedido do usuário (14/10/2026).
+  { valor: "cortados", rotulo: "Cortados (NRI)" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -38,7 +40,7 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
 // "usinagem" (líder da Usinagem, saymon) = Usinagem + Consulta (coletas e previsões);
-// "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Data book + Coletas;
+// "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Data book + Coletas + Cortados (NRI);
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
 // "pintura" (felipe) = Consulta + Pintura.
@@ -55,7 +57,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
   return VISOES.filter((v) =>
     v.valor === "coletas"
       ? perfil === "qualidade"
-      : v.valor === "databook" || v.valor === "recebimento"
+      : v.valor === "databook" || v.valor === "recebimento" || v.valor === "cortados"
         ? perfil === "qualidade" || perfil === "total"
       : v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
