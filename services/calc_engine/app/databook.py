@@ -70,7 +70,11 @@ _COLUNAS_PLANILHA = {
 }
 
 # Validação de dados da planilha (S1:W1).
-ST_BOOK = ["PRONTO", "FAZENDO", "SEM BOOK", "Vazio", "Pronto Aguardando Coleta"]
+# + Rastreabilidade (pedido do usuário, 14/10/2026 — migration 0044): não faz parte
+# do book, mas também se aponta — início e finalização em colunas próprias.
+RASTREAB = "RASTREABILIDADE"
+RASTREAB_FIM = "RASTREABILIDADE FINALIZADA"
+ST_BOOK = ["PRONTO", "FAZENDO", "SEM BOOK", "Vazio", "Pronto Aguardando Coleta", RASTREAB, RASTREAB_FIM]
 # Book pronto → grava D.FINALIZAÇÃO e AUTOR(A).
 PRONTOS = {"PRONTO", "Pronto Aguardando Coleta"}
 
@@ -292,6 +296,7 @@ def propagar(forcar: bool = False) -> dict:
 # --- leitura / edição no app --------------------------------------------------
 
 _COLUNAS_LISTA = ["id", "po", *FIXOS, *EDITAVEIS, "fazendo_em", "fazendo_por", "finalizado_em", "finalizado_por",
+                  "rastreab_inicio_em", "rastreab_inicio_por", "rastreab_fim_em", "rastreab_fim_por",
                   "linha_planilha", "origem", "editado_em", "editado_por"]
 
 
@@ -400,6 +405,12 @@ def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
             # Como o projeto (Croqui de corte): FAZENDO grava o início do book.
             if novo == "FAZENDO":
                 sets.update(fazendo_em=agora, fazendo_por=editado_por)
+            # Rastreabilidade: marcar grava o início (e recomeça); finalizada grava o fim.
+            if novo == RASTREAB:
+                sets.update(rastreab_inicio_em=agora, rastreab_inicio_por=editado_por,
+                            rastreab_fim_em=None, rastreab_fim_por=None)
+            elif novo == RASTREAB_FIM:
+                sets.update(rastreab_fim_em=agora, rastreab_fim_por=editado_por)
             # Book pronto: grava D.FINALIZAÇÃO e AUTOR(A); voltou pra não pronto: apaga.
             if novo in PRONTOS and st_atual not in PRONTOS:
                 sets.update(finalizado_em=agora, finalizado_por=editado_por)
@@ -455,10 +466,15 @@ def excluir_status(item_id: str, por: str | None) -> dict | None:
         trocas = cur.fetchall()
         fazendo = next(((p, e) for s, p, e in reversed(trocas) if s == "FAZENDO"), None)
         pronto = next(((p, e) for s, p, e in reversed(trocas) if s in PRONTOS), None)
+        r_ini = next(((p, e) for s, p, e in reversed(trocas) if s == RASTREAB), None)
+        r_fim = next(((p, e) for s, p, e in reversed(trocas)
+                      if s == RASTREAB_FIM and (not r_ini or e >= r_ini[1])), None)
         sets: dict = {"st_book": anterior}
         if ultima:
             # Sem FAZENDO no histórico que sobrou: o início some (veio do que foi desfeito).
             sets.update(fazendo_em=fazendo[1] if fazendo else None, fazendo_por=fazendo[0] if fazendo else None)
+            sets.update(rastreab_inicio_em=r_ini[1] if r_ini else None, rastreab_inicio_por=r_ini[0] if r_ini else None,
+                        rastreab_fim_em=r_fim[1] if r_fim else None, rastreab_fim_por=r_fim[0] if r_fim else None)
         if anterior not in PRONTOS:
             sets.update(finalizado_em=None, finalizado_por=None)
         elif pronto and ultima:

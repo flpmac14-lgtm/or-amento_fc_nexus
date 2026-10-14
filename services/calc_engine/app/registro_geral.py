@@ -114,7 +114,7 @@ def registro(dias: int = 1) -> dict:
                 acao, tipo = f"Excluiu {de or '—'} → voltou {para or 'sem status'}", "pausa"
             elif campo == "st_book":
                 acao = f"{nome}: {para or '(vazio)'}"
-                tipo = "fim" if para in ("PRONTO", "Pronto Aguardando Coleta") else "andamento"
+                tipo = "fim" if para in ("PRONTO", "Pronto Aguardando Coleta", "RASTREABILIDADE FINALIZADA") else "andamento"
             else:
                 acao, tipo = f"{nome}: {para or '(apagou)'}", "falta" if campo == "falta" and para else "andamento"
             add("databook", em, por, acao + (" (desfeito)" if desfeito else ""), f"PO {po} · {cli or '—'}",

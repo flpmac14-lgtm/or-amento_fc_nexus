@@ -831,6 +831,11 @@ export interface ItemDatabook {
   fazendo_por: string | null;
   finalizado_em: string | null; // D.FINALIZAÇÃO (book pronto)
   finalizado_por: string | null; // AUTOR(A)
+  // Rastreabilidade (migration 0044): ST.BOOK RASTREABILIDADE → início; RASTREABILIDADE FINALIZADA → fim.
+  rastreab_inicio_em: string | null;
+  rastreab_inicio_por: string | null;
+  rastreab_fim_em: string | null;
+  rastreab_fim_por: string | null;
   linha_planilha: number;
   origem: "importacao_planilha" | "controle_obras";
   foto: string | null; // sha256 da 1ª foto do Follow up (pelo PO, senão pelo desenho)

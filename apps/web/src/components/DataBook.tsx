@@ -57,6 +57,16 @@ function textoTempo(i: ItemDatabook, agora: number): string {
   return m === null ? "" : `${duracao(m)}${!i.finalizado_em ? " ▶" : ""}`;
 }
 
+// Rastreabilidade (pedido do usuário, 14/10/2026): não faz parte do book, mas também se aponta.
+const RASTREAB = "RASTREABILIDADE";
+const RASTREAB_FIM = "RASTREABILIDADE FINALIZADA";
+
+function textoTempoRastreab(i: ItemDatabook, agora: number): string {
+  if (!i.rastreab_inicio_em) return "";
+  const fim = i.rastreab_fim_em ?? (i.st_book === RASTREAB ? new Date(agora) : null);
+  return fim ? `${duracao(minutosUteis(i.rastreab_inicio_em, fim))}${!i.rastreab_fim_em ? " ▶" : ""}` : "";
+}
+
 function autorDica(i: ItemDatabook): string {
   return [
     i.fazendo_por && `Iniciou: ${i.fazendo_por}`,
@@ -78,6 +88,8 @@ const COR_ST_BOOK: Record<string, string> = {
   "SEM BOOK": "bg-stone-500 text-white",
   Vazio: "bg-red-600 text-white",
   "Pronto Aguardando Coleta": "bg-sky-600 text-white",
+  [RASTREAB]: "bg-violet-600 text-white",
+  [RASTREAB_FIM]: "bg-violet-200 text-violet-900",
 };
 
 // Situação do pedido na Controle de obras (coluna E).
@@ -213,6 +225,8 @@ export default function DataBook() {
     const m = new Map<string, ItemDatabook[]>();
     for (const i of lista)
       if (i.st_book === "FAZENDO") m.set(i.fazendo_por ?? "—", [...(m.get(i.fazendo_por ?? "—") ?? []), i]);
+      else if (i.st_book === RASTREAB)
+        m.set(i.rastreab_inicio_por ?? "—", [...(m.get(i.rastreab_inicio_por ?? "—") ?? []), i]);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [lista]);
 
@@ -328,7 +342,7 @@ export default function DataBook() {
           ▶ O que cada um está fazendo agora
         </p>
         {fazendoPorPessoa.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-slate-400">Ninguém com book em FAZENDO.</p>
+          <p className="text-sm text-stone-500 dark:text-slate-400">Ninguém com book em FAZENDO ou em RASTREABILIDADE.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {fazendoPorPessoa.map(([pessoa, lista]) => (
@@ -357,8 +371,13 @@ export default function DataBook() {
                         <span className="truncate font-mono font-semibold text-stone-800 dark:text-slate-200">
                           {i.po} <span className="font-sans font-normal text-stone-500">{i.cliente}</span>
                           {i.falta && <span className="ml-1 text-amber-700 dark:text-amber-300">⚠</span>}
+                          {i.st_book === RASTREAB && (
+                            <span className="ml-1 rounded bg-violet-600 px-1 font-sans text-[10px] font-bold text-white">RASTREAB.</span>
+                          )}
                         </span>
-                        <span className="shrink-0 font-mono text-stone-500 dark:text-slate-400">{textoTempo(i, agora)}</span>
+                        <span className="shrink-0 font-mono text-stone-500 dark:text-slate-400">
+                          {i.st_book === RASTREAB ? textoTempoRastreab(i, agora) : textoTempo(i, agora)}
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -550,6 +569,8 @@ export default function DataBook() {
               <th className={th} title="D.Finalização (book pronto)">Final.</th>
               <th className={th}>Autor</th>
               <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:17, sem almoço">Tempo</th>
+              <th className={th} title="Início da rastreabilidade (ST.BOOK RASTREABILIDADE)">Rastr. início</th>
+              <th className={th} title="Finalização da rastreabilidade (ST.BOOK RASTREABILIDADE FINALIZADA)">Rastr. final.</th>
               <th className={th} title="Foto do Follow up pelo PO (ou, sem foto, de outro pedido com o mesmo desenho)">Foto</th>
               <th className={th}>PO</th>
               <th className={th}>ST.BOOK</th>
@@ -594,6 +615,18 @@ export default function DataBook() {
                   {i.finalizado_por ?? i.fazendo_por ?? i.editado_por}
                 </td>
                 <td className={`${td} font-mono`}>{textoTempo(i, agora)}</td>
+                <td
+                  className={`${td} text-violet-700 dark:text-violet-300`}
+                  title={i.rastreab_inicio_em ? `${quando(i.rastreab_inicio_em)} · ${i.rastreab_inicio_por ?? ""} · tempo ${textoTempoRastreab(i, agora)}` : undefined}
+                >
+                  {dataCurta(i.rastreab_inicio_em)}
+                </td>
+                <td
+                  className={`${td} text-violet-700 dark:text-violet-300`}
+                  title={i.rastreab_fim_em ? `${quando(i.rastreab_fim_em)} · ${i.rastreab_fim_por ?? ""} · tempo ${textoTempoRastreab(i, agora)}` : undefined}
+                >
+                  {dataCurta(i.rastreab_fim_em)}
+                </td>
                 <td className="px-0.5 py-0.5">
                   {i.foto ? (
                     <a
@@ -751,6 +784,15 @@ export default function DataBook() {
               <p>
                 <span className="block font-semibold uppercase text-stone-500">Tempo</span>
                 {textoTempo(registro.item, agora) || "—"}
+              </p>
+              <p>
+                <span className="block font-semibold uppercase text-violet-600 dark:text-violet-400">Rastreabilidade — início</span>
+                {quando(registro.item.rastreab_inicio_em) || "—"} {registro.item.rastreab_inicio_por ?? ""}
+              </p>
+              <p>
+                <span className="block font-semibold uppercase text-violet-600 dark:text-violet-400">Rastreabilidade — finalização</span>
+                {quando(registro.item.rastreab_fim_em) || "—"} {registro.item.rastreab_fim_por ?? ""}
+                {registro.item.rastreab_inicio_em && <span className="block">Tempo: {textoTempoRastreab(registro.item, agora) || "—"}</span>}
               </p>
               <p>
                 <span className="block font-semibold uppercase text-stone-500">Falta p/ finalizar</span>
