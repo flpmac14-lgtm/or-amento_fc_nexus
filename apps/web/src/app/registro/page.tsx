@@ -6,7 +6,7 @@
 // Dados: services/calc_engine/app/registro_geral.py.
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { buscarRegistro, type EventoRegistro, type RespostaRegistro } from "@/lib/api";
+import { buscarRegistro, urlImagemFollowUp, type EventoRegistro, type RespostaRegistro } from "@/lib/api";
 import { podeVerFinanceiro } from "@/lib/financeiro";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
@@ -197,8 +197,9 @@ export default function PaginaRegistro() {
                     {lista.slice(0, 400).map((e, n) => (
                       <div
                         key={`${e.em}-${n}`}
-                        className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900/50"
+                        className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900/50"
                       >
+                        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
                         <span className="w-12 shrink-0 font-mono text-xs text-stone-500 dark:text-slate-400">{hora(e.em)}</span>
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${AREA[e.area].selo}`}>
                           {AREA[e.area].icone} {dados.areas.find((a) => a.area === e.area)?.nome}
@@ -207,6 +208,23 @@ export default function PaginaRegistro() {
                         <span className={`font-semibold ${TIPO[e.tipo]}`}>{e.acao}</span>
                         <span className="font-mono text-xs text-stone-700 dark:text-slate-300">{e.alvo}</span>
                         {e.detalhe && <span className="w-full pl-[3.75rem] text-xs text-stone-500 dark:text-slate-400">{e.detalhe}</span>}
+                        </div>
+                        {/* Fotos do pedido na planilha do Follow up — pedido do usuário (14/10/2026). */}
+                        {e.fotos && e.fotos.length > 0 && (
+                          <div className="flex shrink-0 gap-1">
+                            {e.fotos.map((sha) => (
+                              <a key={sha} href={urlImagemFollowUp(sha)} target="_blank" rel="noreferrer" title="Abrir a foto">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={urlImagemFollowUp(sha)}
+                                  alt="Foto do pedido no Follow up"
+                                  loading="lazy"
+                                  className="h-14 w-14 rounded border border-stone-200 bg-white object-contain dark:border-slate-700"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {lista.length > 400 && (

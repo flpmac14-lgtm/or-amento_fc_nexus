@@ -1283,6 +1283,7 @@ export interface EventoRegistro {
   alvo: string;
   detalhe: string | null;
   tipo: "andamento" | "fim" | "falta" | "pausa";
+  fotos?: string[]; // sha256 das fotos do pedido no Follow up (urlImagemFollowUp)
 }
 export interface RespostaRegistro {
   desde: string;
