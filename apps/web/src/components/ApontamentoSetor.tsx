@@ -412,6 +412,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
           operadores={operadores}
           versao={versao}
           abrir={abrir}
+          lotes={lotes}
         />
       ) : (
       <>
@@ -850,6 +851,13 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                         <SeloPrazo prazo={aberto.prazo_contratual} />
                       </Campo>
                       <Campo rotulo="Cliente">{aberto.cliente}</Campo>
+                      {rotuloLote && (
+                        <Campo rotulo={rotuloLote}>
+                          {lotes[aberto.id] ? (
+                            <span className="rounded-md bg-violet-600 px-2 py-0.5 font-mono font-extrabold text-white">{lotes[aberto.id].lote}</span>
+                          ) : null}
+                        </Campo>
+                      )}
                     </div>
                     <Campo rotulo="Descrição">{aberto.descricao}</Campo>
                     <div className="grid grid-cols-2 gap-2">
