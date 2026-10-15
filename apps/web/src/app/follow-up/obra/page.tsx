@@ -7,7 +7,7 @@
 // Parâmetros: ?tipo=po|mac&valor=4501743280
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { ETAPAS, ROTULO_PRAZO, itensDaObra, metaDoItem, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
@@ -370,13 +370,30 @@ function ResumoMeta({ grupos }: { grupos: [string, ItemFollowUp[]][] }) {
   );
 }
 
+// Espera as fotos dos cartões carregarem antes de imprimir (até 8 s).
+async function esperarImagens(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 300));
+  const fim = Date.now() + 8000;
+  while (Date.now() < fim && [...document.images].some((img) => !img.complete)) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
 function Relatorio() {
   const params = useSearchParams();
   const tipo: TipoObra = params.get("tipo") === "mac" ? "mac" : "po";
   const valor = params.get("valor") ?? "";
   // Relatório só de uma Meta (pedido do usuário: só do 1P, só do 2P…); vazio = todas.
-  const meta = (params.get("meta") ?? "").trim().toUpperCase();
-  const [brutos, setItens] = useState<ItemFollowUp[] | null>(null);
+  // Várias (&meta=1P,2P,3P): uma aba só, uma Meta por vez — cada uma vira um PDF
+  // (o navegador bloqueava abrir uma aba por Meta).
+  const fila = useMemo(
+    () => (params.get("meta") ?? "").split(",").map((m) => m.trim().toUpperCase()).filter(Boolean),
+    [params],
+  );
+  const [indice, setIndice] = useState(0);
+  const [emSequencia, setEmSequencia] = useState(false);
+  const meta = fila[indice] ?? "";
+  const [daObra, setItens] = useState<ItemFollowUp[] | null>(null);
   const [nomes, setNomes] = useState<string[]>([]);
   // Tique "Sem fornecedores" — fica na URL (&sem_fornecedor=1) pra mandar o link já assim.
   const [ocultar, setOcultar] = useState(params.get("sem_fornecedor") === "1");
@@ -385,12 +402,38 @@ function Relatorio() {
 
   useEffect(() => {
     document.title = `Obra ${tipo.toUpperCase()} ${valor}${meta ? ` - Meta ${meta}` : ""}`; // nome sugerido do PDF
+  }, [tipo, valor, meta]);
+
+  // "Salvar todos": imprime a Meta da vez; ao fechar a impressão passa pra próxima.
+  useEffect(() => {
+    if (!emSequencia || !daObra) return;
+    let cancelado = false;
+    (async () => {
+      await esperarImagens();
+      if (!cancelado) window.print();
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [emSequencia, indice, daObra]);
+
+  useEffect(() => {
+    if (!emSequencia) return;
+    function depois() {
+      if (indice < fila.length - 1) setIndice(indice + 1);
+      else setEmSequencia(false);
+    }
+    window.addEventListener("afterprint", depois);
+    return () => window.removeEventListener("afterprint", depois);
+  }, [emSequencia, indice, fila.length]);
+
+  useEffect(() => {
     let ativo = true;
     listarFollowUp()
       .then((r) => {
         if (!ativo) return;
         setNomes(nomesFornecedores(r.itens));
-        const lista = itensDaObra(r.itens, tipo, valor).filter((i) => !meta || metaDoItem(i) === meta);
+        const lista = itensDaObra(r.itens, tipo, valor);
         lista.sort((a, b) => a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
         setItens(lista);
       })
@@ -398,12 +441,13 @@ function Relatorio() {
     return () => {
       ativo = false;
     };
-  }, [tipo, valor, meta]);
+  }, [tipo, valor]);
 
   if (!valor) return <p className="p-8 text-red-600">Informe o PO ou a MAC da obra.</p>;
   if (erro) return <p className="p-8 text-red-600">{erro}</p>;
-  if (!brutos) return <p className="p-8 text-stone-500">Carregando relatório… (o servidor pode levar até 1 minuto para acordar)</p>;
+  if (!daObra) return <p className="p-8 text-stone-500">Carregando relatório… (o servidor pode levar até 1 minuto para acordar)</p>;
 
+  const brutos = meta ? daObra.filter((i) => metaDoItem(i) === meta) : daObra;
   const itens = ocultar ? brutos.map((i) => semFornecedor(i, nomes)) : brutos;
 
   const clientes = [...new Set(itens.map((i) => i.cliente).filter(Boolean))].join(", ");
@@ -438,6 +482,39 @@ function Relatorio() {
           />
           Sem fornecedores (pra cliente)
         </label>
+        {fila.length > 1 && (
+          <div className="flex w-full flex-wrap items-center gap-1 rounded-lg border-2 border-violet-500 bg-white p-2 text-sm">
+            <span className="mr-1 font-semibold text-violet-900">Metas ({indice + 1} de {fila.length}):</span>
+            {fila.map((m, n) => (
+              <button
+                key={m}
+                type="button"
+                disabled={emSequencia}
+                onClick={() => setIndice(n)}
+                className={`rounded-md border px-2 py-0.5 font-mono font-bold ${
+                  n === indice ? "border-violet-600 bg-violet-600 text-white" : "border-stone-300 text-stone-700"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setIndice(0);
+                setEmSequencia(true);
+              }}
+              disabled={emSequencia}
+              className="ml-auto rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white hover:bg-violet-600 disabled:opacity-60"
+            >
+              {emSequencia ? `Salvando Meta ${meta}…` : `Salvar os ${fila.length} PDFs (um por Meta)`}
+            </button>
+            <span className="w-full text-xs text-stone-500">
+              Abre a impressão de cada Meta em sequência: em cada uma, “Salvar como PDF” → Salvar (o nome já vem com a Meta).
+              Cancelar numa delas pula pra próxima.
+            </span>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => window.print()}

@@ -29,7 +29,6 @@ export default function FollowUpRelatorioObra({
   // Metas escolhidas (1P, 2P…) — pedido do usuário: uma ou várias; cada uma
   // abre o próprio relatório (um PDF por Meta). Vazio = todas num relatório só.
   const [escolhidas, setEscolhidas] = useState<Set<string>>(new Set());
-  const [bloqueadas, setBloqueadas] = useState(0);
   const metas = useMemo(
     () => [...new Set(daObra.map(metaDoItem).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })),
     [daObra],
@@ -41,7 +40,6 @@ export default function FollowUpRelatorioObra({
   );
 
   function alternarMeta(m: string) {
-    setBloqueadas(0);
     setEscolhidas((s) => {
       if (!m) return new Set();
       const n = new Set(s);
@@ -70,16 +68,12 @@ export default function FollowUpRelatorioObra({
   }
 
   function gerar() {
-    let falhas = 0;
-    for (const m of metasValidas.length ? metasValidas : [""]) {
-      const params = new URLSearchParams({ tipo, valor: valor.trim() });
-      if (m) params.set("meta", m);
-      if (semFornecedor) params.set("sem_fornecedor", "1");
-      if (!window.open(`/follow-up/obra?${params}`, "_blank")) falhas++;
-    }
-    // O navegador costuma bloquear da 2ª aba em diante até liberar os pop-ups do site.
-    if (falhas) setBloqueadas(falhas);
-    else onFechar();
+    // Várias Metas: uma aba só, que salva um PDF por Meta (abrir várias abas o navegador bloqueia).
+    const params = new URLSearchParams({ tipo, valor: valor.trim() });
+    if (metasValidas.length) params.set("meta", metasValidas.join(","));
+    if (semFornecedor) params.set("sem_fornecedor", "1");
+    window.open(`/follow-up/obra?${params}`, "_blank");
+    onFechar();
   }
 
   return (
@@ -154,12 +148,6 @@ export default function FollowUpRelatorioObra({
             </div>
           </div>
         )}
-        {bloqueadas > 0 && (
-          <p className="rounded-lg border border-amber-400 bg-amber-50 p-2.5 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-            O navegador bloqueou {bloqueadas} relatório(s). Libere os pop-ups deste site (ícone 🚫 no fim da barra de endereço →
-            “Sempre permitir”) e clique em Gerar de novo.
-          </p>
-        )}
         <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-stone-200 dark:border-slate-800 p-2.5 text-sm text-stone-800 dark:text-slate-200">
           <input
             type="checkbox"
@@ -187,7 +175,7 @@ export default function FollowUpRelatorioObra({
             disabled={achados.length === 0}
             className="rounded-lg bg-green-600 dark:bg-cyan-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
           >
-            {metasValidas.length > 1 ? `Gerar ${metasValidas.length} relatórios` : "Gerar relatório"}
+            {metasValidas.length > 1 ? `Gerar ${metasValidas.length} relatórios (1 PDF cada)` : "Gerar relatório"}
           </button>
         </div>
       </form>
