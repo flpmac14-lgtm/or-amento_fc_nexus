@@ -940,6 +940,20 @@ export async function criarServicoInterno(
   return r.json();
 }
 
+/** Corrige um apontamento errado (troca o status ou apaga) — devolve a situação atual + histórico do alvo. */
+export async function corrigirApontamento(
+  setor: string,
+  apontamentoId: number,
+  status: StatusApontamento | null,
+  por: string | null,
+): Promise<{ chave: string; atual: Apontamento | null; historico: Apontamento[] }> {
+  const r = await postarApontamento(
+    `${CALC_ENGINE_URL}/apontamentos/${setor}/registros/${apontamentoId}/corrigir`,
+    status ? { status, por } : { excluir: true, por },
+  );
+  return r.json();
+}
+
 export function urlImagemFollowUp(sha256: string): string {
   return `${CALC_ENGINE_URL}/follow-up/midias/${sha256}`;
 }

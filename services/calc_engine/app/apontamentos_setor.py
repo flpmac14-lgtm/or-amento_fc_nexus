@@ -50,6 +50,9 @@ SETORES: dict[str, dict] = {
         "status": {"em_andamento": "Iniciado", "pausado": "Pausado", "finalizado": "Pintura finalizada"},
         "operadores": ["Felipe"],
         "lote": "Lote da pintura",
+        # Pedido do usuário (15/10/2026): o Felipe pinta vários pedidos ao mesmo
+        # tempo — marcar Iniciado num NÃO pausa os outros (era o "bug" do Pausado).
+        "pausa_automatica": False,
     },
     # Pedido do usuário (13/10/2026): jeferson e diego (caldeiraria) apontam a fabricação.
     "caldeiraria": {
@@ -226,6 +229,8 @@ def _registro_diario(cur, cfg: dict, item_id: str, status: str, operador: str, o
 def _pausar_outros(cur, setor: str, cfg: dict, operador: str, exceto: set[str], destino: str,
                    por: str | None) -> list[int]:
     """Ao marcar Usinando: o que o mesmo operador estava usinando vira Pausado."""
+    if not cfg.get("pausa_automatica", True):
+        return []
     cur.execute(
         """select item_id, servico_id from (
              select distinct on (coalesce(item_id, servico_id)) item_id, servico_id, status, operador
@@ -337,3 +342,50 @@ def criar_servico(setor: str, descricao: str | None, quantidade, status: str, op
         linhas = _linhas(cur, ids)
         conn.commit()
     return {"servico": servico, "apontamentos": linhas}
+
+
+def _atual_e_historico(cur, setor: str, item_id: str | None, servico_id: str | None) -> dict:
+    coluna, alvo = ("a.servico_id", servico_id) if servico_id else ("a.item_id", item_id)
+    cur.execute(
+        f"""select {_COLUNAS} from {_DE}
+            where a.setor = %s and {coluna} = %s order by a.em desc, a.id desc""",
+        (setor, alvo),
+    )
+    historico = [_linha(r) for r in cur.fetchall()]
+    return {"chave": item_id or servico_id, "atual": historico[0] if historico else None, "historico": historico}
+
+
+def corrigir(setor: str, apontamento_id: int, status: str | None, por: str | None) -> dict | None:
+    """Pedido do usuário (15/10/2026): corrigir um apontamento feito errado —
+    troca o status (status) ou apaga a linha (status=None). Fica anotado no
+    Registro diário do pedido. Devolve a situação atual + histórico do alvo."""
+    cfg = _setor(setor)
+    if status is not None and status not in cfg["status"]:
+        raise ValueError("Escolha uma das opções.")
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select item_id, servico_id, status, operador from apontamentos_setor where id = %s and setor = %s",
+            (apontamento_id, setor),
+        )
+        r = cur.fetchone()
+        if not r:
+            return None
+        item_id, servico_id, antes, operador = r
+        item_id, servico_id = item_id and str(item_id), servico_id and str(servico_id)
+        de = cfg["status"].get(antes, antes)
+        if status is None:
+            cur.execute("delete from apontamentos_setor where id = %s", (apontamento_id,))
+            texto = f"{cfg['nome']}: apontamento \"{de}\" ({operador}) apagado — corrigido"
+        else:
+            if status == antes:
+                return _atual_e_historico(cur, setor, item_id, servico_id)
+            cur.execute("update apontamentos_setor set status = %s where id = %s", (status, apontamento_id))
+            texto = f"{cfg['nome']}: corrigido \"{de}\" → \"{cfg['status'][status]}\" ({operador})"
+        if item_id:
+            cur.execute(
+                "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+                (item_id, datetime.now(_BRASILIA).date(), texto, por),
+            )
+        resultado = _atual_e_historico(cur, setor, item_id, servico_id)
+        conn.commit()
+    return resultado

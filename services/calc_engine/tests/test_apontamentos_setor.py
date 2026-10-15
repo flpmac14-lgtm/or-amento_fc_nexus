@@ -85,3 +85,16 @@ def test_lote_so_na_pintura():
 def test_lote_invalido(lote):
     with pytest.raises(ValueError, match="Lote inválido"):
         a.salvar_lote("pintura", "x", lote, "felipe")
+
+
+def test_pintura_nao_pausa_automaticamente():
+    # Sem banco: a Pintura sai antes de consultar (cur=None não é tocado).
+    assert a._pausar_outros(None, "pintura", a.SETORES["pintura"], "Felipe", set(), "X", "felipe") == []
+    assert a.SETORES["usinagem"].get("pausa_automatica", True) is True
+
+
+def test_corrigir_valida_status():
+    with pytest.raises(ValueError, match="Escolha uma das opções"):
+        a.corrigir("pintura", 1, "falta_material", "flpmac14")
+    with pytest.raises(ValueError, match="Setor desconhecido"):
+        a.corrigir("montagem", 1, "pausado", "flpmac14")

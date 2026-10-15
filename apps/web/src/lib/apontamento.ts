@@ -30,6 +30,11 @@ export interface ConfigSetor {
   servicoInterno: string;
   // Pintura: plano de pintura e cores bem visíveis nos cartões e no apontamento.
   comPintura?: boolean;
+  // false = marcar "fazendo" NÃO pausa o que o operador já estava fazendo
+  // (Pintura: vários pedidos ao mesmo tempo). Igual a SETORES no backend.
+  pausaAutomatica?: boolean;
+  // ✏️/🗑️ em cada apontamento do histórico, pra corrigir o que foi apontado errado.
+  corrigir?: boolean;
 }
 
 export const CONFIG_USINAGEM: ConfigSetor = {
@@ -125,6 +130,10 @@ export const CONFIG_PINTURA: ConfigSetor = {
   fazendo: "pintando",
   servicoInterno: "Pintura pra uso da Macfab: manutenção, dispositivos, suportes…",
   comPintura: true,
+  // Pedido do usuário (15/10/2026): o Felipe pinta vários pedidos juntos — o
+  // Iniciado num pedido estava pausando os outros; e dá pra corrigir o status.
+  pausaAutomatica: false,
+  corrigir: true,
 };
 
 // Caldeiraria — pedido do usuário (13/10/2026): jeferson e diego apontam a

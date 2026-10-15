@@ -25,6 +25,7 @@ import {
   apontarServico,
   buscarApontamentos,
   buscarHistoricoApontamento,
+  corrigirApontamento,
   criarServicoInterno,
   listarFollowUp,
   salvarLoteSetor,
@@ -132,6 +133,9 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
   const [rotuloLote, setRotuloLote] = useState<string | null>(null);
   const [lotes, setLotes] = useState<Record<string, LoteSetor>>({});
   const [lote, setLote] = useState("");
+  // Correção de apontamento errado (✏️ no histórico): id em edição.
+  const [editando, setEditando] = useState<number | null>(null);
+  const [corrigindo, setCorrigindo] = useState(false);
 
   const opcao = useMemo(() => new Map(config.opcoes.map((o) => [o.status, o])), [config]);
 
@@ -238,7 +242,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
 
   // O que o operador escolhido já está usinando (vai pausar ao marcar Usinando).
   const usinandoAgora =
-    !emAndamento(escolha ?? undefined) || !operador
+    config.pausaAutomatica === false || !emAndamento(escolha ?? undefined) || !operador
       ? []
       : Object.values(atuais).filter((a) => {
           const k = chaveApontamento(a);
@@ -261,6 +265,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
     setOperador(unico ?? (novoAlvo.tipo === "novo" ? null : (atuais[novoAlvo.id]?.operador ?? null)));
     setObs("");
     setHistorico(null);
+    setEditando(null);
     setOutros(new Set());
     setPausarOutros(true);
     setNovaDescricao("");
@@ -333,7 +338,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
       operador,
       observacao: obs,
       por: usuario,
-      pausar_outros: emAndamento(escolha ?? undefined) && pausarOutros,
+      pausar_outros: config.pausaAutomatica !== false && emAndamento(escolha ?? undefined) && pausarOutros,
     };
     try {
       let linhas: Apontamento[];
@@ -369,6 +374,28 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
       setErro((e as Error).message);
     } finally {
       setSalvando(false);
+    }
+  }
+
+  // Troca o status de um apontamento (ou apaga, status=null) — o atual do pedido se recalcula.
+  async function corrigir(h: Apontamento, status: StatusApontamento | null) {
+    setCorrigindo(true);
+    setErro("");
+    try {
+      const r = await corrigirApontamento(config.setor, h.id, status, usuario);
+      setHistorico(r.historico);
+      setAtuais((m) => {
+        const n = { ...m };
+        if (r.atual) n[r.chave] = r.atual;
+        else delete n[r.chave];
+        return n;
+      });
+      setVersao((v) => v + 1);
+      setEditando(null);
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setCorrigindo(false);
     }
   }
 
@@ -888,6 +915,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                 )}
                 <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">Histórico da {config.nome}</p>
+                  {erro && <p className="mb-2 rounded-lg bg-red-50 p-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{erro}</p>}
                   {historico === null && <p className="text-sm text-stone-500">Carregando…</p>}
                   {historico?.length === 0 && <p className="text-sm text-stone-500 dark:text-slate-400">Nenhum apontamento ainda.</p>}
                   <ul className="flex flex-col">
@@ -901,7 +929,53 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                           <span className="ml-2 text-sm text-stone-600 dark:text-slate-400">
                             <strong className="text-stone-800 dark:text-slate-200">{h.operador ?? "—"}</strong> ·{new Date(h.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                           </span>
+                          {config.corrigir && editando !== h.id && (
+                            <button
+                              type="button"
+                              onClick={() => setEditando(h.id)}
+                              aria-label="Corrigir apontamento"
+                              className="ml-2 rounded-lg border border-stone-300 px-2 py-0.5 text-sm dark:border-slate-600"
+                            >
+                              ✏️
+                            </button>
+                          )}
                           {h.observacao && <p className="mt-0.5 text-sm text-stone-800 dark:text-slate-200">{h.observacao}</p>}
+                          {editando === h.id && (
+                            <div className="mt-2 flex flex-col gap-2 rounded-xl border-2 border-amber-400 bg-amber-50 p-2 dark:border-amber-700 dark:bg-amber-950/30">
+                              <span className="text-sm font-bold text-stone-800 dark:text-amber-100">Corrigir para:</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                {config.opcoes.map((op) => (
+                                  <button
+                                    key={op.status}
+                                    type="button"
+                                    disabled={corrigindo || op.status === h.status}
+                                    onClick={() => corrigir(h, op.status)}
+                                    className={`min-h-12 rounded-xl border-2 px-2 text-sm font-extrabold disabled:opacity-40 ${op.ligado}`}
+                                  >
+                                    {op.icone} {op.rotulo}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  disabled={corrigindo}
+                                  onClick={() => corrigir(h, null)}
+                                  className="h-12 rounded-xl border-2 border-red-500 bg-white text-sm font-bold text-red-700 disabled:opacity-40 dark:bg-slate-900 dark:text-red-400"
+                                >
+                                  🗑️ Apagar apontamento
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={corrigindo}
+                                  onClick={() => setEditando(null)}
+                                  className="h-12 rounded-xl border-2 border-stone-300 bg-white text-sm font-bold text-stone-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       );
                     })}

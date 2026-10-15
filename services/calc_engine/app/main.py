@@ -624,6 +624,21 @@ def apontamentos_historico_servico(setor: str, servico_id: str) -> dict:
         raise HTTPException(status_code=503, detail=str(e))
 
 
+@app.post("/apontamentos/{setor}/registros/{apontamento_id}/corrigir")
+def apontamentos_corrigir(setor: str, apontamento_id: int, pedido: dict) -> dict:
+    """Corrige um apontamento errado: `status` novo, ou `excluir: true` apaga."""
+    try:
+        status = None if pedido.get("excluir") else pedido.get("status", "")
+        r = apontamentos_setor.corrigir(setor, apontamento_id, status, pedido.get("por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if r is None:
+        raise HTTPException(status_code=404, detail="Apontamento não encontrado")
+    return r
+
+
 @app.post("/apontamentos/{setor}/servicos/{servico_id}")
 def apontamentos_apontar_servico(setor: str, servico_id: str, pedido: dict) -> dict:
     try:
