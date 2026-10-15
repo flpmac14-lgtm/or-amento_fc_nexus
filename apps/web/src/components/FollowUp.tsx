@@ -40,7 +40,7 @@ import { useLimparComF4 } from "@/lib/atalhoLimpar";
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
-type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material";
+type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material" | "data";
 
 interface Coluna {
   campo: keyof ItemFollowUp | "foto";
@@ -73,6 +73,8 @@ const COLUNAS: Coluna[] = [
   { campo: "falta_material", rotulo: "F.Material", tipo: "material", principal: true, centro: true },
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
+  // Pedido do usuário (15/10): META da Controle de obras logo depois da Obs. Felipe / Marcelo.
+  { campo: "meta", rotulo: "Meta", tipo: "data", principal: true },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
   // Pedido do usuário (08/10): Fornecedor / terceirizado logo depois do Status, sempre visível.
   { campo: "fornecedor", rotulo: "Fornecedor / Terceirizado", tipo: "texto", principal: true, maxW: "max-w-[10rem]" },
@@ -391,6 +393,8 @@ export default function FollowUp({
           if (!contem(`${i.editado_por ?? ""} ${formatarDataHora(i.editado_em)}`, termo)) return false;
         } else if (col.tipo === "prazo") {
           if (!contem(formatarDataBr(i.prazo_contratual), termo)) return false;
+        } else if (col.tipo === "data") {
+          if (!contem(formatarDataBr(i[col.campo as keyof ItemFollowUp] as string | null), termo)) return false;
         } else if (col.tipo === "coleta") {
           // Pedido do usuário: achar as coletas vazias pra marcar a data.
           // E também cada data / texto que já foi preenchido (opções "d:…" / "t:…").
@@ -602,6 +606,10 @@ export default function FollowUp({
         ) : (
           <span className="text-xs">{item.coleta ?? ""}</span>
         );
+      case "data": {
+        const v = item[col.campo as keyof ItemFollowUp] as string | null;
+        return v ? <span className="whitespace-nowrap font-mono text-xs">{formatarDataBr(v)}</span> : "";
+      }
       case "moeda": {
         const v = item[col.campo as keyof ItemFollowUp] as number | null;
         return v === null ? "" : <span className="font-mono text-xs">{formatarMoeda(v)}</span>;

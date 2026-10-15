@@ -41,6 +41,8 @@ CAMPOS_MAE: dict[str, tuple[str, str]] = {
     "tipagem": ("tipar", "texto"),
     "peso_unid": ("kg_pc", "numero"),
     "peso_total": ("kg_tot", "numero"),
+    # Pedido do usuário (15/10/2026) — migration 0046.
+    "meta": ("meta", "data"),
 }
 
 # Campos de acompanhamento — os únicos editáveis no app.

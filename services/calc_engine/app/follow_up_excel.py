@@ -21,7 +21,7 @@ PESO = "#,##0.00"
 DATA = "dd/mm/yyyy"
 _MOEDAS = {"orcamento_terceirizado_unid", "orcamento_custo_macfab_unid", "preco_previsto"}
 _PESOS = {"peso_unid", "peso_total"}
-_DATAS = {"prazo_contratual", "coleta"}
+_DATAS = {"prazo_contratual", "coleta", "meta"}
 
 # Mesmos rótulos da tabela do app; ordem da planilha original.
 _ROTULOS = {
@@ -29,11 +29,13 @@ _ROTULOS = {
     "quantidade": "Qtd", "mac": "MAC", "desenho": "Desenho", "descricao": "Descrição",
     "coleta": "Coleta", "status": "Status", "fornecedor": "Fornecedor",
     "orcamento_terceirizado_unid": "Orç. terceirizado unid", "orcamento_custo_macfab_unid": "Custo Macfab unid",
-    "obs_felipe_marcelo": "Obs. Felipe / Marcelo", "obs_alisson": "Obs. Alisson", "cor2": "COR2", "cor_2": "COR-2",
+    "obs_felipe_marcelo": "Obs. Felipe / Marcelo", "meta": "Meta", "obs_alisson": "Obs. Alisson", "cor2": "COR2", "cor_2": "COR-2",
     "plano_pintura": "Plano de pintura", "st": "ST", "nf": "NF", "tipagem": "Tipagem", "peso_unid": "Peso unid",
     "peso_total": "Peso total", "ano": "Ano", "preco_previsto": "Preço previsto",
 }
 COLUNAS = [c for c, _, _ in CAMPOS if c != "d"]
+# Meta (Controle de obras, migration 0046) logo depois da Obs. Felipe / Marcelo.
+COLUNAS.insert(COLUNAS.index("obs_felipe_marcelo") + 1, "meta")
 _LARGURAS = {"imagem": 12, "descricao": 45, "obs_felipe_marcelo": 30, "obs_alisson": 30, "plano_pintura": 35,
              "cliente": 14, "po": 18, "mac": 14, "desenho": 18, "fornecedor": 18}
 
@@ -58,7 +60,7 @@ def _valor(item: dict, campo: str):
         campo_data = item.get("coleta_data")
         return date.fromisoformat(campo_data) if campo_data else item.get("coleta")
     v = item.get(campo)
-    if campo == "prazo_contratual" and v:
+    if campo in ("prazo_contratual", "meta") and v:
         return date.fromisoformat(v[:10])
     return v
 

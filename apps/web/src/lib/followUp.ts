@@ -34,7 +34,7 @@ export const CAMPOS_EDITAVEIS: Record<string, TipoEdicao> = {
 // travados no app. Espelha CAMPOS_MAE de app/follow_up_mae.py.
 export const CAMPOS_DA_MAE = new Set<string>([
   "prazo_contratual", "cliente", "quantidade", "mac", "desenho", "descricao", "obs_alisson",
-  "cor2", "cor_2", "plano_pintura", "st", "nf", "tipagem", "peso_unid", "peso_total",
+  "cor2", "cor_2", "plano_pintura", "st", "nf", "tipagem", "peso_unid", "peso_total", "meta",
 ]);
 
 // Mesmo critério da fórmula do Status na planilha: etapa "feita" = 100.
