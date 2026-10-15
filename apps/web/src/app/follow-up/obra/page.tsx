@@ -99,7 +99,7 @@ function CardItem({ i }: { i: ItemFollowUp }) {
             </span>
           </Dado>
           <Dado rotulo="Coleta">{i.coleta_data ? formatarDataBr(i.coleta_data) : v(i.coleta)}</Dado>
-          <Dado rotulo="NF">{v(i.nf)}</Dado>
+          <Dado rotulo={i.meta ? "Meta / NF" : "NF"}>{i.meta ? `${i.meta} · ${v(i.nf)}` : v(i.nf)}</Dado>
         </div>
         {/* Etapas: mesma barra do card, em miniatura */}
         <div className="grid grid-cols-8 gap-1">
@@ -241,6 +241,79 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
   );
 }
 
+// META da Controle de obras (pedido do usuário, 15/10/2026 — obra 723: 1P, 2P,
+// 3P…): resumo de cada META e os cartões agrupados por ela.
+const SEM_META = "Sem meta";
+function chaveMeta(i: ItemFollowUp): string {
+  return (i.meta ?? "").trim().toUpperCase() || SEM_META;
+}
+
+function agruparPorMeta(itens: ItemFollowUp[]): [string, ItemFollowUp[]][] {
+  const grupos = new Map<string, ItemFollowUp[]>();
+  for (const i of itens) grupos.set(chaveMeta(i), [...(grupos.get(chaveMeta(i)) ?? []), i]);
+  return [...grupos.entries()].sort(([a], [b]) =>
+    a === SEM_META ? 1 : b === SEM_META ? -1 : a.localeCompare(b, "pt-BR", { numeric: true }),
+  );
+}
+
+function media(valores: (number | null)[]): number | null {
+  const v = valores.filter((x): x is number => x !== null);
+  return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+}
+
+function corPct(p: number | null): string {
+  if (p === null) return "text-stone-400";
+  return p >= 100 ? "bg-green-100 font-bold text-green-800" : p > 0 ? "text-amber-800" : "text-red-700";
+}
+
+function ResumoMeta({ grupos }: { grupos: [string, ItemFollowUp[]][] }) {
+  return (
+    <section className="break-inside-avoid rounded border-2 border-violet-500 p-2">
+      <h2 className="text-[10px] font-bold uppercase tracking-wide text-violet-800">Avanço por Meta</h2>
+      <table className="mt-1 w-full text-[9px]" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+        <thead>
+          <tr className="border-b border-stone-300 text-center text-[8px] uppercase text-stone-500">
+            <th className="py-0.5 text-left">Meta</th>
+            <th>Itens</th>
+            <th>Prontos</th>
+            <th>Peças</th>
+            <th>Peso (kg)</th>
+            {ETAPAS.map((e) => (
+              <th key={e.campo}>{e.rotulo}</th>
+            ))}
+            <th>Avanço</th>
+          </tr>
+        </thead>
+        <tbody>
+          {grupos.map(([meta, lista]) => {
+            const prontos = lista.filter(pronto).length;
+            const avanco = media(lista.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)));
+            return (
+              <tr key={meta} className="border-b border-stone-100 text-center">
+                <td className="py-0.5 text-left font-mono text-[11px] font-extrabold text-violet-900">{meta}</td>
+                <td>{lista.length}</td>
+                <td className={prontos === lista.length ? "font-bold text-green-800" : ""}>{prontos}</td>
+                <td>{formatarNumero(lista.reduce((s, i) => s + (i.quantidade ?? 0), 0), 0)}</td>
+                <td>{formatarNumero(lista.reduce((s, i) => s + (i.peso_total ?? 0), 0), 0)}</td>
+                {ETAPAS.map((e) => {
+                  const p = media(lista.map((i) => i[e.campo] as number | null));
+                  return (
+                    <td key={e.campo} className={`font-mono ${corPct(p)}`}>
+                      {p === null ? "—" : `${formatarNumero(p, 0)}%`}
+                    </td>
+                  );
+                })}
+                <td className="font-mono font-bold">{avanco === null ? "—" : `${formatarNumero(avanco, 0)}%`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="mt-0.5 text-[8px] text-stone-500">Etapas: média do % de cada item da Meta. Avanço: média de todas as etapas.</p>
+    </section>
+  );
+}
+
 function Relatorio() {
   const params = useSearchParams();
   const tipo: TipoObra = params.get("tipo") === "mac" ? "mac" : "po";
@@ -277,6 +350,7 @@ function Relatorio() {
   const etapas = itens.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)).filter((x): x is number => x !== null);
   const avanco = etapas.length ? etapas.reduce((s, x) => s + x, 0) / etapas.length : null;
   const prazos = itens.map((i) => i.prazo_contratual).filter((p): p is string => !!p).sort();
+  const porMeta = itens.some((i) => (i.meta ?? "").trim()) ? agruparPorMeta(itens) : null;
 
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">
@@ -334,11 +408,26 @@ function Relatorio() {
           ))}
         </div>
 
+        {porMeta && <ResumoMeta grupos={porMeta} />}
         {itens.length > 0 && <GraficoFabricacao itens={itens} />}
         {itens.length > 0 && <PontosAtencao itens={itens} />}
 
         {itens.length === 0 ? (
           <p className="py-10 text-center text-stone-500">Nenhum item com {tipo.toUpperCase()} começando em “{valor}”.</p>
+        ) : porMeta ? (
+          porMeta.map(([meta, lista]) => (
+            <section key={meta} className="flex flex-col gap-2">
+              <h2 className="break-after-avoid border-b-2 border-violet-500 pt-1 text-sm font-extrabold text-violet-900">
+                Meta {meta}
+                <span className="ml-2 text-[10px] font-medium text-stone-600">
+                  {lista.length} item(ns) · {lista.filter(pronto).length} pronto(s)
+                </span>
+              </h2>
+              {lista.map((i) => (
+                <CardItem key={i.id} i={i} />
+              ))}
+            </section>
+          ))
         ) : (
           itens.map((i) => <CardItem key={i.id} i={i} />)
         )}
