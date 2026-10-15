@@ -310,9 +310,11 @@ function agruparPorMeta(itens: ItemFollowUp[]): [string, ItemFollowUp[]][] {
   );
 }
 
+// Etapa vazia = não feita (0%), igual ao Status ("Falta Jato, Pintura") —
+// pedido do usuário (15/10/2026): ignorar as vazias dava 99% com Usinagem,
+// Jato e Pintura faltando.
 function media(valores: (number | null)[]): number | null {
-  const v = valores.filter((x): x is number => x !== null);
-  return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+  return valores.length ? valores.reduce<number>((s, x) => s + Math.max(0, Math.min(100, x ?? 0)), 0) / valores.length : null;
 }
 
 function corPct(p: number | null): string {
@@ -363,7 +365,7 @@ function ResumoMeta({ grupos }: { grupos: [string, ItemFollowUp[]][] }) {
           })}
         </tbody>
       </table>
-      <p className="mt-0.5 text-[8px] text-stone-500">Etapas: média do % de cada item da Meta. Avanço: média de todas as etapas.</p>
+      <p className="mt-0.5 text-[8px] text-stone-500">Etapas: média do % de cada item da Meta (etapa vazia = 0%, não feita). Avanço: média das 8 etapas de todos os itens.</p>
     </section>
   );
 }
@@ -408,9 +410,8 @@ function Relatorio() {
   const pecas = itens.reduce((s, i) => s + (i.quantidade ?? 0), 0);
   const peso = itens.reduce((s, i) => s + (i.peso_total ?? 0), 0);
   const prontos = itens.filter(pronto).length;
-  // Avanço = média de todas as etapas preenchidas de todos os itens.
-  const etapas = itens.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)).filter((x): x is number => x !== null);
-  const avanco = etapas.length ? etapas.reduce((s, x) => s + x, 0) / etapas.length : null;
+  // Avanço = média das 8 etapas de todos os itens (etapa vazia conta 0%).
+  const avanco = media(itens.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)));
   const prazos = itens.map((i) => i.prazo_contratual).filter((p): p is string => !!p).sort();
   const porMeta = itens.some((i) => (i.meta ?? "").trim()) ? agruparPorMeta(itens) : null;
 
