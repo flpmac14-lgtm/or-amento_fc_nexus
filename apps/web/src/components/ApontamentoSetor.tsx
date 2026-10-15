@@ -46,7 +46,7 @@ import type { ItemFollowUp } from "@/lib/types";
 const RECARREGAR_A_CADA_MS = 3 * 60 * 1000;
 const MAX_CARTOES = 60; // sem busca, mostra os primeiros (a busca acha o resto)
 
-type Filtro = "todos" | StatusApontamento;
+type Filtro = "todos" | "lote" | StatusApontamento;
 
 function textoBusca(i: ItemFollowUp): string {
   return normalizarBusca(
@@ -105,7 +105,9 @@ function SeloAtual({ a, opcao }: { a: Apontamento | undefined; opcao: Map<Status
   );
 }
 
-export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
+// somenteLeitura: a Qualidade confere a Pintura (status, histórico e lotes) sem
+// apontar — pedido do usuário (15/10/2026). Abre direto em Informações.
+export default function ApontamentoSetor({ config, somenteLeitura = false }: { config: ConfigSetor; somenteLeitura?: boolean }) {
   const [itens, setItens] = useState<ItemFollowUp[]>([]);
   const [servicos, setServicos] = useState<ServicoInterno[]>([]);
   const [atuais, setAtuais] = useState<Record<string, Apontamento>>({});
@@ -188,6 +190,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
   const contagem = useMemo(() => {
     const c: Record<Filtro, number> = {
       todos: itens.length + servicos.length,
+      lote: itens.filter((i) => lotes[i.id]).length,
       em_andamento: 0,
       fundo: 0,
       acabamento: 0,
@@ -200,24 +203,24 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
       if (a) c[a.status]++;
     }
     return c;
-  }, [itens, servicos, atuais]);
+  }, [itens, servicos, atuais, lotes]);
 
   const termos = useMemo(() => normalizarBusca(busca).split(" ").filter(Boolean), [busca]);
 
   const lista = useMemo(() => {
     return itens
-      .filter((i) => (filtro === "todos" ? true : atuais[i.id]?.status === filtro))
+      .filter((i) => (filtro === "todos" ? true : filtro === "lote" ? !!lotes[i.id] : atuais[i.id]?.status === filtro))
       .filter((i) => termos.every((t) => textos.get(i.id)!.includes(t)))
       .sort(
         (a, b) =>
           peso(atuais[a.id]?.status) - peso(atuais[b.id]?.status) ||
           (a.prazo_contratual ?? "9999").localeCompare(b.prazo_contratual ?? "9999"),
       );
-  }, [itens, atuais, termos, filtro, textos]);
+  }, [itens, atuais, termos, filtro, textos, lotes]);
 
   const listaServicos = useMemo(() => {
     return servicos
-      .filter((s) => (filtro === "todos" ? true : atuais[s.id]?.status === filtro))
+      .filter((s) => (filtro === "todos" ? true : filtro !== "lote" && atuais[s.id]?.status === filtro))
       .filter((s) => termos.every((t) => normalizarBusca(`${s.descricao} interno macfab`).includes(t)))
       .sort((a, b) => peso(atuais[a.id]?.status) - peso(atuais[b.id]?.status));
   }, [servicos, atuais, termos, filtro]);
@@ -257,7 +260,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
 
   function abrir(novoAlvo: Alvo) {
     setAlvo(novoAlvo);
-    setAba("apontar");
+    setAba(somenteLeitura ? "info" : "apontar");
     setEscolha(null);
     // Quem já estava no pedido vem marcado (ex.: o mesmo operador dá o Fim de usinagem).
     // Setor com um operador só (Pintura = Felipe, pedido do usuário): já vem escolhido.
@@ -469,6 +472,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
             [
               ["todos", `Todos (${contagem.todos})`],
               ...config.opcoes.map((o) => [o.status, `${o.rotulo.charAt(0)}${o.rotulo.slice(1).toLowerCase()} (${contagem[o.status]})`]),
+              ...(rotuloLote ? [["lote", `🏷️ Com ${rotuloLote.toLowerCase()} (${contagem.lote})`]] : []),
             ] as [Filtro, string][]
           ).map(([f, rotulo]) => (
             <button
@@ -485,6 +489,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
             </button>
           ))}
         </div>
+        {!somenteLeitura && (
         <button
           type="button"
           onClick={() => abrir({ tipo: "novo" })}
@@ -493,6 +498,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
           🔧 + Serviço interno Macfab
           <span className="text-sm font-medium opacity-80">(uso próprio)</span>
         </button>
+        )}
       </div>
 
       {erro && (
@@ -612,7 +618,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                   ✕
                 </button>
               </div>
-              {!novo && (
+              {!novo && !somenteLeitura && (
                 <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
                   {(
                     [
@@ -635,7 +641,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
               )}
             </div>
 
-            {aba === "apontar" || novo ? (
+            {(aba === "apontar" && !somenteLeitura) || novo ? (
               <div className="flex flex-col gap-3 p-4">
                 {novo && (
                   <div className="flex flex-col gap-2 rounded-xl border-2 border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900">
@@ -929,7 +935,7 @@ export default function ApontamentoSetor({ config }: { config: ConfigSetor }) {
                           <span className="ml-2 text-sm text-stone-600 dark:text-slate-400">
                             <strong className="text-stone-800 dark:text-slate-200">{h.operador ?? "—"}</strong> ·{new Date(h.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                           </span>
-                          {config.corrigir && editando !== h.id && (
+                          {config.corrigir && !somenteLeitura && editando !== h.id && (
                             <button
                               type="button"
                               onClick={() => setEditando(h.id)}

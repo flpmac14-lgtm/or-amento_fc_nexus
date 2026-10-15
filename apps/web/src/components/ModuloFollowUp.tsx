@@ -241,7 +241,7 @@ export default function ModuloFollowUp({
       )}
       {visao === "usinagem" && <ApontamentoSetor key="usinagem" config={CONFIG_USINAGEM} />}
       {visao === "caldeiraria" && <ApontamentoSetor key="caldeiraria" config={CONFIG_CALDEIRARIA} />}
-      {visao === "pintura" && <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} />}
+      {visao === "pintura" && <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} somenteLeitura={perfil === "qualidade"} />}
       {visao === "qualidade" && <Qualidade key="principal" />}
       {visao === "backup" && (
         <Qualidade

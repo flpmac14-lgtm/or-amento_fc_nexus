@@ -23,7 +23,7 @@ const PERFIS: Record<string, { nome: string; ve: string; cor: string }> = {
   projeto: { nome: "Projeto", ve: "Material de compra, Croqui de corte, Corte", cor: "border-sky-500" },
   corte: { nome: "Corte", ve: "Só a aba Corte", cor: "border-orange-500" },
   usinagem: { nome: "Usinagem", ve: "Usinagem + Consulta (coletas)", cor: "border-amber-500" },
-  qualidade: { nome: "Qualidade", ve: "QUALIDADE, Backup Recebimento, Data book, Recebimento, Coletas", cor: "border-violet-500" },
+  qualidade: { nome: "Qualidade", ve: "QUALIDADE, Backup Recebimento, Data book, Recebimento, Coletas, Cortados (NRI), Pintura (só consulta)", cor: "border-violet-500" },
   consulta: { nome: "Consulta / Caldeiraria", ve: "Consulta + Caldeiraria (celular)", cor: "border-cyan-500" },
   pintura: { nome: "Pintura", ve: "Consulta + Pintura (celular)", cor: "border-pink-500" },
 };

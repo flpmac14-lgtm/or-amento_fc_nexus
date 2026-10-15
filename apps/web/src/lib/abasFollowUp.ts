@@ -40,7 +40,7 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // perfil (ver lib/acesso.ts): "projeto" (joao, honorio) = Material de compra,
 // Croqui de corte e Corte; "corte" (operador do laser) = só Corte;
 // "usinagem" (líder da Usinagem, saymon) = Usinagem + Consulta (coletas e previsões);
-// "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Data book + Coletas + Cortados (NRI);
+// "qualidade" (ana, carol, pedro, lailto) = QUALIDADE + Data book + Coletas + Cortados (NRI) + Pintura (só consulta);
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
 // "pintura" (felipe) = Consulta + Pintura.
@@ -62,7 +62,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
       : v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
       : perfil === "qualidade"
-        ? false
+        ? v.valor === "pintura" // só consulta: conferir status, histórico e lotes (pedido do usuário, 15/10/2026)
         : perfil === "corte"
         ? v.valor === "corte"
         : perfil === "usinagem"
