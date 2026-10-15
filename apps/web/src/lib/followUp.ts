@@ -223,3 +223,9 @@ export function obraDoItem(item: ItemFollowUp, tipo: TipoObra): string {
   if (tipo === "po") return item.po.split("-")[0];
   return (item.mac ?? "").split(".").slice(0, 2).join(".");
 }
+
+// META da Controle de obras (1P, 2P…) normalizada — "" se vazia. Usada no
+// Relatório por obra (agrupar e gerar só de uma Meta).
+export function metaDoItem(i: ItemFollowUp): string {
+  return (i.meta ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+}

@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
-import { ETAPAS, ROTULO_PRAZO, itensDaObra, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
+import { ETAPAS, ROTULO_PRAZO, itensDaObra, metaDoItem, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
 function v(valor: string | number | null | undefined): string {
@@ -299,7 +299,7 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
 // 3P…): resumo de cada META e os cartões agrupados por ela.
 const SEM_META = "Sem meta";
 function chaveMeta(i: ItemFollowUp): string {
-  return (i.meta ?? "").trim().toUpperCase() || SEM_META;
+  return metaDoItem(i) || SEM_META;
 }
 
 function agruparPorMeta(itens: ItemFollowUp[]): [string, ItemFollowUp[]][] {
@@ -372,6 +372,8 @@ function Relatorio() {
   const params = useSearchParams();
   const tipo: TipoObra = params.get("tipo") === "mac" ? "mac" : "po";
   const valor = params.get("valor") ?? "";
+  // Relatório só de uma Meta (pedido do usuário: só do 1P, só do 2P…); vazio = todas.
+  const meta = (params.get("meta") ?? "").trim().toUpperCase();
   const [brutos, setItens] = useState<ItemFollowUp[] | null>(null);
   const [nomes, setNomes] = useState<string[]>([]);
   // Tique "Sem fornecedores" — fica na URL (&sem_fornecedor=1) pra mandar o link já assim.
@@ -380,13 +382,13 @@ function Relatorio() {
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
 
   useEffect(() => {
-    document.title = `Obra ${tipo.toUpperCase()} ${valor}`; // nome sugerido do PDF
+    document.title = `Obra ${tipo.toUpperCase()} ${valor}${meta ? ` - Meta ${meta}` : ""}`; // nome sugerido do PDF
     let ativo = true;
     listarFollowUp()
       .then((r) => {
         if (!ativo) return;
         setNomes(nomesFornecedores(r.itens));
-        const lista = itensDaObra(r.itens, tipo, valor);
+        const lista = itensDaObra(r.itens, tipo, valor).filter((i) => !meta || metaDoItem(i) === meta);
         lista.sort((a, b) => a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
         setItens(lista);
       })
@@ -394,7 +396,7 @@ function Relatorio() {
     return () => {
       ativo = false;
     };
-  }, [tipo, valor]);
+  }, [tipo, valor, meta]);
 
   if (!valor) return <p className="p-8 text-red-600">Informe o PO ou a MAC da obra.</p>;
   if (erro) return <p className="p-8 text-red-600">{erro}</p>;
@@ -457,6 +459,7 @@ function Relatorio() {
             <p className="text-[10px] font-semibold uppercase tracking-widest text-green-800">FC Nexus · Follow up de obras</p>
             <h1 className="text-xl font-bold">
               Obra — {tipo === "po" ? "PO" : "MAC"} <span className="font-mono">{valor}</span>
+              {meta && <span className="ml-2 rounded bg-violet-700 px-2 py-0.5 font-mono text-base text-white" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>Meta {meta}</span>}
             </h1>
             <p className="text-xs text-stone-600">Cliente: {clientes || "—"}</p>
           </div>
@@ -493,7 +496,7 @@ function Relatorio() {
         {itens.length > 0 && <PontosAtencao itens={itens} />}
 
         {itens.length === 0 ? (
-          <p className="py-10 text-center text-stone-500">Nenhum item com {tipo.toUpperCase()} começando em “{valor}”.</p>
+          <p className="py-10 text-center text-stone-500">Nenhum item com {tipo.toUpperCase()} começando em “{valor}”{meta ? ` na Meta ${meta}` : ""}.</p>
         ) : porMeta ? (
           porMeta.map(([meta, lista]) => (
             <section key={meta} className="flex flex-col gap-2">

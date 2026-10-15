@@ -5,7 +5,7 @@
 // (app/follow-up/obra/page.tsx).
 
 import { useEffect, useMemo, useState } from "react";
-import { itensDaObra, obraDoItem, type TipoObra } from "@/lib/followUp";
+import { itensDaObra, metaDoItem, obraDoItem, type TipoObra } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
 const classeCampo =
@@ -25,7 +25,15 @@ export default function FollowUpRelatorioObra({
   // Tique "Sem fornecedores" (pedido do usuário): o relatório já abre com os
   // terceirizados como "Serviço de monitoramento externo" (dá pra trocar lá também).
   const [semFornecedor, setSemFornecedor] = useState(false);
-  const achados = useMemo(() => itensDaObra(itens, tipo, valor), [itens, tipo, valor]);
+  const daObra = useMemo(() => itensDaObra(itens, tipo, valor), [itens, tipo, valor]);
+  // Só de uma Meta (1P, 2P…) — pedido do usuário; "" = todas.
+  const [meta, setMeta] = useState("");
+  const metas = useMemo(
+    () => [...new Set(daObra.map(metaDoItem).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })),
+    [daObra],
+  );
+  const metaValida = metas.includes(meta) ? meta : "";
+  const achados = useMemo(() => (metaValida ? daObra.filter((i) => metaDoItem(i) === metaValida) : daObra), [daObra, metaValida]);
   // Sugestões: as obras (PO base / MAC base) que existem.
   const sugestoes = useMemo(
     () => [...new Set(itens.map((i) => obraDoItem(i, tipo)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })),
@@ -47,6 +55,7 @@ export default function FollowUpRelatorioObra({
 
   function gerar() {
     const params = new URLSearchParams({ tipo, valor: valor.trim() });
+    if (metaValida) params.set("meta", metaValida);
     if (semFornecedor) params.set("sem_fornecedor", "1");
     window.open(`/follow-up/obra?${params}`, "_blank");
     onFechar();
@@ -102,6 +111,28 @@ export default function FollowUpRelatorioObra({
             {valor.trim() ? `${achados.length} item(ns) encontrado(s)` : " "}
           </span>
         </label>
+        {metas.length > 0 && (
+          <div className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+            Meta
+            <div className="flex flex-wrap gap-1">
+              {["", ...metas].map((m) => (
+                <button
+                  key={m || "todas"}
+                  type="button"
+                  onClick={() => setMeta(m)}
+                  aria-pressed={metaValida === m}
+                  className={`rounded-md border px-2.5 py-1 font-mono text-sm font-semibold ${
+                    metaValida === m
+                      ? "border-violet-600 bg-violet-600 text-white"
+                      : "border-stone-300 text-stone-700 dark:border-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  {m || "Todas"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-stone-200 dark:border-slate-800 p-2.5 text-sm text-stone-800 dark:text-slate-200">
           <input
             type="checkbox"
