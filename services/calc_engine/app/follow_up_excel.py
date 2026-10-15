@@ -21,7 +21,7 @@ PESO = "#,##0.00"
 DATA = "dd/mm/yyyy"
 _MOEDAS = {"orcamento_terceirizado_unid", "orcamento_custo_macfab_unid", "preco_previsto"}
 _PESOS = {"peso_unid", "peso_total"}
-_DATAS = {"prazo_contratual", "coleta", "meta"}
+_DATAS = {"prazo_contratual", "coleta"}
 
 # Mesmos rótulos da tabela do app; ordem da planilha original.
 _ROTULOS = {
@@ -60,7 +60,7 @@ def _valor(item: dict, campo: str):
         campo_data = item.get("coleta_data")
         return date.fromisoformat(campo_data) if campo_data else item.get("coleta")
     v = item.get(campo)
-    if campo in ("prazo_contratual", "meta") and v:
+    if campo == "prazo_contratual" and v:
         return date.fromisoformat(v[:10])
     return v
 

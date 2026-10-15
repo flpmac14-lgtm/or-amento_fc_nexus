@@ -556,7 +556,7 @@ export interface ItemFollowUp {
   orcamento_custo_macfab_unid: number | null;
   preco_previsto: number | null;
   obs_felipe_marcelo: string | null;
-  meta: string | null; // AAAA-MM-DD — META da Controle de obras (migration 0046)
+  meta: string | null; // META da Controle de obras como está na planilha (data dd/mm/aaaa ou texto)
   // Tique F.Material (migration 0033): esperando material pra fabricar — linha vermelha.
   falta_material: boolean;
   obs_alisson: string | null;

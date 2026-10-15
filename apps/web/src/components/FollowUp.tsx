@@ -40,7 +40,7 @@ import { useLimparComF4 } from "@/lib/atalhoLimpar";
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
-type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material" | "data";
+type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material";
 
 interface Coluna {
   campo: keyof ItemFollowUp | "foto";
@@ -74,7 +74,7 @@ const COLUNAS: Coluna[] = [
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   // Pedido do usuário (15/10): META da Controle de obras logo depois da Obs. Felipe / Marcelo.
-  { campo: "meta", rotulo: "Meta", tipo: "data", principal: true },
+  { campo: "meta", rotulo: "Meta", tipo: "texto", principal: true, maxW: "max-w-[8rem]" },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
   // Pedido do usuário (08/10): Fornecedor / terceirizado logo depois do Status, sempre visível.
   { campo: "fornecedor", rotulo: "Fornecedor / Terceirizado", tipo: "texto", principal: true, maxW: "max-w-[10rem]" },
@@ -152,6 +152,11 @@ function fixa(campo: Coluna["campo"], fundo: string): string {
 function valorCampo(item: ItemFollowUp, campo: Coluna["campo"]): unknown {
   if (campo === "foto") return item.imagens.length;
   if (campo === "coleta") return item.coleta_data ?? item.coleta;
+  // Meta é texto: as datas (dd/mm/aa ou dd/mm/aaaa) ordenam como data.
+  if (campo === "meta") {
+    const m = /^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/.exec((item.meta ?? "").trim());
+    return m ? `${m[3].length === 2 ? `20${m[3]}` : m[3]}-${m[2]}-${m[1]}` : item.meta;
+  }
   return item[campo];
 }
 
@@ -393,8 +398,6 @@ export default function FollowUp({
           if (!contem(`${i.editado_por ?? ""} ${formatarDataHora(i.editado_em)}`, termo)) return false;
         } else if (col.tipo === "prazo") {
           if (!contem(formatarDataBr(i.prazo_contratual), termo)) return false;
-        } else if (col.tipo === "data") {
-          if (!contem(formatarDataBr(i[col.campo as keyof ItemFollowUp] as string | null), termo)) return false;
         } else if (col.tipo === "coleta") {
           // Pedido do usuário: achar as coletas vazias pra marcar a data.
           // E também cada data / texto que já foi preenchido (opções "d:…" / "t:…").
@@ -404,6 +407,8 @@ export default function FollowUp({
           } else if (termo !== valorFiltroColeta(i)) {
             return false;
           }
+        } else if (col.campo === "meta") {
+          if (!contem(i.meta, termo)) return false; // filtra pelo texto da planilha, não pela chave de ordenação
         } else if (!contem(valorCampo(i, col.campo), termo)) {
           return false;
         }
@@ -606,10 +611,6 @@ export default function FollowUp({
         ) : (
           <span className="text-xs">{item.coleta ?? ""}</span>
         );
-      case "data": {
-        const v = item[col.campo as keyof ItemFollowUp] as string | null;
-        return v ? <span className="whitespace-nowrap font-mono text-xs">{formatarDataBr(v)}</span> : "";
-      }
       case "moeda": {
         const v = item[col.campo as keyof ItemFollowUp] as number | null;
         return v === null ? "" : <span className="font-mono text-xs">{formatarMoeda(v)}</span>;
