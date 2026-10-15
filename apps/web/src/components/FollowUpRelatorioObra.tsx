@@ -22,6 +22,9 @@ export default function FollowUpRelatorioObra({
 }) {
   const [tipo, setTipo] = useState<TipoObra>("po");
   const [valor, setValor] = useState(() => (itemInicial ? obraDoItem(itemInicial, "po") : ""));
+  // Tique "Sem fornecedores" (pedido do usuário): o relatório já abre com os
+  // terceirizados como "Serviço de monitoramento externo" (dá pra trocar lá também).
+  const [semFornecedor, setSemFornecedor] = useState(false);
   const achados = useMemo(() => itensDaObra(itens, tipo, valor), [itens, tipo, valor]);
   // Sugestões: as obras (PO base / MAC base) que existem.
   const sugestoes = useMemo(
@@ -43,7 +46,9 @@ export default function FollowUpRelatorioObra({
   }
 
   function gerar() {
-    window.open(`/follow-up/obra?${new URLSearchParams({ tipo, valor: valor.trim() })}`, "_blank");
+    const params = new URLSearchParams({ tipo, valor: valor.trim() });
+    if (semFornecedor) params.set("sem_fornecedor", "1");
+    window.open(`/follow-up/obra?${params}`, "_blank");
     onFechar();
   }
 
@@ -95,6 +100,20 @@ export default function FollowUpRelatorioObra({
           </datalist>
           <span className={achados.length ? "text-green-700 dark:text-cyan-300" : ""}>
             {valor.trim() ? `${achados.length} item(ns) encontrado(s)` : " "}
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-stone-200 dark:border-slate-800 p-2.5 text-sm text-stone-800 dark:text-slate-200">
+          <input
+            type="checkbox"
+            checked={semFornecedor}
+            onChange={(e) => setSemFornecedor(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-violet-600"
+          />
+          <span>
+            <strong>Sem fornecedores (pra cliente)</strong>
+            <span className="block text-xs text-stone-500 dark:text-slate-400">
+              Terceirizado aparece como “Serviço de monitoramento externo”, também na Obs.
+            </span>
           </span>
         </label>
         <div className="flex justify-end gap-2">
