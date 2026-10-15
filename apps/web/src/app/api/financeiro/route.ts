@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { podeVerFinanceiro, type BudgetFinanceiro } from "@/lib/financeiro";
+import { podeAbrirFinanceiro, podeVerFinanceiro, type BudgetFinanceiro } from "@/lib/financeiro";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
@@ -14,6 +14,16 @@ async function usuarioFinanceiro(): Promise<string | null> {
     data: { user },
   } = await supabase.auth.getUser();
   return podeVerFinanceiro(user?.email) ? user!.email! : null;
+}
+
+// Ler o painel: o flpmac14 e o perfil "financeiro" (gabriele). Budget (ver e
+// salvar) continua só do flpmac14 — pedido do usuário: oculto pra ela.
+async function usuarioPainel(): Promise<{ budget: boolean } | null> {
+  const supabase = await criarClienteSupabaseServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return podeAbrirFinanceiro(user) ? { budget: podeVerFinanceiro(user?.email) } : null;
 }
 
 // "JWT issued at future" (07/10): o token que o Supabase gera na hora às vezes
@@ -39,8 +49,9 @@ async function lerComRetentativa() {
 const NEGADO = () => NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
 
 export async function GET(request: Request) {
-  if (!(await usuarioFinanceiro())) return NEGADO();
-  // ?sem_notas=1 (bloco da Visão Geral): não manda a lista de NFs, que é a maior parte.
+  const quem = await usuarioPainel();
+  if (!quem) return NEGADO();
+  // ?sem_notas=1 (bloco da Visão Geral): não manda as listas (NFs, compras, títulos), que são a maior parte.
   const semNotas = new URL(request.url).searchParams.has("sem_notas");
   const { resumo, budget } = await lerComRetentativa();
   if (resumo.error || budget.error) {
@@ -48,9 +59,15 @@ export async function GET(request: Request) {
   }
   return NextResponse.json(
     {
-      resumo: resumo.data?.dados ? (semNotas ? { ...resumo.data.dados, notas: [] } : resumo.data.dados) : null,
+      resumo: resumo.data?.dados
+        ? semNotas
+          ? { ...resumo.data.dados, notas: [], compras: [], pagar: undefined, receber: undefined }
+          : resumo.data.dados
+        : null,
       gerado_em: resumo.data?.gerado_em ?? null,
-      budget: budget.data?.dados ?? { faturamento: {}, custos_pct: {} },
+      // Budget oculto pro perfil "financeiro": nem vai na resposta.
+      budget: quem.budget ? (budget.data?.dados ?? { faturamento: {}, custos_pct: {} }) : { faturamento: {}, custos_pct: {} },
+      ver_budget: quem.budget,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

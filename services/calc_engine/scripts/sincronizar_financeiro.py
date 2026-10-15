@@ -109,6 +109,120 @@ GROUP BY F.CODIGO, F.NRONOTA, F.DTEMISSAO, F.CLIENTE, F.VEPEDIDO, LEFT(I.CFOP, 4
 """
 
 
+# --- Painel do financeiro (perfil "financeiro" — pedido do usuário, 15/10/2026) ---
+# Compras recentes (pedidos de compra), contas a pagar e a receber.
+DIAS_COMPRAS = 45
+DIAS_PAGAR = 60  # a pagar: vencidos + vencendo nos próximos 60 dias
+DIAS_BAIXAS = 15  # pagos / recebidos nos últimos 15 dias
+
+STATUS_COMPRA = {"$": "Aprovado", "A": "Aberto", "D": "Pré-liberado", "E": "Encerrado", "L": "Liberado",
+                 "V": "Confirmado", "C": "Cancelado", "R": "Recusado"}
+
+SQL_COMPRAS = """
+SELECT P.CODIGO, P.DTPEDIDO, P.DTPRAZO, P.STATUS, P.VLRTOTAL, P.VLRFRETE,
+  COALESCE(NULLIF(LTRIM(RTRIM(F.FANTASIA)), ''), F.RAZAO) AS FORNECEDOR
+FROM CO_PEDIDOS P
+LEFT JOIN FN_FORNECEDORES F ON F.CODIGO = P.FORNECEDOR
+WHERE P.FILIAL = ? AND P.DTPEDIDO >= ? AND P.STATUS NOT IN ('C', 'R')
+"""
+
+SQL_COMPRAS_ITENS = """
+SELECT I.PEDIDO, I.ITEM, I.DESCRICAO, I.QTDEPED, I.UNDSUP, I.VLRTOTAL, I.DTPRAZOREC, R.OBRA
+FROM CO_PEDIDOITENS I
+INNER JOIN CO_PEDIDOS P ON P.CODIGO = I.PEDIDO
+LEFT JOIN CO_REQUISICAO R ON R.CODIGO = I.CODREQ
+WHERE P.FILIAL = ? AND P.DTPEDIDO >= ? AND P.STATUS NOT IN ('C', 'R') AND I.STATUS <> 'C'
+"""
+
+# STATUS 'A' = ativa (B = bloqueada, C = cancelada); sem DTPAGAMENTO = em aberto.
+SQL_PAGAR = """
+SELECT P.CODIGO, P.DTVENCIMENTO, P.DTPAGAMENTO, P.VLRDEVIDO, P.VLREFETIVO, P.NRODOCUMENTO, P.TPPAGAMENTO, P.FILIAL,
+  COALESCE(NULLIF(LTRIM(RTRIM(F.FANTASIA)), ''), F.RAZAO, P.BENEFICIARIONOME) AS NOME
+FROM FN_PAGAR P
+LEFT JOIN FN_FORNECEDORES F ON F.CODIGO = P.CODFORNECEDOR
+WHERE P.STATUS = 'A'
+  AND ((P.DTPAGAMENTO IS NULL AND P.DTVENCIMENTO <= ?) OR P.DTPAGAMENTO >= ?)
+"""
+
+SQL_RECEBER = """
+SELECT R.CODIGO, R.DTVENCIMENTO, R.DTPAGAMENTO, R.VLRDEVIDO, R.VLREFETIVO, R.NRODOCUMENTO, R.TPPAGAMENTO,
+  (SELECT TOP 1 E.RAZAO FROM VW_FN_CLIENTEENDERECO E WHERE E.CLIENTE = R.CODCLIENTE) AS CLIENTE, R.NRONOTA
+FROM FN_RECEBER R
+WHERE R.STATUS = 'A' AND R.FILIAL = ?
+  AND (R.DTPAGAMENTO IS NULL OR R.DTPAGAMENTO >= ?)
+"""
+
+# Forma de pagamento: só os códigos de significado certo; o resto vai como veio.
+FORMAS = {"BLQ": "Boleto", "PIX": "PIX", "TED": "TED", "DOC": "DOC", "CH": "Cheque"}
+
+
+def _texto(v) -> str | None:
+    v = (v or "").strip() if isinstance(v, str) else v
+    return v or None
+
+
+def _dia(v) -> str | None:
+    return v.date().isoformat() if v else None
+
+
+def _painel(cur, hoje: date) -> dict:
+    from datetime import timedelta
+
+    ini_compras = hoje - timedelta(days=DIAS_COMPRAS)
+    ini_baixas = hoje - timedelta(days=DIAS_BAIXAS)
+    compras: dict[int, dict] = {}
+    cur.execute(SQL_COMPRAS, FILIAL, ini_compras)
+    for codigo, dt, prazo, status, total, frete, fornecedor in cur.fetchall():
+        st = (status or "").strip()
+        compras[int(codigo)] = {"pedido": str(int(codigo)), "data": _dia(dt), "prazo": _dia(prazo), "status": st,
+                                "status_rotulo": STATUS_COMPRA.get(st, st), "fornecedor": _texto(fornecedor),
+                                "total": round(float(total or 0), 2), "frete": round(float(frete or 0), 2),
+                                "obras": [], "itens": []}
+    cur.execute(SQL_COMPRAS_ITENS, FILIAL, ini_compras)
+    for pedido, item, descricao, qtd, und, total, prazo, obra in cur.fetchall():
+        c = compras.get(int(pedido))
+        if not c:
+            continue
+        mac = _mac(obra)
+        c["itens"].append({"item": _texto(item), "descricao": _texto(descricao), "qtd": float(qtd or 0),
+                           "und": _texto(und), "total": round(float(total or 0), 2), "obra": mac,
+                           "prazo": _dia(prazo)})
+        if mac and mac not in c["obras"]:
+            c["obras"].append(mac)
+    for c in compras.values():
+        c["itens"].sort(key=lambda i: i["item"] or "")
+
+    pagar_aberto, pagos = [], []
+    cur.execute(SQL_PAGAR, hoje + timedelta(days=DIAS_PAGAR), ini_baixas)
+    for codigo, venc, pago, devido, efetivo, doc, forma, filial, nome in cur.fetchall():
+        t = {"id": int(codigo), "vencimento": _dia(venc), "nome": _texto(nome), "documento": _texto(doc),
+             "forma": FORMAS.get((forma or "").strip(), _texto(forma)), "filial": int(filial or 1)}
+        if pago:
+            pagos.append({**t, "pago_em": _dia(pago), "valor": round(float(efetivo or devido or 0), 2)})
+        else:
+            pagar_aberto.append({**t, "valor": round(float(devido or 0), 2)})
+
+    receber_aberto, recebidos = [], []
+    cur.execute(SQL_RECEBER, FILIAL, ini_baixas)
+    for codigo, venc, pago, devido, efetivo, doc, forma, cliente, nota in cur.fetchall():
+        t = {"id": int(codigo), "vencimento": _dia(venc), "nome": _texto(cliente), "documento": _texto(doc),
+             "nota": (_texto(nota) or "").lstrip("0") or None, "forma": FORMAS.get((forma or "").strip(), _texto(forma))}
+        if pago:
+            recebidos.append({**t, "pago_em": _dia(pago), "valor": round(float(efetivo or devido or 0), 2)})
+        else:
+            receber_aberto.append({**t, "valor": round(float(devido or 0), 2)})
+
+    por_venc = lambda t: (t["vencimento"] or "", t["id"])  # noqa: E731
+    por_baixa = lambda t: (t["pago_em"] or "", t["id"])  # noqa: E731
+    return {
+        "hoje": hoje.isoformat(),
+        "compras": sorted(compras.values(), key=lambda c: (c["data"] or "", int(c["pedido"])), reverse=True),
+        "pagar": {"abertos": sorted(pagar_aberto, key=por_venc), "pagos": sorted(pagos, key=por_baixa, reverse=True)},
+        "receber": {"abertos": sorted(receber_aberto, key=por_venc),
+                    "recebidos": sorted(recebidos, key=por_baixa, reverse=True)},
+    }
+
+
 def _mac(obra: str | None) -> str | None:
     """Obra no formato do Follow up (MAC com 2 partes): '0924.26' / 'MAC.251.25' /
     'MAC.1131.25.10.03' → '924.26' / '251.25' / '1131.25'. Sem número (ex.:
@@ -187,6 +301,7 @@ def montar(hoje: date | None = None) -> dict:
                 "cancelada": (status or "").strip() == "C",
             })
             n["servico" if cfop in CFOP_SERVICO else "producao"] += float(valor or 0)
+        painel = _painel(cur, hoje)
     r2 = lambda d: {k: round(v, 2) for k, v in d.items()}  # noqa: E731
     return {
         "meses": meses,
@@ -200,6 +315,7 @@ def montar(hoje: date | None = None) -> dict:
              "total": round(n["producao"] + n["servico"], 2)}
             for _, n in sorted(notas.items(), key=lambda kv: (kv[1]["emissao"], kv[0]), reverse=True)
         ],
+        **painel,
     }
 
 
@@ -208,7 +324,8 @@ def sincronizar(simular: bool = False) -> str | None:
     dados = montar()
     texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
     assinatura = hashlib.sha256(texto.encode()).hexdigest()
-    resumo = (f"{len(dados['notas'])} NFs · faturamento {dados['meses'][-1]}: "
+    resumo = (f"{len(dados['notas'])} NFs · {len(dados['compras'])} compras · "
+              f"{len(dados['pagar']['abertos'])} a pagar · {len(dados['receber']['abertos'])} a receber · faturamento {dados['meses'][-1]}: "
               f"R$ {sum(dados['faturamento'][dados['meses'][-1]].values()):,.2f}")
     if simular:
         return resumo

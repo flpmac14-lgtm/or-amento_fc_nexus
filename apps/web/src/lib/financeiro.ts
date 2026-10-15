@@ -5,11 +5,25 @@
 // services/calc_engine/scripts/sincronizar_financeiro.py (mesmas consultas
 // do DashboardIndustrial).
 
+import type { User } from "@supabase/supabase-js";
+
 export const EMAIL_FINANCEIRO = "flpmac14@gmail.com";
 export const ROTA_FINANCEIRO = "/financeiro";
 
+// Conta do usuário (flpmac14): também é a "admin" em outras telas (Ver como, Registro).
 export function podeVerFinanceiro(email: string | null | undefined): boolean {
   return (email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO;
+}
+
+// Perfil "financeiro" (gabriele, pedido do usuário 15/10/2026): só o painel, sem Budget.
+export const PERFIL_FINANCEIRO = "financeiro";
+export function perfilFinanceiro(user: Pick<User, "app_metadata"> | null | undefined): boolean {
+  return user?.app_metadata?.acesso === PERFIL_FINANCEIRO;
+}
+
+/** Quem abre /financeiro e /api/financeiro: o flpmac14 e o perfil "financeiro". */
+export function podeAbrirFinanceiro(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  return podeVerFinanceiro(user?.email) || perfilFinanceiro(user);
 }
 
 export interface ResumoFinanceiro {
@@ -20,6 +34,46 @@ export interface ResumoFinanceiro {
   entrada_pedidos: Record<string, number>;
   // NFs faturadas (mesmo filtro do faturamento), a mais recente primeiro.
   notas: NotaFiscal[];
+  // Painel do financeiro (15/10/2026): compras recentes, a pagar e a receber.
+  hoje?: string;
+  compras?: CompraErp[];
+  pagar?: { abertos: TituloErp[]; pagos: TituloErp[] };
+  receber?: { abertos: TituloErp[]; recebidos: TituloErp[] };
+}
+
+/** Pedido de compra (CO_PEDIDOS) dos últimos 45 dias. */
+export interface CompraErp {
+  pedido: string;
+  data: string | null;
+  prazo: string | null;
+  status: string;
+  status_rotulo: string;
+  fornecedor: string | null;
+  total: number;
+  frete: number;
+  obras: string[];
+  itens: {
+    item: string | null;
+    descricao: string | null;
+    qtd: number;
+    und: string | null;
+    total: number;
+    obra: string | null;
+    prazo: string | null;
+  }[];
+}
+
+/** Título a pagar (FN_PAGAR) ou a receber (FN_RECEBER). */
+export interface TituloErp {
+  id: number;
+  vencimento: string | null;
+  nome: string | null; // fornecedor / cliente
+  documento: string | null;
+  forma: string | null;
+  valor: number;
+  pago_em?: string | null;
+  nota?: string | null;
+  filial?: number;
 }
 
 export interface NotaFiscal {
@@ -44,6 +98,7 @@ export interface RespostaFinanceiro {
   resumo: ResumoFinanceiro | null;
   gerado_em: string | null;
   budget: BudgetFinanceiro;
+  ver_budget?: boolean; // false pro perfil "financeiro" (pedido do usuário: Budget oculto)
 }
 
 /** GET /api/financeiro. Se der erro, tenta mais uma vez depois de 2 s antes de

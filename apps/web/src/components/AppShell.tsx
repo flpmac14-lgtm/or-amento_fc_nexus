@@ -24,7 +24,7 @@ import {
   type ValorVisao,
 } from "@/lib/abasFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
@@ -135,11 +135,20 @@ const ROTULO_PERFIL: Record<string, string> = {
   qualidade: "QUALIDADE",
   consulta: "CONSULTA",
   pintura: "PINTURA",
+  financeiro: "FINANCEIRO",
 };
 
 // real = a conta logada; o menu é montado "como" a conta escolhida no Ver como (só o admin).
 function montarMenu(real: User): Conta {
   const user = usuarioEfetivo(real);
+  // Perfil "financeiro" (gabriele): só o painel Financeiro no menu.
+  if (perfilFinanceiro(user)) {
+    return {
+      login: emailParaLogin(user.email ?? ""),
+      perfil: "financeiro",
+      itens: [{ secao: "Principal", itens: [{ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" }] }],
+    };
+  }
   const perfil = perfilModulo(user);
   const restrita = acessoSoFollowUp(user);
   const secoes: Conta["itens"] = [];
@@ -286,7 +295,13 @@ export default function AppShell({
       >
         {/* Logo → Visão Geral (pedido do usuário); quem não tem Visão Geral vai pro Follow up. */}
         <Link
-          href={conta?.itens.some((s) => s.itens.some((i) => i.href === "/visao-geral")) ? "/visao-geral" : "/follow-up"}
+          href={
+            conta?.perfil === "financeiro"
+              ? "/financeiro"
+              : conta?.itens.some((s) => s.itens.some((i) => i.href === "/visao-geral"))
+                ? "/visao-geral"
+                : "/follow-up"
+          }
           onClick={() => setAberto(false)}
           className="group flex items-center gap-3 border-b border-white/10 px-4 py-4"
         >

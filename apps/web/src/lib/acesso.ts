@@ -26,6 +26,10 @@ export const ACESSO_CONSULTA = "consulta";
 // Pintura (felipe) — pedido do usuário (13/10/2026): igual ao jeferson/diego,
 // mas aponta a Pintura (fundo, acabamento, finalização…) em vez da Caldeiraria.
 export const ACESSO_PINTURA = "pintura";
+// Financeiro (gabriele) — pedido do usuário (15/10/2026): SÓ o painel
+// /financeiro (sem Budget), pelo celular. Não é "só Follow up": o proxy prende
+// essa conta em /financeiro (ver perfilFinanceiro em lib/financeiro.ts).
+export const ACESSO_FINANCEIRO = "financeiro";
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,
 // conferido no proxy) e o marcelo (acesso "follow_up") abrem.

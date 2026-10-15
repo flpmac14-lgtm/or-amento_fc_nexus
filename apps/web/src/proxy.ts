@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
-import { ROTA_FINANCEIRO, podeVerFinanceiro } from "@/lib/financeiro";
+import { ROTA_FINANCEIRO, perfilFinanceiro, podeAbrirFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 // /instalar, manifesto e ícones do app instalável (PWA): públicos — o celular
@@ -23,17 +23,32 @@ export async function proxy(request: NextRequest) {
   }
 
   const soFollowUp = acessoSoFollowUp(user);
+  // Perfil "financeiro" (gabriele): preso em /financeiro — pedido do usuário.
+  const soFinanceiro = perfilFinanceiro(user);
 
   // Logado abrindo o /login → vai pra sua tela inicial. As outras rotas
   // públicas (instalar, manifesto, ícones do app) valem pra todos, logado ou
   // não, inclusive conta restrita (o celular busca o manifesto já logado).
   if (user && request.nextUrl.pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.pathname = soFinanceiro ? ROTA_FINANCEIRO : soFollowUp ? ROTA_FOLLOW_UP : "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
   if (rotaPublica) return response;
+
+  // Perfil "financeiro": só a página e os dados do Financeiro; o resto volta pra lá.
+  if (user && soFinanceiro) {
+    const caminho = request.nextUrl.pathname;
+    if (caminho.startsWith(ROTA_FINANCEIRO) || caminho.startsWith("/api/financeiro")) return response;
+    if (caminho.startsWith("/api/")) {
+      return NextResponse.json({ erro: "Conta com acesso restrito (financeiro)." }, { status: 403 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = ROTA_FINANCEIRO;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   // Visão Geral: só o admin (ADMIN_EMAILS) e a conta marcelo (acesso
   // "follow_up") — pedido do usuário. Os demais voltam pra sua tela inicial.
@@ -45,9 +60,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Financeiro: SÓ a conta flpmac14 — pedido explícito do usuário (os dados
-  // também são conferidos em app/api/financeiro/route.ts).
-  if (user && request.nextUrl.pathname.startsWith(ROTA_FINANCEIRO) && !podeVerFinanceiro(user.email)) {
+  // Financeiro: a conta flpmac14 e o perfil "financeiro" — pedido explícito do
+  // usuário (os dados também são conferidos em app/api/financeiro/route.ts).
+  if (user && request.nextUrl.pathname.startsWith(ROTA_FINANCEIRO) && !podeAbrirFinanceiro(user)) {
     const url = request.nextUrl.clone();
     url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
     url.search = "";

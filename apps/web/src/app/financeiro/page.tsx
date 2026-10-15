@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
 import FinanceiroNotas from "@/components/FinanceiroNotas";
+import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/FinanceiroPainel";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
 import { buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
 
@@ -46,11 +47,28 @@ export default function PaginaFinanceiro() {
   const [carregando, setCarregando] = useState(true);
   const [mesSel, setMesSel] = useState<string | null>(null);
   const [mesNotas, setMesNotas] = useState("");
+  // Abas (pedido do usuário, 15/10/2026): Resumo, Compras, A pagar, A receber e
+  // Faturamento (o painel de antes). Lembrada no endereço (?aba=).
+  const [aba, setAba] = useState<AbaPainel | "faturamento">("resumo");
+  function irAba(a: AbaPainel | "faturamento") {
+    setAba(a);
+    const url = new URL(window.location.href);
+    url.searchParams.set("aba", a);
+    window.history.replaceState(null, "", url);
+    window.scrollTo({ top: 0 });
+  }
 
   const buscar = useCallback(() => {
     buscarFinanceiro(false)
       .then((j) => {
-        setDados(j);
+        // 1ª carga: abre na aba do endereço (as abas só aparecem com os dados).
+        setDados((antes) => {
+          if (!antes) {
+            const a = new URLSearchParams(window.location.search).get("aba");
+            if (a === "faturamento" || ABAS_PAINEL.some(([v]) => v === a)) setAba(a as AbaPainel | "faturamento");
+          }
+          return j;
+        });
         setErro("");
       })
       .catch((e: Error) => setErro(e.message))
@@ -103,7 +121,7 @@ export default function PaginaFinanceiro() {
       }
       acoes={
         <>
-          {meses.length > 2 && (
+          {aba === "faturamento" && meses.length > 2 && (
             <label className="flex items-center gap-1 text-sm text-stone-600 dark:text-slate-300">
               <span className="hidden sm:inline">Mês:</span>
               <select
@@ -123,7 +141,7 @@ export default function PaginaFinanceiro() {
               </select>
             </label>
           )}
-          {mesSel && (
+          {aba === "faturamento" && mesSel && (
             <button type="button" onClick={() => escolherMes(null)} className={classeBotaoCabecalho} title="Voltar pro mês atual">
               ✕<span className="hidden sm:inline"> mês atual</span>
             </button>
@@ -143,6 +161,25 @@ export default function PaginaFinanceiro() {
         )}
 
         {resumo && (
+          <nav className="sticky top-14 z-20 -mx-3 flex gap-1 overflow-x-auto border-b border-stone-200 bg-stone-50/95 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border">
+            {[...ABAS_PAINEL, ["faturamento", "Faturamento"] as const].map(([v, r]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => irAba(v)}
+                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold ${
+                  aba === v ? "bg-green-700 text-white dark:bg-cyan-600" : "text-stone-600 hover:bg-stone-200 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {resumo && aba !== "faturamento" && <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />}
+
+        {resumo && aba === "faturamento" && (
           <>
             {/* Faturamento: 3 meses mais recentes */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -240,7 +277,8 @@ export default function PaginaFinanceiro() {
 
             <FinanceiroNotas notas={resumo.notas ?? []} mes={mesNotas} setMes={setMesNotas} />
 
-            <FinanceiroBudget budget={budget} grupos={resumo.grupos} salvou={salvouBudget} />
+            {/* Budget oculto pro perfil "financeiro" (pedido do usuário). */}
+            {dados?.ver_budget !== false && <FinanceiroBudget budget={budget} grupos={resumo.grupos} salvou={salvouBudget} />}
           </>
         )}
       </main>
