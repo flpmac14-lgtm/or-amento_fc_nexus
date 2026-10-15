@@ -29,6 +29,50 @@ function localFabricacao(i: ItemFollowUp): string {
   return !f || normalizarBusca(f).startsWith("macfa") ? MACFAB : f; // "MACFA" digitado errado também
 }
 
+// Tique "Sem fornecedores" — pedido do usuário (15/10/2026): relatório pra
+// mostrar fora (ex.: pro cliente) sem o nome dos terceirizados. Todo
+// fornecedor que não é a Macfab vira este termo — no cartão, no gráfico, nos
+// avisos e dentro da Obs. / Plano de pintura que citar o nome.
+const TERMO_EXTERNO = "Serviço de monitoramento externo";
+
+// Sem acento e minúsculo, letra por letra (mesmo tamanho do original, pra achar a posição).
+function dobrar(texto: string): string {
+  return texto.split("").map((c) => c.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().charAt(0) || c).join("");
+}
+
+function trocarNomes(texto: string | null, nomes: string[]): string | null {
+  if (!texto) return texto;
+  let saida = texto;
+  for (const nome of nomes) {
+    const alvo = dobrar(nome);
+    let pos = dobrar(saida).indexOf(alvo);
+    while (pos >= 0) {
+      saida = saida.slice(0, pos) + TERMO_EXTERNO + saida.slice(pos + nome.length);
+      pos = dobrar(saida).indexOf(alvo, pos + TERMO_EXTERNO.length);
+    }
+  }
+  return saida;
+}
+
+// Nomes de todos os fornecedores do Follow up (não só desta obra): a Obs. pode citar outro.
+function nomesFornecedores(todos: ItemFollowUp[]): string[] {
+  const nomes = new Set<string>();
+  for (const i of todos) {
+    const f = (i.fornecedor ?? "").trim().replace(/\s+/g, " ");
+    if (f.length >= 3 && localFabricacao(i) !== MACFAB) nomes.add(f);
+  }
+  return [...nomes].sort((a, b) => b.length - a.length); // o mais longo primeiro ("Silva Usinagem" antes de "Silva")
+}
+
+function semFornecedor(i: ItemFollowUp, nomes: string[]): ItemFollowUp {
+  return {
+    ...i,
+    fornecedor: localFabricacao(i) === MACFAB ? i.fornecedor : TERMO_EXTERNO,
+    obs_felipe_marcelo: trocarNomes(i.obs_felipe_marcelo, nomes),
+    plano_pintura: trocarNomes(i.plano_pintura, nomes),
+  };
+}
+
 // Pontos de atenção do item (pedido do usuário): falta material — se é de um
 // terceirizado, falta levar o material pra ele; e falta cortar (Corte < 100%).
 function alertas(i: ItemFollowUp): string[] {
@@ -36,7 +80,13 @@ function alertas(i: ItemFollowUp): string[] {
   const local = localFabricacao(i);
   const lista: string[] = [];
   if (i.falta_material) {
-    lista.push(local === MACFAB ? "Falta material pra fabricar" : `Falta levar material pro terceirizado (${local})`);
+    lista.push(
+      local === MACFAB
+        ? "Falta material pra fabricar"
+        : local === TERMO_EXTERNO
+          ? `Falta material — ${TERMO_EXTERNO}`
+          : `Falta levar material pro terceirizado (${local})`,
+    );
   }
   if (i.cor !== 100) lista.push("Falta cortar");
   return lista;
@@ -208,7 +258,11 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
     <section className="break-inside-avoid rounded border-2 border-red-500 p-2">
       <h2 className="text-[10px] font-bold uppercase tracking-wide text-red-700">⚠ Pontos de atenção</h2>
       <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
-        {levar > 0 && <span className="rounded bg-red-600 px-1.5 py-0.5 font-bold text-white">{levar} falta levar material pro terceirizado</span>}
+        {levar > 0 && (
+          <span className="rounded bg-red-600 px-1.5 py-0.5 font-bold text-white">
+            {levar} {abertos.some((i) => i.fornecedor === TERMO_EXTERNO) ? `falta material — ${TERMO_EXTERNO}` : "falta levar material pro terceirizado"}
+          </span>
+        )}
         {material > 0 && <span className="rounded bg-red-600 px-1.5 py-0.5 font-bold text-white">{material} falta material na Macfab</span>}
         {cortar > 0 && (
           <span className="rounded border border-orange-500 bg-orange-50 px-1.5 py-0.5 font-bold text-orange-800">{cortar} falta cortar</span>
@@ -318,7 +372,10 @@ function Relatorio() {
   const params = useSearchParams();
   const tipo: TipoObra = params.get("tipo") === "mac" ? "mac" : "po";
   const valor = params.get("valor") ?? "";
-  const [itens, setItens] = useState<ItemFollowUp[] | null>(null);
+  const [brutos, setItens] = useState<ItemFollowUp[] | null>(null);
+  const [nomes, setNomes] = useState<string[]>([]);
+  // Tique "Sem fornecedores" — fica na URL (&sem_fornecedor=1) pra mandar o link já assim.
+  const [ocultar, setOcultar] = useState(params.get("sem_fornecedor") === "1");
   const [erro, setErro] = useState("");
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
 
@@ -328,6 +385,7 @@ function Relatorio() {
     listarFollowUp()
       .then((r) => {
         if (!ativo) return;
+        setNomes(nomesFornecedores(r.itens));
         const lista = itensDaObra(r.itens, tipo, valor);
         lista.sort((a, b) => a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
         setItens(lista);
@@ -340,7 +398,9 @@ function Relatorio() {
 
   if (!valor) return <p className="p-8 text-red-600">Informe o PO ou a MAC da obra.</p>;
   if (erro) return <p className="p-8 text-red-600">{erro}</p>;
-  if (!itens) return <p className="p-8 text-stone-500">Carregando relatório… (o servidor pode levar até 1 minuto para acordar)</p>;
+  if (!brutos) return <p className="p-8 text-stone-500">Carregando relatório… (o servidor pode levar até 1 minuto para acordar)</p>;
+
+  const itens = ocultar ? brutos.map((i) => semFornecedor(i, nomes)) : brutos;
 
   const clientes = [...new Set(itens.map((i) => i.cliente).filter(Boolean))].join(", ");
   const pecas = itens.reduce((s, i) => s + (i.quantidade ?? 0), 0);
@@ -354,7 +414,27 @@ function Relatorio() {
 
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">
-      <div className="mx-auto mb-4 flex max-w-[210mm] justify-end gap-2 print:hidden">
+      <div className="mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-end gap-2 print:hidden">
+        <label
+          className={`mr-auto flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold ${
+            ocultar ? "border-violet-600 bg-violet-50 text-violet-900" : "border-stone-400 bg-white text-stone-700"
+          }`}
+          title={`Troca o nome de todo terceirizado por "${TERMO_EXTERNO}" (cartões, gráfico, avisos e Obs.)`}
+        >
+          <input
+            type="checkbox"
+            checked={ocultar}
+            onChange={(e) => {
+              setOcultar(e.target.checked);
+              const url = new URL(window.location.href);
+              if (e.target.checked) url.searchParams.set("sem_fornecedor", "1");
+              else url.searchParams.delete("sem_fornecedor");
+              window.history.replaceState(null, "", url);
+            }}
+            className="h-5 w-5 accent-violet-600"
+          />
+          Sem fornecedores (pra cliente)
+        </label>
         <button
           type="button"
           onClick={() => window.print()}
