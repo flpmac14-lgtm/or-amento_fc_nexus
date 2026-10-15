@@ -180,7 +180,8 @@ function ListaTitulos({
       const d = (t[campoDia] as string | null) ?? "";
       m.set(d, [...(m.get(d) ?? []), t]);
     }
-    return [...m.entries()];
+    // Dentro do dia, o maior valor primeiro.
+    return [...m.entries()].map(([d, l]) => [d, l.sort((a, b) => b.valor - a.valor)] as const);
   }, [titulos, campoDia]);
   if (!titulos.length) return <Vazio>Nada por aqui.</Vazio>;
   return (
@@ -297,7 +298,13 @@ function Resumo({ resumo, hoje, ir }: { resumo: ResumoFinanceiro; hoje: string; 
   const compras7 = compras.filter((c) => c.data && c.data >= somarDias(hoje, -6));
   const fat = resumo.faturamento[mes];
   const fatMes = fat ? fat.producao + fat.servico : 0;
-  const proximos = pagar.filter((t) => t.vencimento && t.vencimento >= hoje).slice(0, 6);
+  // Próximos 5 dias com pagamento: total e quantidade do dia inteiro.
+  const proximos = [...new Set(pagar.map((t) => t.vencimento).filter((d): d is string => !!d && d >= hoje))]
+    .slice(0, 5)
+    .map((dia) => {
+      const doDia = pagar.filter((t) => t.vencimento === dia);
+      return { dia, qtd: doDia.length, total: soma(doDia), maior: [...doDia].sort((a, b) => b.valor - a.valor)[0] };
+    });
 
   return (
     <div className="flex flex-col gap-4">
@@ -333,7 +340,29 @@ function Resumo({ resumo, hoje, ir }: { resumo: ResumoFinanceiro; hoje: string; 
       <Titulo extra={<button type="button" onClick={() => ir("pagar")} className="text-sm font-semibold text-green-700 dark:text-cyan-300">ver todos →</button>}>
         Próximos pagamentos
       </Titulo>
-      <ListaTitulos titulos={proximos} hoje={hoje} campoDia="vencimento" />
+      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {proximos.map((p) => (
+          <button
+            key={p.dia}
+            type="button"
+            onClick={() => ir("pagar")}
+            className="flex w-full items-center justify-between gap-3 border-t border-stone-100 px-3 py-2.5 text-left first:border-t-0 active:bg-stone-50 dark:border-slate-800 dark:active:bg-slate-800"
+          >
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold text-stone-900 dark:text-white">
+                {diaExtenso(p.dia, hoje)} <span className="font-normal text-stone-500 dark:text-slate-400">· {p.qtd} título(s)</span>
+              </span>
+              {p.maior && (
+                <span className="block truncate text-xs text-stone-500 dark:text-slate-400">
+                  maior: {p.maior.nome ?? "—"} ({moeda(p.maior.valor)})
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 font-mono text-[15px] font-black text-stone-900 dark:text-white">{moeda(p.total)}</span>
+          </button>
+        ))}
+        {!proximos.length && <p className="p-4 text-center text-sm text-stone-500">Nenhum pagamento previsto.</p>}
+      </div>
 
       <Titulo extra={<button type="button" onClick={() => ir("compras")} className="text-sm font-semibold text-green-700 dark:text-cyan-300">ver todas →</button>}>
         Últimas compras
