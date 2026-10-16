@@ -76,7 +76,10 @@ function limparNome(s: string): string {
 function nomeDaFoto(f: FotoSetor, titulo: string, usados: Set<string>): string {
   const d = new Date(f.em);
   const p = (n: number) => String(n).padStart(2, "0");
-  const quandoArq = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}h${p(d.getMinutes())}`;
+  // Foto do Follow up (planilha/colada) não tem data: fica sem.
+  const quandoArq = f.em
+    ? `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}h${p(d.getMinutes())}`
+    : "";
   const base = limparNome([titulo, f.tipo, f.observacao, quandoArq].filter(Boolean).join(" - "));
   let nome = base;
   for (let n = 2; usados.has(nome.toLowerCase()); n++) nome = `${base} (${n})`;
@@ -85,7 +88,9 @@ function nomeDaFoto(f: FotoSetor, titulo: string, usados: Set<string>): string {
 }
 
 async function baixarFotos(
-  fotos: FotoSetor[],
+  // Lista pronta, ou buscada DEPOIS de escolher a pasta (o navegador só deixa
+  // abrir a escolha de pasta logo no clique).
+  quais: FotoSetor[] | (() => Promise<FotoSetor[]>),
   tituloDe: (f: FotoSetor) => string,
   aoAvancar: (feitas: number) => void,
 ): Promise<string> {
@@ -99,6 +104,8 @@ async function baixarFotos(
       return ""; // cancelou a escolha da pasta
     }
   }
+  const fotos = typeof quais === "function" ? await quais() : quais;
+  if (!fotos.length) return "Esse pedido não tem fotos.";
   const usados = new Set<string>();
   let feitas = 0;
   const erros: string[] = [];
@@ -131,6 +138,91 @@ async function baixarFotos(
   return (
     `✔ ${feitas} de ${fotos.length} foto(s) baixada(s)${pasta ? " na pasta escolhida" : " (pasta Downloads)"}` +
     (erros.length ? ` · ${erros.length} falharam` : "")
+  );
+}
+
+/** Botão destacado do cabeçalho do pedido (pedido do usuário, 16/10/2026):
+ * baixa de uma vez todas as imagens do pedido — fotos de qualidade do setor +
+ * fotos do Follow up — escolhendo a pasta. */
+export function BotaoBaixarPedido({ setor, item, qtdQualidade }: { setor: string; item: ItemFollowUp; qtdQualidade: number }) {
+  const [baixando, setBaixando] = useState<number | null>(null);
+  const [msg, setMsg] = useState("");
+  const total = qtdQualidade + item.imagens.length;
+  const titulo = limparNome(`${item.desenho ?? ""} PO ${item.po}`);
+
+  async function baixar() {
+    setMsg("");
+    setBaixando(0);
+    try {
+      const r = await baixarFotos(
+        async () => {
+          const qualidade = qtdQualidade ? await listarFotosSetor(setor, { itemId: item.id }) : [];
+          const doFollowUp: FotoSetor[] = item.imagens.map((im, n) => ({
+            id: im.id,
+            item_id: item.id,
+            sha256: im.sha256,
+            tipo: `Foto do pedido ${n + 1}`,
+            observacao: null,
+            por: null,
+            em: "",
+            largura: im.largura,
+            altura: im.altura,
+          }));
+          return [...qualidade, ...doFollowUp];
+        },
+        () => titulo,
+        setBaixando,
+      );
+      if (r) setMsg(r);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBaixando(null);
+    }
+  }
+
+  if (!total) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <button
+        type="button"
+        disabled={baixando !== null}
+        onClick={baixar}
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-sky-700 bg-sky-600 text-lg font-extrabold text-white shadow active:scale-[0.98] disabled:opacity-60"
+      >
+        {baixando !== null ? `Baixando ${baixando}/${total}…` : `⬇️ Baixar fotos do pedido (${total})`}
+      </button>
+      {msg && <p className="text-center text-sm font-bold text-stone-700 dark:text-slate-300">{msg}</p>}
+    </div>
+  );
+}
+
+/** Botão destacado no cabeçalho de cada pedido da aba 📷 Fotos: baixa as
+ * fotos daquele grupo escolhendo a pasta. */
+function BotaoBaixarGrupo({ lista, titulo }: { lista: FotoSetor[]; titulo: string }) {
+  const [baixando, setBaixando] = useState<number | null>(null);
+  const [msg, setMsg] = useState("");
+
+  async function baixar() {
+    setMsg("");
+    setBaixando(0);
+    const r = await baixarFotos(lista, () => titulo, setBaixando);
+    setBaixando(null);
+    if (r) setMsg(r);
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={baixando !== null}
+        onClick={baixar}
+        className="h-12 rounded-xl border-2 border-sky-700 bg-sky-600 px-3 text-sm font-extrabold text-white shadow active:scale-[0.97] disabled:opacity-60"
+      >
+        {baixando !== null ? `${baixando}/${lista.length}…` : `⬇️ Baixar (${lista.length})`}
+      </button>
+      {msg && <p className="max-w-[12rem] text-right text-xs font-semibold text-stone-600 dark:text-slate-300">{msg}</p>}
+    </div>
   );
 }
 
@@ -841,19 +933,23 @@ export function FotosSetor({
         if (itemId === GERAL)
           return (
             <div key={itemId} className="rounded-xl border-2 border-violet-300 bg-white p-2 dark:border-violet-800 dark:bg-slate-900">
-              <p className="mb-2 px-1 text-lg font-bold text-stone-900 dark:text-white">
-                📸 Fotos gerais (sem pedido) <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">📷 {lista.length}</span>
-              </p>
+              <div className="mb-2 flex items-start gap-2">
+                <p className="min-w-0 flex-1 px-1 text-lg font-bold text-stone-900 dark:text-white">
+                  📸 Fotos gerais (sem pedido) <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">📷 {lista.length}</span>
+                </p>
+                <BotaoBaixarGrupo lista={lista} titulo="Foto geral" />
+              </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{lista.map(miniatura)}</div>
             </div>
           );
         return (
           <div key={itemId} className="rounded-xl border-2 border-stone-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+            <div className="mb-2 flex items-start gap-2">
             <button
               type="button"
               disabled={!i}
               onClick={() => abrirPedido(itemId)}
-              className="mb-2 flex w-full flex-col items-start rounded-lg px-1 text-left hover:bg-stone-50 disabled:cursor-default dark:hover:bg-slate-800"
+              className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 text-left hover:bg-stone-50 disabled:cursor-default dark:hover:bg-slate-800"
             >
               <span className="font-mono text-lg font-bold text-stone-900 dark:text-white">
                 {i ? (i.desenho ?? i.po) : "Pedido que saiu do Follow up"} <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">📷 {lista.length}</span>
@@ -864,6 +960,8 @@ export function FotosSetor({
                 </span>
               )}
             </button>
+            <BotaoBaixarGrupo lista={lista} titulo={i ? `${i.desenho ?? ""} PO ${i.po}` : "Pedido"} />
+            </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{lista.map(miniatura)}</div>
           </div>
         );

@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Foto, FotoServico, chaveApontamento, quando, type Alvo } from "@/components/ApontamentoComum";
 import ApontamentoHistorico from "@/components/ApontamentoHistorico";
-import { FotosDoPedido, FotosSetor } from "@/components/FotosQualidade";
+import { BotaoBaixarPedido, FotosDoPedido, FotosSetor } from "@/components/FotosQualidade";
 import { SeloPrazo } from "@/components/FollowUpDetalhe";
 import {
   apontarItem,
@@ -677,6 +677,14 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                   ✕
                 </button>
               </div>
+              {aberto && comFotos && (
+                <BotaoBaixarPedido
+                  key={`${aberto.id}-${fotosContagem[aberto.id] ?? 0}`}
+                  setor={config.setor}
+                  item={aberto}
+                  qtdQualidade={fotosContagem[aberto.id] ?? 0}
+                />
+              )}
               {abasPedido.length > 1 && (
                 <div className={`mt-3 grid ${abasPedido.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900`}>
                   {abasPedido.map(([t, r]) => (
