@@ -21,7 +21,6 @@ import {
   type FotoSetor,
 } from "@/lib/api";
 import { normalizarBusca } from "@/lib/busca";
-import { montarZip, type ArquivoZip } from "@/lib/zip";
 import type { ItemFollowUp } from "@/lib/types";
 
 const LADO_MAX = 2000;
@@ -59,22 +58,24 @@ function dataHora(iso: string): string {
 }
 
 // --- Baixar e excluir várias (pedido do usuário, 16/10/2026) ------------------
-// Baixa UM arquivo só: várias fotos num .zip (lib/zip.ts), uma foto em .jpg.
-// Onde salvar: janela "Salvar como" (showSaveFilePicker, Chrome/Edge no PC).
-// Antes era foto por foto numa pasta escolhida, e o Chrome pedia "permitir
-// editar a pasta" / "permitir vários downloads" — o usuário viu como erro.
-// Sem a janela (celular, Firefox): download normal (pasta Downloads).
-interface ArquivoEscolhido {
+// As fotos vão soltas (um arquivo por foto) DIRETO na pasta que o usuário
+// escolhe (showDirectoryPicker — Chrome/Edge no PC). Pedido do usuário: nada de
+// .zip, nada de extrair. O Chrome pergunta "permitir editar arquivos" (tem que
+// Permitir) e NÃO aceita a Área de Trabalho/Downloads/Documentos em si — só uma
+// pasta dentro delas. Sem a janela (celular, Firefox): download normal.
+interface PastaEscolhida {
   name: string;
-  createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
+  getFileHandle(nome: string, op: { create: boolean }): Promise<{
+    createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
+  }>;
 }
-type JanelaSalvar = Window & {
-  showSaveFilePicker?: (op: {
-    id?: string;
-    suggestedName: string;
-    types: { description: string; accept: Record<string, string[]> }[];
-  }) => Promise<ArquivoEscolhido>;
+type JanelaComPasta = Window & {
+  showDirectoryPicker?: (op?: { id?: string; mode?: "readwrite" }) => Promise<PastaEscolhida>;
 };
+
+const AVISO_PASTA =
+  "O Chrome não deixa salvar direto na Área de Trabalho, em Downloads ou em Documentos: escolha (ou crie com " +
+  "“Nova pasta”) uma pasta DENTRO delas, ex.: Downloads\\Fotos pintura, e clique em “Permitir”/“Editar arquivos”.";
 
 function limparNome(s: string): string {
   return s.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -94,88 +95,71 @@ function nomeDaFoto(f: FotoSetor, titulo: string, usados: Set<string>): string {
   return nome;
 }
 
+// Devolve a mensagem de sucesso; erro = Error com o texto pra mostrar na tela.
 async function baixarFotos(
-  // Lista pronta, ou buscada DEPOIS de escolher onde salvar (o navegador só
-  // deixa abrir a janela "Salvar como" logo no clique).
+  // Lista pronta, ou buscada DEPOIS de escolher a pasta (o navegador só deixa
+  // abrir a escolha de pasta logo no clique).
   quais: FotoSetor[] | (() => Promise<FotoSetor[]>),
   tituloDe: (f: FotoSetor) => string,
   aoAvancar: (feitas: number) => void,
-  nomeZip: string,
-  total: number, // quantas vão vir (1 = .jpg, mais = .zip)
 ): Promise<string> {
-  const umaSo = total === 1;
-  const sugerido = limparNome(
-    umaSo && Array.isArray(quais) && quais[0] ? nomeDaFoto(quais[0], tituloDe(quais[0]), new Set()) : nomeZip,
-  );
-  const escolher = (window as JanelaSalvar).showSaveFilePicker;
-  let destino: ArquivoEscolhido | null = null;
+  const escolher = (window as JanelaComPasta).showDirectoryPicker;
+  let pasta: PastaEscolhida | null = null;
   if (escolher) {
     try {
-      destino = await escolher({
-        id: "fotos-qualidade",
-        suggestedName: `${sugerido}.${umaSo ? "jpg" : "zip"}`,
-        types: [
-          umaSo
-            ? { description: "Foto", accept: { "image/jpeg": [".jpg", ".jpeg"] } }
-            : { description: "Fotos (ZIP)", accept: { "application/zip": [".zip"] } },
-        ],
-      });
+      pasta = await escolher({ id: "fotos-qualidade", mode: "readwrite" });
     } catch (e) {
-      if ((e as Error).name === "AbortError") return ""; // cancelou
-      destino = null; // navegador não deixou abrir a janela: download normal
+      const nome = (e as Error).name;
+      if (nome === "AbortError") return ""; // cancelou (ou fechou o aviso de pasta do sistema)
+      if (nome === "SecurityError" || nome === "NotAllowedError") throw new Error(AVISO_PASTA);
+      pasta = null; // a janela não abriu: download normal
     }
   }
   const fotos = typeof quais === "function" ? await quais() : quais;
   if (!fotos.length) return "Esse pedido não tem fotos.";
 
   const usados = new Set<string>();
-  const arquivos: ArquivoZip[] = [];
-  let tipoUnico = "image/jpeg";
-  let erros = 0;
+  let feitas = 0;
+  let ultimoErro = "";
   for (const f of fotos) {
     try {
       const r = await fetch(urlImagemFollowUp(f.sha256));
-      if (!r.ok) throw new Error(String(r.status));
+      if (!r.ok) throw new Error(`servidor respondeu ${r.status}`);
       const blob = await r.blob();
       const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
-      tipoUnico = blob.type || tipoUnico;
-      arquivos.push({
-        nome: `${nomeDaFoto(f, tituloDe(f), usados)}.${ext}`,
-        dados: new Uint8Array(await blob.arrayBuffer()),
-        data: f.em ? new Date(f.em) : undefined,
-      });
-      aoAvancar(arquivos.length);
-    } catch {
-      erros++;
+      const nome = `${nomeDaFoto(f, tituloDe(f), usados)}.${ext}`;
+      if (pasta) {
+        const w = await (await pasta.getFileHandle(nome, { create: true })).createWritable();
+        await w.write(blob);
+        await w.close();
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nome;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        await new Promise((ok) => setTimeout(ok, 400)); // navegador barra downloads em rajada
+      }
+      feitas++;
+      aoAvancar(feitas);
+    } catch (e) {
+      const err = e as Error;
+      if (pasta && (err.name === "NotAllowedError" || err.name === "SecurityError"))
+        throw new Error(`O Chrome não deu permissão pra gravar na pasta “${pasta.name}”. ${AVISO_PASTA}`);
+      ultimoErro = `${err.name}: ${err.message}`;
     }
   }
-  if (!arquivos.length) return "Não consegui baixar as fotos — confira a internet e tente de novo.";
-
-  const zip = !(umaSo && arquivos.length === 1);
-  const final = zip ? montarZip(arquivos) : new Blob([arquivos[0].dados as BlobPart], { type: tipoUnico });
-  const nomeFinal = zip ? `${sugerido}.zip` : arquivos[0].nome;
-  if (destino) {
-    const w = await destino.createWritable();
-    await w.write(final);
-    await w.close();
-  } else {
-    const url = URL.createObjectURL(final);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nomeFinal;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-  }
+  if (!feitas) throw new Error(`Nenhuma foto foi salva (${ultimoErro}).`);
   return (
-    `✔ ${arquivos.length} foto(s) salva(s)${zip ? " num arquivo .zip" : ""}` +
-    (destino ? ` (${destino.name})` : " — pasta Downloads") +
-    (erros ? ` · ${erros} falharam` : "")
+    `✔ ${feitas} foto(s) salva(s) ${pasta ? `na pasta “${pasta.name}”` : "na pasta Downloads"}` +
+    (feitas < fotos.length ? ` · ${fotos.length - feitas} falharam (${ultimoErro})` : "")
   );
 }
 
 /** Botão destacado do cabeçalho do pedido (pedido do usuário, 16/10/2026):
  * baixa de uma vez todas as imagens do pedido — fotos de qualidade do setor +
- * fotos do Follow up — escolhendo a pasta. */
+ * fotos do Follow up — direto na pasta escolhida. */
 export function BotaoBaixarPedido({ setor, item, qtdQualidade }: { setor: string; item: ItemFollowUp; qtdQualidade: number }) {
   const [baixando, setBaixando] = useState<number | null>(null);
   const [msg, setMsg] = useState("");
@@ -204,8 +188,6 @@ export function BotaoBaixarPedido({ setor, item, qtdQualidade }: { setor: string
         },
         () => titulo,
         setBaixando,
-        `${titulo} - fotos`,
-        total,
       );
       if (r) setMsg(r);
     } catch (e) {
@@ -226,7 +208,13 @@ export function BotaoBaixarPedido({ setor, item, qtdQualidade }: { setor: string
       >
         {baixando !== null ? `Baixando ${baixando}/${total}…` : `⬇️ Baixar fotos do pedido (${total})`}
       </button>
-      {msg && <p className="text-center text-sm font-bold text-stone-700 dark:text-slate-300">{msg}</p>}
+      {msg ? (
+        <p className="text-center text-sm font-bold text-stone-700 dark:text-slate-300">{msg}</p>
+      ) : (
+        <p className="text-center text-xs text-stone-500 dark:text-slate-400">
+          Escolha uma pasta dentro de Downloads ou da Área de Trabalho (ex.: “Fotos pintura”) e clique em Permitir.
+        </p>
+      )}
     </div>
   );
 }
@@ -240,9 +228,14 @@ function BotaoBaixarGrupo({ lista, titulo }: { lista: FotoSetor[]; titulo: strin
   async function baixar() {
     setMsg("");
     setBaixando(0);
-    const r = await baixarFotos(lista, () => titulo, setBaixando, `${titulo} - fotos`, lista.length);
-    setBaixando(null);
-    if (r) setMsg(r);
+    try {
+      const r = await baixarFotos(lista, () => titulo, setBaixando);
+      if (r) setMsg(r);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBaixando(null);
+    }
   }
 
   return (
@@ -314,10 +307,14 @@ function BarraSelecao({
   async function baixar() {
     setMsg("");
     setBaixando(0);
-    const hoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
-    const r = await baixarFotos(sel.escolhidas, tituloDe, setBaixando, `Fotos de qualidade ${hoje}`, n);
-    setBaixando(null);
-    if (r) setMsg(r);
+    try {
+      const r = await baixarFotos(sel.escolhidas, tituloDe, setBaixando);
+      if (r) setMsg(r);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBaixando(null);
+    }
   }
 
   async function excluir() {
