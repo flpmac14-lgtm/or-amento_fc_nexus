@@ -484,6 +484,8 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
           itens={itens}
           versao={versao}
           abrirPedido={(id) => abrir({ tipo: "pedido", id }, "fotos")}
+          usuario={usuario}
+          somenteLeitura={somenteLeitura}
         />
       ) : tela === "historico" ? (
         <ApontamentoHistorico

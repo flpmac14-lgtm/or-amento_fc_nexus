@@ -57,6 +57,238 @@ function dataHora(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// --- Baixar e excluir várias (pedido do usuário, 16/10/2026) ------------------
+// Seleciona as fotos e baixa escolhendo a pasta (Chrome/Edge: showDirectoryPicker,
+// igual aos certificados da Qualidade); sem isso (celular, Firefox), download normal.
+interface PastaEscolhida {
+  getFileHandle(nome: string, op: { create: boolean }): Promise<{
+    createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
+  }>;
+}
+type JanelaComPasta = Window & {
+  showDirectoryPicker?: (op?: { id?: string; mode?: "readwrite" }) => Promise<PastaEscolhida>;
+};
+
+function limparNome(s: string): string {
+  return s.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+function nomeDaFoto(f: FotoSetor, titulo: string, usados: Set<string>): string {
+  const d = new Date(f.em);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const quandoArq = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}h${p(d.getMinutes())}`;
+  const base = limparNome([titulo, f.tipo, f.observacao, quandoArq].filter(Boolean).join(" - "));
+  let nome = base;
+  for (let n = 2; usados.has(nome.toLowerCase()); n++) nome = `${base} (${n})`;
+  usados.add(nome.toLowerCase());
+  return nome;
+}
+
+async function baixarFotos(
+  fotos: FotoSetor[],
+  tituloDe: (f: FotoSetor) => string,
+  aoAvancar: (feitas: number) => void,
+): Promise<string> {
+  // Escolher a pasta tem que ser logo no clique (exigência do navegador).
+  const escolher = (window as JanelaComPasta).showDirectoryPicker;
+  let pasta: PastaEscolhida | null = null;
+  if (escolher) {
+    try {
+      pasta = await escolher({ id: "fotos-qualidade", mode: "readwrite" });
+    } catch {
+      return ""; // cancelou a escolha da pasta
+    }
+  }
+  const usados = new Set<string>();
+  let feitas = 0;
+  const erros: string[] = [];
+  for (const f of fotos) {
+    try {
+      const r = await fetch(urlImagemFollowUp(f.sha256));
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+      const nome = `${nomeDaFoto(f, tituloDe(f), usados)}.${ext}`;
+      if (pasta) {
+        const w = await (await pasta.getFileHandle(nome, { create: true })).createWritable();
+        await w.write(blob);
+        await w.close();
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nome;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        await new Promise((ok) => setTimeout(ok, 300)); // navegador bloqueia downloads em rajada
+      }
+      feitas++;
+      aoAvancar(feitas);
+    } catch {
+      erros.push(f.tipo);
+    }
+  }
+  return (
+    `✔ ${feitas} de ${fotos.length} foto(s) baixada(s)${pasta ? " na pasta escolhida" : " (pasta Downloads)"}` +
+    (erros.length ? ` · ${erros.length} falharam` : "")
+  );
+}
+
+/** Barra "Selecionar → Baixar / Excluir" e a seleção das fotos. */
+function useSelecao(fotos: FotoSetor[]) {
+  const [selecionando, setSelecionando] = useState(false);
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const visiveis = new Set(fotos.map((f) => f.id));
+  const escolhidas = fotos.filter((f) => marcadas.has(f.id));
+  return {
+    selecionando,
+    marcadas,
+    escolhidas,
+    iniciar: () => setSelecionando(true),
+    sair: () => {
+      setSelecionando(false);
+      setMarcadas(new Set());
+    },
+    alternar: (id: string) =>
+      setMarcadas((s) => {
+        const n = new Set(s);
+        if (n.has(id)) n.delete(id);
+        else n.add(id);
+        return n;
+      }),
+    todas: () =>
+      setMarcadas((s) => ([...visiveis].every((id) => s.has(id)) ? new Set() : new Set(visiveis))),
+    todasMarcadas: fotos.length > 0 && fotos.every((f) => marcadas.has(f.id)),
+    limpar: (ids: string[]) =>
+      setMarcadas((s) => {
+        const n = new Set(s);
+        for (const id of ids) n.delete(id);
+        return n;
+      }),
+  };
+}
+
+function BarraSelecao({
+  sel,
+  total,
+  tituloDe,
+  onExcluir,
+}: {
+  sel: ReturnType<typeof useSelecao>;
+  total: number;
+  tituloDe: (f: FotoSetor) => string;
+  onExcluir?: (fotos: FotoSetor[]) => Promise<void>; // sem = só consulta (não exclui)
+}) {
+  const [baixando, setBaixando] = useState<number | null>(null);
+  const [confirmar, setConfirmar] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [msg, setMsg] = useState("");
+  const n = sel.escolhidas.length;
+
+  async function baixar() {
+    setMsg("");
+    setBaixando(0);
+    const r = await baixarFotos(sel.escolhidas, tituloDe, setBaixando);
+    setBaixando(null);
+    if (r) setMsg(r);
+  }
+
+  async function excluir() {
+    if (!onExcluir) return;
+    setExcluindo(true);
+    setMsg("");
+    try {
+      await onExcluir(sel.escolhidas);
+      setMsg(`🗑️ ${n} foto(s) excluída(s)`);
+      setConfirmar(false);
+      sel.sair();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
+  if (!total) return null;
+  const botao = "h-12 rounded-xl border-2 px-3 text-sm font-bold active:scale-[0.97] disabled:opacity-40";
+  return (
+    <div className="flex flex-col gap-2">
+      {!sel.selecionando ? (
+        <button
+          type="button"
+          onClick={() => {
+            setMsg("");
+            sel.iniciar();
+          }}
+          className={`${botao} border-stone-300 text-stone-700 dark:border-slate-600 dark:text-slate-200`}
+        >
+          ☑ Selecionar fotos pra baixar{onExcluir ? " ou excluir" : ""}
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-xl border-2 border-sky-500 bg-sky-50 p-2 dark:border-sky-700 dark:bg-sky-950/30">
+          <p className="text-center text-sm font-bold text-stone-800 dark:text-sky-100">
+            {n ? `${n} foto(s) marcada(s)` : "Toque nas fotos pra marcar"}
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <button type="button" onClick={sel.todas} className={`${botao} border-sky-500 bg-white text-sky-800 dark:bg-slate-900 dark:text-sky-200`}>
+              {sel.todasMarcadas ? "Desmarcar todas" : "Marcar todas"}
+            </button>
+            <button
+              type="button"
+              disabled={!n || baixando !== null}
+              onClick={baixar}
+              className={`${botao} border-green-700 bg-green-600 text-white`}
+            >
+              {baixando !== null ? `Baixando ${baixando}/${n}…` : `⬇️ Baixar (${n})`}
+            </button>
+            {onExcluir && (
+              <button
+                type="button"
+                disabled={!n || excluindo}
+                onClick={() => setConfirmar(true)}
+                className={`${botao} border-red-500 bg-white text-red-700 dark:bg-slate-900 dark:text-red-400`}
+              >
+                🗑️ Excluir ({n})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmar(false);
+                sel.sair();
+              }}
+              className={`${botao} border-stone-300 bg-white text-stone-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300`}
+            >
+              Cancelar
+            </button>
+          </div>
+          {confirmar && (
+            <div className="flex flex-col gap-2 rounded-xl border-2 border-red-500 bg-red-50 p-2 dark:bg-red-950/40">
+              <p className="text-center text-sm font-bold text-red-800 dark:text-red-200">
+                Excluir {n} foto(s)? Não dá pra desfazer.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" disabled={excluindo} onClick={excluir} className={`${botao} border-red-700 bg-red-600 text-white`}>
+                  {excluindo ? "Excluindo…" : "🗑️ Sim, excluir"}
+                </button>
+                <button
+                  type="button"
+                  disabled={excluindo}
+                  onClick={() => setConfirmar(false)}
+                  className={`${botao} border-stone-300 bg-white text-stone-700 dark:bg-slate-900 dark:text-slate-300`}
+                >
+                  Não
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {msg && <p className="rounded-lg bg-stone-100 p-2 text-center text-sm font-bold text-stone-800 dark:bg-slate-800 dark:text-slate-200">{msg}</p>}
+    </div>
+  );
+}
+
 // Foto em tela cheia, com tipo, observação, quem tirou e (se pode) apagar.
 function Visualizador({
   foto,
@@ -167,13 +399,36 @@ function Visualizador({
   );
 }
 
-function Miniatura({ foto, onClick, grande = false }: { foto: FotoSetor; onClick: () => void; grande?: boolean }) {
+// marcada: undefined = fora do modo seleção; true/false = caixinha marcada ou não.
+function Miniatura({
+  foto,
+  onClick,
+  grande = false,
+  marcada,
+}: {
+  foto: FotoSetor;
+  onClick: () => void;
+  grande?: boolean;
+  marcada?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col overflow-hidden rounded-xl border-2 border-stone-200 bg-white text-left active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900"
+      aria-pressed={marcada}
+      className={`relative flex flex-col overflow-hidden rounded-xl border-2 bg-white text-left active:scale-[0.98] dark:bg-slate-900 ${
+        marcada ? "border-sky-600 ring-2 ring-sky-500 dark:border-sky-400" : "border-stone-200 dark:border-slate-700"
+      }`}
     >
+      {marcada !== undefined && (
+        <span
+          className={`absolute left-1.5 top-1.5 z-10 flex h-8 w-8 items-center justify-center rounded-lg border-2 text-xl font-bold shadow ${
+            marcada ? "border-sky-700 bg-sky-600 text-white" : "border-white bg-black/40 text-white"
+          }`}
+        >
+          {marcada ? "✓" : ""}
+        </span>
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element -- mídia do calc_engine */}
       <img
         src={urlImagemFollowUp(foto.sha256)}
@@ -220,6 +475,8 @@ export function FotosDoPedido({
   const [vendo, setVendo] = useState<FotoSetor | null>(null);
   const camera = useRef<HTMLInputElement>(null);
   const galeria = useRef<HTMLInputElement>(null);
+  const sel = useSelecao(fotos ?? []);
+  const titulo = item ? (item.desenho ?? `PO ${item.po}`) : "Foto geral";
 
   useEffect(() => {
     let ativo = true;
@@ -273,11 +530,20 @@ export function FotosDoPedido({
     }
   }
 
-  async function apagar(f: FotoSetor) {
-    await removerFotoSetor(setor, f.id, usuario);
-    const resto = (fotos ?? []).filter((x) => x.id !== f.id);
-    setFotos(resto);
-    onContagem?.(resto.length);
+  // Apaga uma ou várias; as que já foram apagadas saem da tela mesmo se outra falhar.
+  async function apagar(lista: FotoSetor[]) {
+    const feitas = new Set<string>();
+    try {
+      for (const f of lista) {
+        await removerFotoSetor(setor, f.id, usuario);
+        feitas.add(f.id);
+      }
+    } finally {
+      const resto = (fotos ?? []).filter((x) => !feitas.has(x.id));
+      setFotos(resto);
+      sel.limpar([...feitas]);
+      if (feitas.size) onContagem?.(resto.length);
+    }
   }
 
   return (
@@ -372,17 +638,33 @@ export function FotosDoPedido({
         </p>
         {fotos === null && <p className="text-sm text-stone-500">Carregando…</p>}
         {fotos?.length === 0 && <p className="text-sm text-stone-500 dark:text-slate-400">Nenhuma foto ainda.</p>}
+        <div className="mb-2">
+          <BarraSelecao
+            sel={sel}
+            total={fotos?.length ?? 0}
+            tituloDe={() => titulo}
+            onExcluir={somenteLeitura ? undefined : apagar}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {fotos?.map((f) => <Miniatura key={f.id} foto={f} grande onClick={() => setVendo(f)} />)}
+          {fotos?.map((f) => (
+            <Miniatura
+              key={f.id}
+              foto={f}
+              grande
+              marcada={sel.selecionando ? sel.marcadas.has(f.id) : undefined}
+              onClick={() => (sel.selecionando ? sel.alternar(f.id) : setVendo(f))}
+            />
+          ))}
         </div>
       </div>
 
       {vendo && (
         <Visualizador
           foto={vendo}
-          titulo={item ? (item.desenho ?? `PO ${item.po}`) : "Foto geral"}
+          titulo={titulo}
           onFechar={() => setVendo(null)}
-          onApagar={somenteLeitura ? undefined : () => apagar(vendo)}
+          onApagar={somenteLeitura ? undefined : () => apagar([vendo])}
         />
       )}
     </div>
@@ -405,12 +687,16 @@ export function FotosSetor({
   itens,
   versao,
   abrirPedido,
+  usuario,
+  somenteLeitura,
 }: {
   setor: string;
   tipos: string[];
   itens: ItemFollowUp[];
   versao: number;
   abrirPedido: (itemId: string) => void;
+  usuario: string | null;
+  somenteLeitura: boolean;
 }) {
   const [dias, setDias] = useState<number>(30);
   const [fotos, setFotos] = useState<FotoSetor[] | null>(null);
@@ -454,6 +740,40 @@ export function FotosSetor({
     }
     return [...m.entries()]; // já vem da mais recente pra mais antiga
   }, [fotos, tipo, termos, porId]);
+
+  // Seleção vale pras fotos que estão na tela (filtro/busca aplicados).
+  const naTela = useMemo(() => grupos.flatMap(([, l]) => l), [grupos]);
+  const sel = useSelecao(naTela);
+
+  function tituloDe(f: FotoSetor): string {
+    if (!f.item_id) return "Foto geral";
+    const i = porId.get(f.item_id);
+    return i ? `${i.desenho ?? ""} PO ${i.po}` : "Pedido";
+  }
+
+  async function apagar(lista: FotoSetor[]) {
+    const feitas = new Set<string>();
+    try {
+      for (const f of lista) {
+        await removerFotoSetor(setor, f.id, usuario);
+        feitas.add(f.id);
+      }
+    } finally {
+      setFotos((atual) => (atual ?? []).filter((x) => !feitas.has(x.id)));
+      sel.limpar([...feitas]);
+    }
+  }
+
+  function miniatura(f: FotoSetor) {
+    return (
+      <Miniatura
+        key={f.id}
+        foto={f}
+        marcada={sel.selecionando ? sel.marcadas.has(f.id) : undefined}
+        onClick={() => (sel.selecionando ? sel.alternar(f.id) : setVendo(f))}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -505,6 +825,7 @@ export function FotosSetor({
         <p className="text-sm text-stone-500 dark:text-slate-400">
           Pra tirar foto: abra o pedido em 📋 Pedidos → aba <strong>📷 Fotos</strong>.
         </p>
+        <BarraSelecao sel={sel} total={naTela.length} tituloDe={tituloDe} onExcluir={somenteLeitura ? undefined : apagar} />
       </div>
 
       {erro && (
@@ -523,9 +844,7 @@ export function FotosSetor({
               <p className="mb-2 px-1 text-lg font-bold text-stone-900 dark:text-white">
                 📸 Fotos gerais (sem pedido) <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">📷 {lista.length}</span>
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {lista.map((f) => <Miniatura key={f.id} foto={f} onClick={() => setVendo(f)} />)}
-              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{lista.map(miniatura)}</div>
             </div>
           );
         return (
@@ -545,9 +864,7 @@ export function FotosSetor({
                 </span>
               )}
             </button>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {lista.map((f) => <Miniatura key={f.id} foto={f} onClick={() => setVendo(f)} />)}
-            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{lista.map(miniatura)}</div>
           </div>
         );
       })}
@@ -560,6 +877,7 @@ export function FotosSetor({
             return i ? `${i.desenho ?? ""} · PO ${i.po}` : vendo.item_id ? undefined : "Foto geral";
           })()}
           onFechar={() => setVendo(null)}
+          onApagar={somenteLeitura ? undefined : () => apagar([vendo])}
         />
       )}
     </div>
