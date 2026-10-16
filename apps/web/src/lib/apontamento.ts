@@ -35,6 +35,8 @@ export interface ConfigSetor {
   pausaAutomatica?: boolean;
   // ✏️/🗑️ em cada apontamento do histórico, pra corrigir o que foi apontado errado.
   corrigir?: boolean;
+  // 📷 Fotos de qualidade tiradas pelo celular (Pintura: micragem, aderência...).
+  fotos?: boolean;
 }
 
 export const CONFIG_USINAGEM: ConfigSetor = {
@@ -134,6 +136,9 @@ export const CONFIG_PINTURA: ConfigSetor = {
   // Iniciado num pedido estava pausando os outros; e dá pra corrigir o status.
   pausaAutomatica: false,
   corrigir: true,
+  // Pedido do usuário (16/10/2026): o Felipe tira foto dos registros de
+  // qualidade (espessura de camada, aderência...) pelo próprio app.
+  fotos: true,
 };
 
 // Caldeiraria — pedido do usuário (13/10/2026): jeferson e diego apontam a

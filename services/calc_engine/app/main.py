@@ -600,6 +600,47 @@ def apontamentos_lote(setor: str, item_id: str, pedido: dict) -> dict:
     return {"lotes": lotes}
 
 
+@app.get("/apontamentos/{setor}/fotos")
+def apontamentos_fotos(setor: str, item_id: str | None = None, dias: int | None = None) -> dict:
+    """Fotos de qualidade (Pintura) de um pedido ou dos últimos `dias` — sem os
+    bytes (a imagem vem de /follow-up/midias/{sha256})."""
+    try:
+        return {"fotos": apontamentos_setor.fotos(setor, item_id, dias)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/apontamentos/{setor}/itens/{item_id}/fotos")
+def apontamentos_adicionar_foto(setor: str, item_id: str, file: UploadFile, tipo: str = Form(""),
+                                observacao: str | None = Form(None), por: str | None = Form(None)) -> dict:
+    """Foto de qualidade tirada pelo celular no app — ver
+    app/apontamentos_setor.py::adicionar_foto. Síncrona de propósito (thread)."""
+    try:
+        foto = apontamentos_setor.adicionar_foto(setor, item_id, file.file.read(), tipo, observacao, por)
+    except (ValueError, ImagemInvalida) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if foto is None:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado no Follow up")
+    return foto
+
+
+@app.delete("/apontamentos/{setor}/fotos/{foto_id}")
+def apontamentos_remover_foto(setor: str, foto_id: str, por: str | None = None) -> dict:
+    try:
+        ok = apontamentos_setor.remover_foto(setor, foto_id, por)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not ok:
+        raise HTTPException(status_code=404, detail="Foto não encontrada")
+    return {"ok": True}
+
+
 @app.post("/apontamentos/{setor}/servicos")
 def apontamentos_criar_servico(setor: str, pedido: dict) -> dict:
     """Novo serviço interno Macfab (usinagem pra uso próprio) + 1º apontamento."""

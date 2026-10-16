@@ -25,6 +25,12 @@ Depois, também a pedido do usuário (migration 0027):
 Lote (pedido do usuário, 14/10/2026 — migration 0043): igual ao NRI do Corte,
 a Pintura anota o lote de cada pedido (tabela lotes_setor, um por pedido;
 vazio apaga). Só nos setores com "lote" em SETORES.
+
+Fotos de qualidade (pedido do usuário, 16/10/2026 — migration 0048): o felipe
+tira foto pelo celular, dentro do app, dos registros de qualidade do pedido
+(espessura de camada/micragem, aderência...). Tabela fotos_setor; a imagem fica
+em follow_up_midias (por hash, igual às fotos do Follow up). Só nos setores com
+"fotos" (lista de tipos) em SETORES.
 """
 
 from __future__ import annotations
@@ -50,6 +56,9 @@ SETORES: dict[str, dict] = {
         "status": {"em_andamento": "Iniciado", "pausado": "Pausado", "finalizado": "Pintura finalizada"},
         "operadores": ["Felipe"],
         "lote": "Lote da pintura",
+        # Pedido do usuário (16/10/2026): fotos dos registros de qualidade.
+        "fotos": ["Espessura de camada (micragem)", "Aderência", "Rugosidade / perfil de jato",
+                  "Condição ambiente (umidade/temperatura)", "Inspeção visual", "Outro"],
         # Pedido do usuário (15/10/2026): o Felipe pinta vários pedidos ao mesmo
         # tempo — marcar Iniciado num NÃO pausa os outros (era o "bug" do Pausado).
         "pausa_automatica": False,
@@ -120,7 +129,117 @@ def situacao(setor: str) -> dict:
         or datetime.fromisoformat(a["em"]) >= limite
     ]
     return {"setor": setor, "operadores": cfg["operadores"], "atuais": por_alvo, "servicos": servicos,
-            "lote": cfg.get("lote"), "lotes": lotes(setor) if cfg.get("lote") else {}}
+            "lote": cfg.get("lote"), "lotes": lotes(setor) if cfg.get("lote") else {},
+            "fotos_tipos": cfg.get("fotos", []), "fotos_contagem": contagem_fotos(setor) if cfg.get("fotos") else {}}
+
+
+# --- Fotos de qualidade (migration 0048) ---------------------------------------
+
+_COLUNAS_FOTO = "f.id, f.item_id, f.midia_sha256, f.tipo, f.observacao, f.por, f.em, m.largura, m.altura"
+_DE_FOTO = "fotos_setor f join follow_up_midias m on m.sha256 = f.midia_sha256"
+
+
+def _foto(r) -> dict:
+    fid, item_id, sha, tipo, obs, por, em, largura, altura = r
+    return {"id": str(fid), "item_id": str(item_id), "sha256": sha, "tipo": tipo, "observacao": obs, "por": por,
+            "em": em.isoformat(), "largura": largura, "altura": altura}
+
+
+def _setor_com_fotos(setor: str) -> dict:
+    cfg = _setor(setor)
+    if not cfg.get("fotos"):
+        raise ValueError(f"{cfg['nome']} não tem fotos de qualidade.")
+    return cfg
+
+
+def contagem_fotos(setor: str) -> dict[str, int]:
+    """Quantas fotos cada pedido tem (item_id → n) — só números, pra lista."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select item_id, count(*) from fotos_setor where setor = %s group by item_id", (setor,))
+        return {str(i): n for i, n in cur.fetchall()}
+
+
+def fotos(setor: str, item_id: str | None = None, dias: int | None = None) -> list[dict]:
+    """Fotos de um pedido (item_id) ou as do setor nos últimos `dias` (sem os
+    bytes — a imagem vem de /follow-up/midias/{sha256})."""
+    _setor_com_fotos(setor)
+    filtro, args = "f.setor = %s", [setor]
+    if item_id:
+        filtro += " and f.item_id = %s"
+        args.append(item_id)
+    if dias:
+        filtro += " and f.em >= now() - make_interval(days => %s)"
+        args.append(max(1, min(int(dias), 3650)))
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(f"select {_COLUNAS_FOTO} from {_DE_FOTO} where {filtro} order by f.em desc", args)
+        return [_foto(r) for r in cur.fetchall()]
+
+
+def adicionar_foto(setor: str, item_id: str, conteudo: bytes, tipo: str | None, observacao: str | None,
+                   por: str | None) -> dict | None:
+    """Grava a foto (reduzida se for grande) e anota no Registro diário do
+    pedido. None = pedido não existe."""
+    import hashlib
+
+    from app.follow_up_mae import preparar_imagem
+
+    cfg = _setor_com_fotos(setor)
+    if tipo not in cfg["fotos"]:
+        raise ValueError("Escolha o tipo da foto.")
+    obs = re.sub(r"\s+", " ", observacao or "").strip() or None
+    if obs and len(obs) > DESCRICAO_MAX:
+        raise ValueError(f"Observação muito longa (máximo {DESCRICAO_MAX} caracteres).")
+    dados, content_type, largura, altura = preparar_imagem(conteudo)
+    sha = hashlib.sha256(dados).hexdigest()
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select 1 from follow_up_itens where id = %s", (item_id,))
+        if not cur.fetchone():
+            return None
+        cur.execute(
+            """insert into follow_up_midias (sha256, content_type, conteudo, largura, altura, tamanho)
+               values (%s, %s, %s, %s, %s, %s) on conflict (sha256) do nothing""",
+            (sha, content_type, dados, largura, altura, len(dados)),
+        )
+        cur.execute(
+            """insert into fotos_setor (setor, item_id, midia_sha256, tipo, observacao, por)
+               values (%s, %s, %s, %s, %s, %s) returning id""",
+            (setor, item_id, sha, tipo, obs, por),
+        )
+        fid = cur.fetchone()[0]
+        cur.execute(
+            "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+            (item_id, datetime.now(_BRASILIA).date(), f"{cfg['nome']}: 📷 foto — {tipo}" + (f" ({obs})" if obs else ""),
+             por),
+        )
+        cur.execute(f"select {_COLUNAS_FOTO} from {_DE_FOTO} where f.id = %s", (fid,))
+        foto = _foto(cur.fetchone())
+        conn.commit()
+    return foto
+
+
+def remover_foto(setor: str, foto_id: str, por: str | None) -> bool:
+    """Apaga a foto (e a imagem, se ninguém mais usa). False = não existe."""
+    cfg = _setor_com_fotos(setor)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select item_id, midia_sha256, tipo from fotos_setor where id = %s and setor = %s",
+                    (foto_id, setor))
+        r = cur.fetchone()
+        if not r:
+            return False
+        item_id, sha, tipo = r
+        cur.execute("delete from fotos_setor where id = %s", (foto_id,))
+        cur.execute(
+            """delete from follow_up_midias m where sha256 = %s
+               and not exists (select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256)
+               and not exists (select 1 from fotos_setor f where f.midia_sha256 = m.sha256)""",
+            (sha,),
+        )
+        cur.execute(
+            "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+            (item_id, datetime.now(_BRASILIA).date(), f"{cfg['nome']}: 📷 foto apagada — {tipo}", por),
+        )
+        conn.commit()
+    return True
 
 
 def lotes(setor: str) -> dict[str, dict]:

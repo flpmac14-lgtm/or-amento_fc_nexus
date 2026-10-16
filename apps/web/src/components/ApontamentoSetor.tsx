@@ -13,12 +13,15 @@
 //     apontados junto (soma a quantidade).
 // Aba "Histórico" (components/ApontamentoHistorico.tsx): o que cada operador
 // está fazendo agora + linha do tempo.
+// Aba "📷 Fotos" (Pintura, pedido do usuário 16/10/2026): fotos de qualidade
+// tiradas pelo celular no próprio app (components/FotosQualidade.tsx).
 // Os dados do pedido são os do Follow up (nada novo); o apontamento grava
 // histórico + Registro diário do item (app/apontamentos_setor.py).
 
 import { useEffect, useMemo, useState } from "react";
 import { Foto, FotoServico, chaveApontamento, quando, type Alvo } from "@/components/ApontamentoComum";
 import ApontamentoHistorico from "@/components/ApontamentoHistorico";
+import { FotosDoPedido, FotosSetor } from "@/components/FotosQualidade";
 import { SeloPrazo } from "@/components/FollowUpDetalhe";
 import {
   apontarItem,
@@ -46,7 +49,8 @@ import type { ItemFollowUp } from "@/lib/types";
 const RECARREGAR_A_CADA_MS = 3 * 60 * 1000;
 const MAX_CARTOES = 60; // sem busca, mostra os primeiros (a busca acha o resto)
 
-type Filtro = "todos" | "lote" | StatusApontamento;
+type Filtro = "todos" | "lote" | "fotos" | StatusApontamento;
+type AbaPedido = "apontar" | "info" | "fotos";
 
 function textoBusca(i: ItemFollowUp): string {
   return normalizarBusca(
@@ -117,7 +121,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [alvo, setAlvo] = useState<Alvo | null>(null);
-  const [aba, setAba] = useState<"apontar" | "info">("apontar");
+  const [aba, setAba] = useState<AbaPedido>("apontar");
   const [escolha, setEscolha] = useState<StatusApontamento | null>(null);
   const [obs, setObs] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -125,7 +129,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   const [historico, setHistorico] = useState<Apontamento[] | null>(null);
   const [operadores, setOperadores] = useState<string[]>([]);
   const [operador, setOperador] = useState<string | null>(null);
-  const [tela, setTela] = useState<"pedidos" | "historico">("pedidos");
+  const [tela, setTela] = useState<"pedidos" | "historico" | "fotos">("pedidos");
   const [versao, setVersao] = useState(0); // muda a cada salvar → Histórico recarrega
   const [outros, setOutros] = useState<Set<string>>(new Set()); // pedidos do mesmo desenho apontados junto
   const [pausarOutros, setPausarOutros] = useState(true);
@@ -138,6 +142,10 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   // Correção de apontamento errado (✏️ no histórico): id em edição.
   const [editando, setEditando] = useState<number | null>(null);
   const [corrigindo, setCorrigindo] = useState(false);
+  // Fotos de qualidade (Pintura): tipos e quantas cada pedido tem.
+  const [fotosTipos, setFotosTipos] = useState<string[]>([]);
+  const [fotosContagem, setFotosContagem] = useState<Record<string, number>>({});
+  const comFotos = !!config.fotos && fotosTipos.length > 0;
 
   const opcao = useMemo(() => new Map(config.opcoes.map((o) => [o.status, o])), [config]);
 
@@ -153,6 +161,8 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
           setOperadores(a.operadores);
           setRotuloLote(a.lote ?? null);
           setLotes(a.lotes ?? {});
+          setFotosTipos(a.fotos_tipos ?? []);
+          setFotosContagem(a.fotos_contagem ?? {});
           setErro("");
         })
         .catch((e: Error) => ativo && setErro(e.message))
@@ -191,6 +201,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     const c: Record<Filtro, number> = {
       todos: itens.length + servicos.length,
       lote: itens.filter((i) => lotes[i.id]).length,
+      fotos: itens.filter((i) => fotosContagem[i.id]).length,
       em_andamento: 0,
       fundo: 0,
       acabamento: 0,
@@ -203,24 +214,32 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
       if (a) c[a.status]++;
     }
     return c;
-  }, [itens, servicos, atuais, lotes]);
+  }, [itens, servicos, atuais, lotes, fotosContagem]);
 
   const termos = useMemo(() => normalizarBusca(busca).split(" ").filter(Boolean), [busca]);
 
   const lista = useMemo(() => {
     return itens
-      .filter((i) => (filtro === "todos" ? true : filtro === "lote" ? !!lotes[i.id] : atuais[i.id]?.status === filtro))
+      .filter((i) =>
+        filtro === "todos"
+          ? true
+          : filtro === "lote"
+            ? !!lotes[i.id]
+            : filtro === "fotos"
+              ? !!fotosContagem[i.id]
+              : atuais[i.id]?.status === filtro,
+      )
       .filter((i) => termos.every((t) => textos.get(i.id)!.includes(t)))
       .sort(
         (a, b) =>
           peso(atuais[a.id]?.status) - peso(atuais[b.id]?.status) ||
           (a.prazo_contratual ?? "9999").localeCompare(b.prazo_contratual ?? "9999"),
       );
-  }, [itens, atuais, termos, filtro, textos, lotes]);
+  }, [itens, atuais, termos, filtro, textos, lotes, fotosContagem]);
 
   const listaServicos = useMemo(() => {
     return servicos
-      .filter((s) => (filtro === "todos" ? true : filtro !== "lote" && atuais[s.id]?.status === filtro))
+      .filter((s) => (filtro === "todos" ? true : filtro !== "lote" && filtro !== "fotos" && atuais[s.id]?.status === filtro))
       .filter((s) => termos.every((t) => normalizarBusca(`${s.descricao} interno macfab`).includes(t)))
       .sort((a, b) => peso(atuais[a.id]?.status) - peso(atuais[b.id]?.status));
   }, [servicos, atuais, termos, filtro]);
@@ -258,9 +277,9 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     return i ? (i.desenho ?? `PO ${i.po}`) : "pedido";
   }
 
-  function abrir(novoAlvo: Alvo) {
+  function abrir(novoAlvo: Alvo, abaInicial?: AbaPedido) {
     setAlvo(novoAlvo);
-    setAba(somenteLeitura ? "info" : "apontar");
+    setAba(abaInicial ?? (somenteLeitura ? "info" : "apontar"));
     setEscolha(null);
     // Quem já estava no pedido vem marcado (ex.: o mesmo operador dá o Fim de usinagem).
     // Setor com um operador só (Pintura = Felipe, pedido do usuário): já vem escolhido.
@@ -402,6 +421,17 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     }
   }
 
+  // Abas do pedido aberto: Apontar (quem aponta), Informações e 📷 Fotos (setor com fotos).
+  const abasPedido: [AbaPedido, string][] = novo
+    ? []
+    : [
+        ...(somenteLeitura ? [] : ([["apontar", "✍️ Apontar"]] as [AbaPedido, string][])),
+        ["info", "ℹ️ Informações"],
+        ...(aberto && comFotos
+          ? ([["fotos", `📷 Fotos${fotosContagem[aberto.id] ? ` (${fotosContagem[aberto.id]})` : ""}`]] as [AbaPedido, string][])
+          : []),
+      ];
+
   function sugerir(s: string) {
     setObs((o) => (o.trim() ? `${o.trim()}; ${s}` : s));
   }
@@ -414,12 +444,13 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40">
+      <div className={`grid ${comFotos ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40`}>
         {(
           [
             ["pedidos", "📋 Pedidos"],
             ["historico", "🕘 Histórico"],
-          ] as const
+            ...(comFotos ? [["fotos", "📷 Fotos"]] : []),
+          ] as ["pedidos" | "historico" | "fotos", string][]
         ).map(([t, r]) => (
           <button
             key={t}
@@ -434,7 +465,15 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         ))}
       </div>
 
-      {tela === "historico" ? (
+      {tela === "fotos" && comFotos ? (
+        <FotosSetor
+          setor={config.setor}
+          tipos={fotosTipos}
+          itens={itens}
+          versao={versao}
+          abrirPedido={(id) => abrir({ tipo: "pedido", id }, "fotos")}
+        />
+      ) : tela === "historico" ? (
         <ApontamentoHistorico
           config={config}
           itens={itens}
@@ -473,6 +512,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
               ["todos", `Todos (${contagem.todos})`],
               ...config.opcoes.map((o) => [o.status, `${o.rotulo.charAt(0)}${o.rotulo.slice(1).toLowerCase()} (${contagem[o.status]})`]),
               ...(rotuloLote ? [["lote", `🏷️ Com ${rotuloLote.toLowerCase()} (${contagem.lote})`]] : []),
+              ...(comFotos ? [["fotos", `📷 Com fotos (${contagem.fotos})`]] : []),
             ] as [Filtro, string][]
           ).map(([f, rotulo]) => (
             <button
@@ -553,6 +593,11 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                     Lote {lotes[i.id].lote}
                   </span>
                 )}
+                {comFotos && fotosContagem[i.id] > 0 && (
+                  <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-300">
+                    📷 {fotosContagem[i.id]}
+                  </span>
+                )}
               </span>
             </span>
           </button>
@@ -618,14 +663,9 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                   ✕
                 </button>
               </div>
-              {!novo && !somenteLeitura && (
-                <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
-                  {(
-                    [
-                      ["apontar", "✍️ Apontar"],
-                      ["info", "ℹ️ Informações"],
-                    ] as const
-                  ).map(([t, r]) => (
+              {abasPedido.length > 1 && (
+                <div className={`mt-3 grid ${abasPedido.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900`}>
+                  {abasPedido.map(([t, r]) => (
                     <button
                       key={t}
                       type="button"
@@ -641,7 +681,16 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
               )}
             </div>
 
-            {(aba === "apontar" && !somenteLeitura) || novo ? (
+            {aba === "fotos" && aberto && comFotos ? (
+              <FotosDoPedido
+                setor={config.setor}
+                item={aberto}
+                tipos={fotosTipos}
+                usuario={usuario}
+                somenteLeitura={somenteLeitura}
+                onContagem={(n) => setFotosContagem((m) => ({ ...m, [aberto.id]: n }))}
+              />
+            ) : (aba === "apontar" && !somenteLeitura) || novo ? (
               <div className="flex flex-col gap-3 p-4">
                 {novo && (
                   <div className="flex flex-col gap-2 rounded-xl border-2 border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900">
@@ -812,6 +861,17 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                       <span className="text-xs text-stone-500 dark:text-slate-400">Vale também pros {outros.size} pedido(s) marcados acima.</span>
                     )}
                   </label>
+                )}
+
+                {aberto && comFotos && (
+                  <button
+                    type="button"
+                    onClick={() => setAba("fotos")}
+                    className="flex h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-violet-500 text-lg font-bold text-violet-700 active:scale-[0.98] dark:border-violet-400 dark:text-violet-300"
+                  >
+                    📷 Fotos de qualidade
+                    {fotosContagem[aberto.id] ? <span className="text-sm font-medium">({fotosContagem[aberto.id]} salvas)</span> : null}
+                  </button>
                 )}
 
                 <label className="flex flex-col gap-1">

@@ -98,3 +98,23 @@ def test_corrigir_valida_status():
         a.corrigir("pintura", 1, "falta_material", "flpmac14")
     with pytest.raises(ValueError, match="Setor desconhecido"):
         a.corrigir("montagem", 1, "pausado", "flpmac14")
+
+
+def test_fotos_so_na_pintura():
+    with pytest.raises(ValueError, match="não tem fotos"):
+        a.adicionar_foto("usinagem", "x", b"", "Aderência", None, "saymon")
+    assert "Espessura de camada (micragem)" in a.SETORES["pintura"]["fotos"]
+
+
+def test_foto_exige_tipo_e_observacao_curta():
+    with pytest.raises(ValueError, match="Escolha o tipo"):
+        a.adicionar_foto("pintura", "x", b"", "Qualquer", None, "felipe")
+    with pytest.raises(ValueError, match="muito longa"):
+        a.adicionar_foto("pintura", "x", b"", "Aderência", "a" * (a.DESCRICAO_MAX + 1), "felipe")
+
+
+def test_foto_invalida():
+    from app.follow_up_mae import ImagemInvalida
+
+    with pytest.raises(ImagemInvalida):
+        a.adicionar_foto("pintura", "x", b"nao e imagem", "Aderência", "120 um", "felipe")

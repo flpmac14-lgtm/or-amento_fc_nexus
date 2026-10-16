@@ -861,6 +861,8 @@ export async function buscarApontamentos(
   servicos: ServicoInterno[];
   lote?: string | null; // rótulo do campo (ex.: "Lote da pintura"); null = setor sem lote
   lotes?: Record<string, LoteSetor>; // item_id → lote gravado
+  fotos_tipos?: string[]; // tipos de foto de qualidade; vazio = setor sem fotos
+  fotos_contagem?: Record<string, number>; // item_id → quantas fotos
 }> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar os apontamentos");
@@ -952,6 +954,51 @@ export async function corrigirApontamento(
     status ? { status, por } : { excluir: true, por },
   );
   return r.json();
+}
+
+// Fotos de qualidade do setor (Pintura: espessura de camada, aderência...) —
+// tiradas pelo celular no app. Ver app/apontamentos_setor.py (migration 0048).
+export interface FotoSetor {
+  id: string;
+  item_id: string;
+  sha256: string; // imagem em urlImagemFollowUp(sha256)
+  tipo: string;
+  observacao: string | null;
+  por: string | null;
+  em: string;
+  largura: number | null;
+  altura: number | null;
+}
+
+export async function listarFotosSetor(setor: string, filtro: { itemId?: string; dias?: number }): Promise<FotoSetor[]> {
+  const qs = new URLSearchParams();
+  if (filtro.itemId) qs.set("item_id", filtro.itemId);
+  if (filtro.dias) qs.set("dias", String(filtro.dias));
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/fotos?${qs}`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar as fotos");
+  return (await resposta.json()).fotos;
+}
+
+export async function enviarFotoSetor(
+  setor: string,
+  itemId: string,
+  foto: Blob,
+  dados: { tipo: string; observacao: string; por: string | null },
+): Promise<FotoSetor> {
+  const form = new FormData();
+  form.append("file", foto, foto instanceof File ? foto.name : "foto.jpg");
+  form.append("tipo", dados.tipo);
+  if (dados.observacao.trim()) form.append("observacao", dados.observacao.trim());
+  if (dados.por) form.append("por", dados.por);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}/fotos`, { method: "POST", body: form });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao enviar a foto");
+  return resposta.json();
+}
+
+export async function removerFotoSetor(setor: string, fotoId: string, por: string | null): Promise<void> {
+  const qs = por ? `?por=${encodeURIComponent(por)}` : "";
+  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/fotos/${fotoId}${qs}`, { method: "DELETE" });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao apagar a foto");
 }
 
 export function urlImagemFollowUp(sha256: string): string {

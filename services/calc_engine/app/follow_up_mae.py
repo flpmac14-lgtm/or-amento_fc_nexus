@@ -354,7 +354,8 @@ def remover_imagem(imagem_id: str, removida_por: str | None = None) -> dict | No
         cur.execute("delete from follow_up_imagens where id = %s", (imagem_id,))
         cur.execute(
             "delete from follow_up_midias m where sha256 = %s and not exists "
-            "(select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256)",
+            "(select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256) and not exists "
+            "(select 1 from fotos_setor f where f.midia_sha256 = m.sha256)",  # foto de qualidade (0048)
             (sha,),
         )
         cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
