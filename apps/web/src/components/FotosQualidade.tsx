@@ -21,6 +21,7 @@ import {
   type FotoSetor,
 } from "@/lib/api";
 import { normalizarBusca } from "@/lib/busca";
+import { montarZip, type ArquivoZip } from "@/lib/zip";
 import type { ItemFollowUp } from "@/lib/types";
 
 const LADO_MAX = 2000;
@@ -58,15 +59,21 @@ function dataHora(iso: string): string {
 }
 
 // --- Baixar e excluir várias (pedido do usuário, 16/10/2026) ------------------
-// Seleciona as fotos e baixa escolhendo a pasta (Chrome/Edge: showDirectoryPicker,
-// igual aos certificados da Qualidade); sem isso (celular, Firefox), download normal.
-interface PastaEscolhida {
-  getFileHandle(nome: string, op: { create: boolean }): Promise<{
-    createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
-  }>;
+// Baixa UM arquivo só: várias fotos num .zip (lib/zip.ts), uma foto em .jpg.
+// Onde salvar: janela "Salvar como" (showSaveFilePicker, Chrome/Edge no PC).
+// Antes era foto por foto numa pasta escolhida, e o Chrome pedia "permitir
+// editar a pasta" / "permitir vários downloads" — o usuário viu como erro.
+// Sem a janela (celular, Firefox): download normal (pasta Downloads).
+interface ArquivoEscolhido {
+  name: string;
+  createWritable(): Promise<{ write(d: Blob): Promise<void>; close(): Promise<void> }>;
 }
-type JanelaComPasta = Window & {
-  showDirectoryPicker?: (op?: { id?: string; mode?: "readwrite" }) => Promise<PastaEscolhida>;
+type JanelaSalvar = Window & {
+  showSaveFilePicker?: (op: {
+    id?: string;
+    suggestedName: string;
+    types: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<ArquivoEscolhido>;
 };
 
 function limparNome(s: string): string {
@@ -88,56 +95,81 @@ function nomeDaFoto(f: FotoSetor, titulo: string, usados: Set<string>): string {
 }
 
 async function baixarFotos(
-  // Lista pronta, ou buscada DEPOIS de escolher a pasta (o navegador só deixa
-  // abrir a escolha de pasta logo no clique).
+  // Lista pronta, ou buscada DEPOIS de escolher onde salvar (o navegador só
+  // deixa abrir a janela "Salvar como" logo no clique).
   quais: FotoSetor[] | (() => Promise<FotoSetor[]>),
   tituloDe: (f: FotoSetor) => string,
   aoAvancar: (feitas: number) => void,
+  nomeZip: string,
+  total: number, // quantas vão vir (1 = .jpg, mais = .zip)
 ): Promise<string> {
-  // Escolher a pasta tem que ser logo no clique (exigência do navegador).
-  const escolher = (window as JanelaComPasta).showDirectoryPicker;
-  let pasta: PastaEscolhida | null = null;
+  const umaSo = total === 1;
+  const sugerido = limparNome(
+    umaSo && Array.isArray(quais) && quais[0] ? nomeDaFoto(quais[0], tituloDe(quais[0]), new Set()) : nomeZip,
+  );
+  const escolher = (window as JanelaSalvar).showSaveFilePicker;
+  let destino: ArquivoEscolhido | null = null;
   if (escolher) {
     try {
-      pasta = await escolher({ id: "fotos-qualidade", mode: "readwrite" });
-    } catch {
-      return ""; // cancelou a escolha da pasta
+      destino = await escolher({
+        id: "fotos-qualidade",
+        suggestedName: `${sugerido}.${umaSo ? "jpg" : "zip"}`,
+        types: [
+          umaSo
+            ? { description: "Foto", accept: { "image/jpeg": [".jpg", ".jpeg"] } }
+            : { description: "Fotos (ZIP)", accept: { "application/zip": [".zip"] } },
+        ],
+      });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return ""; // cancelou
+      destino = null; // navegador não deixou abrir a janela: download normal
     }
   }
   const fotos = typeof quais === "function" ? await quais() : quais;
   if (!fotos.length) return "Esse pedido não tem fotos.";
+
   const usados = new Set<string>();
-  let feitas = 0;
-  const erros: string[] = [];
+  const arquivos: ArquivoZip[] = [];
+  let tipoUnico = "image/jpeg";
+  let erros = 0;
   for (const f of fotos) {
     try {
       const r = await fetch(urlImagemFollowUp(f.sha256));
       if (!r.ok) throw new Error(String(r.status));
       const blob = await r.blob();
       const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
-      const nome = `${nomeDaFoto(f, tituloDe(f), usados)}.${ext}`;
-      if (pasta) {
-        const w = await (await pasta.getFileHandle(nome, { create: true })).createWritable();
-        await w.write(blob);
-        await w.close();
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = nome;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        await new Promise((ok) => setTimeout(ok, 300)); // navegador bloqueia downloads em rajada
-      }
-      feitas++;
-      aoAvancar(feitas);
+      tipoUnico = blob.type || tipoUnico;
+      arquivos.push({
+        nome: `${nomeDaFoto(f, tituloDe(f), usados)}.${ext}`,
+        dados: new Uint8Array(await blob.arrayBuffer()),
+        data: f.em ? new Date(f.em) : undefined,
+      });
+      aoAvancar(arquivos.length);
     } catch {
-      erros.push(f.tipo);
+      erros++;
     }
   }
+  if (!arquivos.length) return "Não consegui baixar as fotos — confira a internet e tente de novo.";
+
+  const zip = !(umaSo && arquivos.length === 1);
+  const final = zip ? montarZip(arquivos) : new Blob([arquivos[0].dados as BlobPart], { type: tipoUnico });
+  const nomeFinal = zip ? `${sugerido}.zip` : arquivos[0].nome;
+  if (destino) {
+    const w = await destino.createWritable();
+    await w.write(final);
+    await w.close();
+  } else {
+    const url = URL.createObjectURL(final);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nomeFinal;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
   return (
-    `✔ ${feitas} de ${fotos.length} foto(s) baixada(s)${pasta ? " na pasta escolhida" : " (pasta Downloads)"}` +
-    (erros.length ? ` · ${erros.length} falharam` : "")
+    `✔ ${arquivos.length} foto(s) salva(s)${zip ? " num arquivo .zip" : ""}` +
+    (destino ? ` (${destino.name})` : " — pasta Downloads") +
+    (erros ? ` · ${erros} falharam` : "")
   );
 }
 
@@ -172,6 +204,8 @@ export function BotaoBaixarPedido({ setor, item, qtdQualidade }: { setor: string
         },
         () => titulo,
         setBaixando,
+        `${titulo} - fotos`,
+        total,
       );
       if (r) setMsg(r);
     } catch (e) {
@@ -206,7 +240,7 @@ function BotaoBaixarGrupo({ lista, titulo }: { lista: FotoSetor[]; titulo: strin
   async function baixar() {
     setMsg("");
     setBaixando(0);
-    const r = await baixarFotos(lista, () => titulo, setBaixando);
+    const r = await baixarFotos(lista, () => titulo, setBaixando, `${titulo} - fotos`, lista.length);
     setBaixando(null);
     if (r) setMsg(r);
   }
@@ -280,7 +314,8 @@ function BarraSelecao({
   async function baixar() {
     setMsg("");
     setBaixando(0);
-    const r = await baixarFotos(sel.escolhidas, tituloDe, setBaixando);
+    const hoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
+    const r = await baixarFotos(sel.escolhidas, tituloDe, setBaixando, `Fotos de qualidade ${hoje}`, n);
     setBaixando(null);
     if (r) setMsg(r);
   }
