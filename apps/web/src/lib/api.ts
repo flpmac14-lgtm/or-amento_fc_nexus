@@ -960,7 +960,7 @@ export async function corrigirApontamento(
 // tiradas pelo celular no app. Ver app/apontamentos_setor.py (migration 0048).
 export interface FotoSetor {
   id: string;
-  item_id: string;
+  item_id: string | null; // null = foto geral do setor (sem pedido)
   sha256: string; // imagem em urlImagemFollowUp(sha256)
   tipo: string;
   observacao: string | null;
@@ -970,8 +970,12 @@ export interface FotoSetor {
   altura: number | null;
 }
 
-export async function listarFotosSetor(setor: string, filtro: { itemId?: string; dias?: number }): Promise<FotoSetor[]> {
+export async function listarFotosSetor(
+  setor: string,
+  filtro: { itemId?: string; dias?: number; geral?: boolean },
+): Promise<FotoSetor[]> {
   const qs = new URLSearchParams();
+  if (filtro.geral) qs.set("geral", "true");
   if (filtro.itemId) qs.set("item_id", filtro.itemId);
   if (filtro.dias) qs.set("dias", String(filtro.dias));
   const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/fotos?${qs}`);
@@ -981,7 +985,7 @@ export async function listarFotosSetor(setor: string, filtro: { itemId?: string;
 
 export async function enviarFotoSetor(
   setor: string,
-  itemId: string,
+  itemId: string | null, // null = foto geral (sem pedido)
   foto: Blob,
   dados: { tipo: string; observacao: string; por: string | null },
 ): Promise<FotoSetor> {
@@ -990,7 +994,7 @@ export async function enviarFotoSetor(
   form.append("tipo", dados.tipo);
   if (dados.observacao.trim()) form.append("observacao", dados.observacao.trim());
   if (dados.por) form.append("por", dados.por);
-  const resposta = await fetch(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}/fotos`, { method: "POST", body: form });
+  const resposta = await fetch(itemId ? `${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}/fotos` : `${CALC_ENGINE_URL}/apontamentos/${setor}/fotos`, { method: "POST", body: form });
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao enviar a foto");
   return resposta.json();
 }

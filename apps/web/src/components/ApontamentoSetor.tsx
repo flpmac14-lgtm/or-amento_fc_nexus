@@ -14,7 +14,8 @@
 // Aba "Histórico" (components/ApontamentoHistorico.tsx): o que cada operador
 // está fazendo agora + linha do tempo.
 // Aba "📷 Fotos" (Pintura, pedido do usuário 16/10/2026): fotos de qualidade
-// tiradas pelo celular no próprio app (components/FotosQualidade.tsx).
+// tiradas pelo celular no próprio app (components/FotosQualidade.tsx); e aba
+// "📸 Foto geral" pra fotos sem pedido (cabine, medidor, ambiente...).
 // Os dados do pedido são os do Follow up (nada novo); o apontamento grava
 // histórico + Registro diário do item (app/apontamentos_setor.py).
 
@@ -51,6 +52,7 @@ const MAX_CARTOES = 60; // sem busca, mostra os primeiros (a busca acha o resto)
 
 type Filtro = "todos" | "lote" | "fotos" | StatusApontamento;
 type AbaPedido = "apontar" | "info" | "fotos";
+type Tela = "pedidos" | "historico" | "fotos" | "geral";
 
 function textoBusca(i: ItemFollowUp): string {
   return normalizarBusca(
@@ -129,7 +131,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   const [historico, setHistorico] = useState<Apontamento[] | null>(null);
   const [operadores, setOperadores] = useState<string[]>([]);
   const [operador, setOperador] = useState<string | null>(null);
-  const [tela, setTela] = useState<"pedidos" | "historico" | "fotos">("pedidos");
+  const [tela, setTela] = useState<Tela>("pedidos");
   const [versao, setVersao] = useState(0); // muda a cada salvar → Histórico recarrega
   const [outros, setOutros] = useState<Set<string>>(new Set()); // pedidos do mesmo desenho apontados junto
   const [pausarOutros, setPausarOutros] = useState(true);
@@ -444,13 +446,13 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         </div>
       )}
 
-      <div className={`grid ${comFotos ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40`}>
+      <div className={`grid ${comFotos ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2"} gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40`}>
         {(
           [
             ["pedidos", "📋 Pedidos"],
             ["historico", "🕘 Histórico"],
-            ...(comFotos ? [["fotos", "📷 Fotos"]] : []),
-          ] as ["pedidos" | "historico" | "fotos", string][]
+            ...(comFotos ? [["fotos", "📷 Fotos"], ["geral", "📸 Foto geral"]] : []),
+          ] as [Tela, string][]
         ).map(([t, r]) => (
           <button
             key={t}
@@ -465,7 +467,17 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         ))}
       </div>
 
-      {tela === "fotos" && comFotos ? (
+      {tela === "geral" && comFotos ? (
+        <div className="overflow-hidden rounded-xl border border-stone-200 bg-stone-50 dark:border-slate-800 dark:bg-slate-950">
+          <div className="border-b border-stone-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xl font-extrabold text-stone-900 dark:text-white">📸 Foto geral</p>
+            <p className="text-sm text-stone-600 dark:text-slate-400">
+              Fotos de qualidade sem pedido: cabine, medidor de camada, condição do ambiente… (pra foto de um pedido, use 📋 Pedidos → 📷 Fotos)
+            </p>
+          </div>
+          <FotosDoPedido setor={config.setor} item={null} tipos={fotosTipos} usuario={usuario} somenteLeitura={somenteLeitura} />
+        </div>
+      ) : tela === "fotos" && comFotos ? (
         <FotosSetor
           setor={config.setor}
           tipos={fotosTipos}

@@ -141,7 +141,7 @@ _DE_FOTO = "fotos_setor f join follow_up_midias m on m.sha256 = f.midia_sha256"
 
 def _foto(r) -> dict:
     fid, item_id, sha, tipo, obs, por, em, largura, altura = r
-    return {"id": str(fid), "item_id": str(item_id), "sha256": sha, "tipo": tipo, "observacao": obs, "por": por,
+    return {"id": str(fid), "item_id": item_id and str(item_id), "sha256": sha, "tipo": tipo, "observacao": obs, "por": por,
             "em": em.isoformat(), "largura": largura, "altura": altura}
 
 
@@ -159,12 +159,15 @@ def contagem_fotos(setor: str) -> dict[str, int]:
         return {str(i): n for i, n in cur.fetchall()}
 
 
-def fotos(setor: str, item_id: str | None = None, dias: int | None = None) -> list[dict]:
-    """Fotos de um pedido (item_id) ou as do setor nos últimos `dias` (sem os
-    bytes — a imagem vem de /follow-up/midias/{sha256})."""
+def fotos(setor: str, item_id: str | None = None, dias: int | None = None, geral: bool = False) -> list[dict]:
+    """Fotos de um pedido (item_id), só as gerais (geral=True, sem pedido —
+    migration 0049) ou todas do setor nos últimos `dias` (sem os bytes — a
+    imagem vem de /follow-up/midias/{sha256})."""
     _setor_com_fotos(setor)
     filtro, args = "f.setor = %s", [setor]
-    if item_id:
+    if geral:
+        filtro += " and f.item_id is null"
+    elif item_id:
         filtro += " and f.item_id = %s"
         args.append(item_id)
     if dias:
@@ -175,10 +178,11 @@ def fotos(setor: str, item_id: str | None = None, dias: int | None = None) -> li
         return [_foto(r) for r in cur.fetchall()]
 
 
-def adicionar_foto(setor: str, item_id: str, conteudo: bytes, tipo: str | None, observacao: str | None,
+def adicionar_foto(setor: str, item_id: str | None, conteudo: bytes, tipo: str | None, observacao: str | None,
                    por: str | None) -> dict | None:
     """Grava a foto (reduzida se for grande) e anota no Registro diário do
-    pedido. None = pedido não existe."""
+    pedido. item_id None = foto geral do setor (sem pedido, migration 0049).
+    None = pedido não existe."""
     import hashlib
 
     from app.follow_up_mae import preparar_imagem
@@ -192,9 +196,10 @@ def adicionar_foto(setor: str, item_id: str, conteudo: bytes, tipo: str | None, 
     dados, content_type, largura, altura = preparar_imagem(conteudo)
     sha = hashlib.sha256(dados).hexdigest()
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute("select 1 from follow_up_itens where id = %s", (item_id,))
-        if not cur.fetchone():
-            return None
+        if item_id:
+            cur.execute("select 1 from follow_up_itens where id = %s", (item_id,))
+            if not cur.fetchone():
+                return None
         cur.execute(
             """insert into follow_up_midias (sha256, content_type, conteudo, largura, altura, tamanho)
                values (%s, %s, %s, %s, %s, %s) on conflict (sha256) do nothing""",
@@ -206,11 +211,12 @@ def adicionar_foto(setor: str, item_id: str, conteudo: bytes, tipo: str | None, 
             (setor, item_id, sha, tipo, obs, por),
         )
         fid = cur.fetchone()[0]
-        cur.execute(
-            "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
-            (item_id, datetime.now(_BRASILIA).date(), f"{cfg['nome']}: 📷 foto — {tipo}" + (f" ({obs})" if obs else ""),
-             por),
-        )
+        if item_id:
+            cur.execute(
+                "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+                (item_id, datetime.now(_BRASILIA).date(),
+                 f"{cfg['nome']}: 📷 foto — {tipo}" + (f" ({obs})" if obs else ""), por),
+            )
         cur.execute(f"select {_COLUNAS_FOTO} from {_DE_FOTO} where f.id = %s", (fid,))
         foto = _foto(cur.fetchone())
         conn.commit()
@@ -234,10 +240,11 @@ def remover_foto(setor: str, foto_id: str, por: str | None) -> bool:
                and not exists (select 1 from fotos_setor f where f.midia_sha256 = m.sha256)""",
             (sha,),
         )
-        cur.execute(
-            "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
-            (item_id, datetime.now(_BRASILIA).date(), f"{cfg['nome']}: 📷 foto apagada — {tipo}", por),
-        )
+        if item_id:
+            cur.execute(
+                "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
+                (item_id, datetime.now(_BRASILIA).date(), f"{cfg['nome']}: 📷 foto apagada — {tipo}", por),
+            )
         conn.commit()
     return True
 

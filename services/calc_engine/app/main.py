@@ -601,11 +601,11 @@ def apontamentos_lote(setor: str, item_id: str, pedido: dict) -> dict:
 
 
 @app.get("/apontamentos/{setor}/fotos")
-def apontamentos_fotos(setor: str, item_id: str | None = None, dias: int | None = None) -> dict:
-    """Fotos de qualidade (Pintura) de um pedido ou dos últimos `dias` — sem os
-    bytes (a imagem vem de /follow-up/midias/{sha256})."""
+def apontamentos_fotos(setor: str, item_id: str | None = None, dias: int | None = None, geral: bool = False) -> dict:
+    """Fotos de qualidade (Pintura) de um pedido, só as gerais (geral=1) ou dos
+    últimos `dias` — sem os bytes (a imagem vem de /follow-up/midias/{sha256})."""
     try:
-        return {"fotos": apontamentos_setor.fotos(setor, item_id, dias)}
+        return {"fotos": apontamentos_setor.fotos(setor, item_id, dias, geral)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:
@@ -626,6 +626,18 @@ def apontamentos_adicionar_foto(setor: str, item_id: str, file: UploadFile, tipo
     if foto is None:
         raise HTTPException(status_code=404, detail="Pedido não encontrado no Follow up")
     return foto
+
+
+@app.post("/apontamentos/{setor}/fotos")
+def apontamentos_adicionar_foto_geral(setor: str, file: UploadFile, tipo: str = Form(""),
+                                      observacao: str | None = Form(None), por: str | None = Form(None)) -> dict:
+    """Foto geral do setor, sem pedido (aba "Foto geral", migration 0049)."""
+    try:
+        return apontamentos_setor.adicionar_foto(setor, None, file.file.read(), tipo, observacao, por)
+    except (ValueError, ImagemInvalida) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.delete("/apontamentos/{setor}/fotos/{foto_id}")

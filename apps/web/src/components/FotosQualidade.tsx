@@ -6,6 +6,8 @@
 // ela já fica salva; a Qualidade e o resto do pessoal veem as fotos.
 //   - FotosDoPedido: aba "📷 Fotos" dentro do pedido (tirar / ver / apagar);
 //   - FotosSetor: aba "📷 Fotos" da tela do setor (todas, por pedido).
+//   - Foto geral (pedido do usuário, 16/10/2026): FotosDoPedido sem pedido
+//     (item null) = aba "📸 Foto geral" — cabine, medidor, ambiente...
 // A foto é reduzida no celular antes de subir (rede da fábrica) e de novo no
 // servidor se precisar. Ver app/apontamentos_setor.py (migration 0048).
 
@@ -191,7 +193,8 @@ function Miniatura({ foto, onClick, grande = false }: { foto: FotoSetor; onClick
   );
 }
 
-/** Aba "📷 Fotos" dentro do pedido: tirar foto (câmera), escolher da galeria, ver e apagar. */
+/** Aba "📷 Fotos" dentro do pedido (ou "📸 Foto geral" com item null): tirar foto
+ * (câmera), escolher da galeria, ver e apagar. */
 export function FotosDoPedido({
   setor,
   item,
@@ -201,12 +204,13 @@ export function FotosDoPedido({
   onContagem,
 }: {
   setor: string;
-  item: ItemFollowUp;
+  item: ItemFollowUp | null;
   tipos: string[];
   usuario: string | null;
   somenteLeitura: boolean;
-  onContagem: (n: number) => void;
+  onContagem?: (n: number) => void;
 }) {
+  const itemId = item?.id ?? null;
   const [fotos, setFotos] = useState<FotoSetor[] | null>(null);
   const [tipo, setTipo] = useState(() => lerTipo(tipos));
   const [obs, setObs] = useState("");
@@ -219,7 +223,7 @@ export function FotosDoPedido({
 
   useEffect(() => {
     let ativo = true;
-    listarFotosSetor(setor, { itemId: item.id })
+    listarFotosSetor(setor, itemId ? { itemId } : { geral: true })
       .then((f) => ativo && setFotos(f))
       .catch((e: Error) => {
         if (!ativo) return;
@@ -229,7 +233,7 @@ export function FotosDoPedido({
     return () => {
       ativo = false;
     };
-  }, [setor, item.id]);
+  }, [setor, itemId]);
 
   function escolherTipo(t: string) {
     setTipo(t);
@@ -252,7 +256,7 @@ export function FotosDoPedido({
     try {
       for (const [n, arquivo] of arquivos.entries()) {
         setEnviando({ feitas: n, total: arquivos.length });
-        novas.push(await enviarFotoSetor(setor, item.id, await reduzir(arquivo), { tipo, observacao: obs, por: usuario }));
+        novas.push(await enviarFotoSetor(setor, itemId, await reduzir(arquivo), { tipo, observacao: obs, por: usuario }));
       }
       setObs("");
       setAviso(`✔ ${novas.length === 1 ? "Foto salva" : `${novas.length} fotos salvas`} — ${tipo}`);
@@ -264,7 +268,7 @@ export function FotosDoPedido({
       if (novas.length) {
         const total = [...[...novas].reverse(), ...(fotos ?? [])];
         setFotos(total);
-        onContagem(total.length);
+        onContagem?.(total.length);
       }
     }
   }
@@ -273,7 +277,7 @@ export function FotosDoPedido({
     await removerFotoSetor(setor, f.id, usuario);
     const resto = (fotos ?? []).filter((x) => x.id !== f.id);
     setFotos(resto);
-    onContagem(resto.length);
+    onContagem?.(resto.length);
   }
 
   return (
@@ -376,7 +380,7 @@ export function FotosDoPedido({
       {vendo && (
         <Visualizador
           foto={vendo}
-          titulo={item.desenho ?? `PO ${item.po}`}
+          titulo={item ? (item.desenho ?? `PO ${item.po}`) : "Foto geral"}
           onFechar={() => setVendo(null)}
           onApagar={somenteLeitura ? undefined : () => apagar(vendo)}
         />
@@ -384,6 +388,8 @@ export function FotosDoPedido({
     </div>
   );
 }
+
+const GERAL = "geral"; // grupo das fotos sem pedido
 
 const PERIODOS = [
   [7, "7 dias"],
@@ -438,12 +444,13 @@ export function FotosSetor({
     const m = new Map<string, FotoSetor[]>();
     for (const f of fotos ?? []) {
       if (tipo && f.tipo !== tipo) continue;
-      const i = porId.get(f.item_id);
+      const i = f.item_id ? porId.get(f.item_id) : undefined;
       const texto = normalizarBusca(
         [i?.po, i?.mac, i?.desenho, i?.descricao, i?.cliente, f.tipo, f.observacao].filter(Boolean).join(" "),
       );
       if (!termos.every((t) => texto.includes(t))) continue;
-      m.set(f.item_id, [...(m.get(f.item_id) ?? []), f]);
+      const chave = f.item_id ?? GERAL;
+      m.set(chave, [...(m.get(chave) ?? []), f]);
     }
     return [...m.entries()]; // já vem da mais recente pra mais antiga
   }, [fotos, tipo, termos, porId]);
@@ -510,6 +517,17 @@ export function FotosSetor({
 
       {grupos.map(([itemId, lista]) => {
         const i = porId.get(itemId);
+        if (itemId === GERAL)
+          return (
+            <div key={itemId} className="rounded-xl border-2 border-violet-300 bg-white p-2 dark:border-violet-800 dark:bg-slate-900">
+              <p className="mb-2 px-1 text-lg font-bold text-stone-900 dark:text-white">
+                📸 Fotos gerais (sem pedido) <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">📷 {lista.length}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {lista.map((f) => <Miniatura key={f.id} foto={f} onClick={() => setVendo(f)} />)}
+              </div>
+            </div>
+          );
         return (
           <div key={itemId} className="rounded-xl border-2 border-stone-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
             <button
@@ -538,8 +556,8 @@ export function FotosSetor({
         <Visualizador
           foto={vendo}
           titulo={(() => {
-            const i = porId.get(vendo.item_id);
-            return i ? `${i.desenho ?? ""} · PO ${i.po}` : undefined;
+            const i = vendo.item_id ? porId.get(vendo.item_id) : undefined;
+            return i ? `${i.desenho ?? ""} · PO ${i.po}` : vendo.item_id ? undefined : "Foto geral";
           })()}
           onFechar={() => setVendo(null)}
         />
