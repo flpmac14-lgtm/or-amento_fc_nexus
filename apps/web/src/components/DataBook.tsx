@@ -21,7 +21,10 @@ import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemDatabook } from "@/lib/types";
 import FollowUpSino from "@/components/FollowUpSino";
 import DataBookApontar, { FaixaEtapas } from "@/components/DataBookApontar";
+import CorteHistorico from "@/components/CorteHistorico";
 import { IconeCadeado } from "@/components/FollowUpEdicao";
+
+type ModoDatabook = "apontar" | "planilha" | "corte";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 const PAGINA = 200;
@@ -235,14 +238,16 @@ export default function DataBook() {
   const [erro, setErro] = useState("");
   const [usuario, setUsuario] = useState<string | null>(null);
   // Modo da aba: apontar por etapa (padrão) ou a planilha (lembrado no navegador).
-  const [modo, setModo] = useState<"apontar" | "planilha">(() => {
+  // Pedido do usuário (17/10): a Qualidade também vê o Histórico de serviço do Corte.
+  const [modo, setModo] = useState<ModoDatabook>(() => {
     try {
-      return typeof window !== "undefined" && localStorage.getItem("fcnexus.databook.modo") === "planilha" ? "planilha" : "apontar";
+      const salvo = typeof window !== "undefined" ? localStorage.getItem("fcnexus.databook.modo") : null;
+      return salvo === "planilha" || salvo === "corte" ? salvo : "apontar";
     } catch {
       return "apontar";
     }
   });
-  function trocarModo(m: "apontar" | "planilha") {
+  function trocarModo(m: ModoDatabook) {
     setModo(m);
     try {
       localStorage.setItem("fcnexus.databook.modo", m);
@@ -447,18 +452,19 @@ export default function DataBook() {
 
       {/* Pedido do usuário (17/10/2026): apontar por etapa igual à Usinagem/Pintura
           (celular e computador); a planilha continua do jeito que era. */}
-      <div className="grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40 sm:max-w-md">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40 sm:max-w-xl">
         {(
           [
             ["apontar", "📱 Apontar etapas"],
             ["planilha", "📋 Planilha"],
+            ["corte", "✂️ Histórico do corte"],
           ] as const
         ).map(([m, rotulo]) => (
           <button
             key={m}
             type="button"
             onClick={() => trocarModo(m)}
-            className={`h-11 rounded-lg text-base font-bold ${
+            className={`h-11 rounded-lg px-1 text-sm font-bold leading-tight sm:text-base ${
               modo === m ? "bg-green-600 text-white dark:bg-cyan-500 dark:text-slate-950" : "text-stone-600 dark:text-slate-300"
             }`}
           >
@@ -467,7 +473,9 @@ export default function DataBook() {
         ))}
       </div>
 
-      {modo === "apontar" ? (
+      {modo === "corte" ? (
+        <CorteHistorico />
+      ) : modo === "apontar" ? (
         <DataBookApontar
           itens={itens}
           usuario={usuario}
