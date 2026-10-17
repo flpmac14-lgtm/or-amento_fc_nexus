@@ -490,7 +490,7 @@ export default function FollowUpDetalhe({
             <Campo rotulo="Obs. Felipe / Marcelo" largo>
               {editavel("obs_felipe_marcelo", true)}
             </Campo>
-            <Campo rotulo="Obs. Alisson (OBS da Controle de obras)" largo mae>
+            <Campo rotulo="Obs. Diretoria (OBS da Controle de obras)" largo mae>
               {texto(item.obs_alisson)}
             </Campo>
           </Secao>

@@ -236,7 +236,7 @@ export default function RelatorioItemFollowUp() {
           <table className="w-full">
             <tbody>
               <Linha rotulo="Obs. Felipe / Marcelo" valor={<span className="whitespace-pre-wrap">{v(item.obs_felipe_marcelo)}</span>} />
-              <Linha rotulo="Obs. Alisson" valor={v(item.obs_alisson)} />
+              <Linha rotulo="Obs. Diretoria" valor={v(item.obs_alisson)} />
             </tbody>
           </table>
         </Secao>

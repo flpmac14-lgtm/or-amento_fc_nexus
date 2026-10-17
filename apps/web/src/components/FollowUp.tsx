@@ -73,6 +73,8 @@ const COLUNAS: Coluna[] = [
   { campo: "falta_material", rotulo: "F.Material", tipo: "material", principal: true, centro: true },
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
+  // Pedido do usuário (17/10): OBS da Controle de obras (antes "Obs. Alisson") vira Obs. Diretoria, ao lado da Obs. Felipe.
+  { campo: "obs_alisson", rotulo: "Obs. Diretoria", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   // Pedido do usuário (15/10): META da Controle de obras logo depois da Obs. Felipe / Marcelo.
   { campo: "meta", rotulo: "Meta", tipo: "texto", principal: true, maxW: "max-w-[8rem]" },
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
@@ -87,7 +89,6 @@ const COLUNAS: Coluna[] = [
   { campo: "plano_pintura", rotulo: "Plano de pintura", tipo: "texto", principal: true, maxW: "max-w-[16rem]" },
   { campo: "orcamento_terceirizado_unid", rotulo: "Orç. terceirizado unid", tipo: "moeda", principal: false },
   { campo: "orcamento_custo_macfab_unid", rotulo: "Custo Macfab unid", tipo: "moeda", principal: false },
-  { campo: "obs_alisson", rotulo: "Obs. Alisson", tipo: "texto", principal: false, largura: "min-w-[14rem]" },
   { campo: "st", rotulo: "ST", tipo: "codigo", principal: false },
   { campo: "nf", rotulo: "NF", tipo: "codigo", principal: false },
   { campo: "peso_unid", rotulo: "Peso unid", tipo: "peso", principal: false },

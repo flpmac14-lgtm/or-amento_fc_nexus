@@ -29,13 +29,15 @@ _ROTULOS = {
     "quantidade": "Qtd", "mac": "MAC", "desenho": "Desenho", "descricao": "Descrição",
     "coleta": "Coleta", "status": "Status", "fornecedor": "Fornecedor",
     "orcamento_terceirizado_unid": "Orç. terceirizado unid", "orcamento_custo_macfab_unid": "Custo Macfab unid",
-    "obs_felipe_marcelo": "Obs. Felipe / Marcelo", "meta": "Meta", "obs_alisson": "Obs. Alisson", "cor2": "COR2", "cor_2": "COR-2",
+    "obs_felipe_marcelo": "Obs. Felipe / Marcelo", "meta": "Meta", "obs_alisson": "Obs. Diretoria", "cor2": "COR2", "cor_2": "COR-2",
     "plano_pintura": "Plano de pintura", "st": "ST", "nf": "NF", "tipagem": "Tipagem", "peso_unid": "Peso unid",
     "peso_total": "Peso total", "ano": "Ano", "preco_previsto": "Preço previsto",
 }
 COLUNAS = [c for c, _, _ in CAMPOS if c != "d"]
-# Meta (Controle de obras, migration 0046) logo depois da Obs. Felipe / Marcelo.
-COLUNAS.insert(COLUNAS.index("obs_felipe_marcelo") + 1, "meta")
+# Obs. Diretoria (OBS da Controle de obras) ao lado da Obs. Felipe / Marcelo, depois a Meta (migration 0046).
+COLUNAS.remove("obs_alisson")
+COLUNAS.insert(COLUNAS.index("obs_felipe_marcelo") + 1, "obs_alisson")
+COLUNAS.insert(COLUNAS.index("obs_alisson") + 1, "meta")
 _LARGURAS = {"imagem": 12, "descricao": 45, "obs_felipe_marcelo": 30, "obs_alisson": 30, "plano_pintura": 35,
              "cliente": 14, "po": 18, "mac": 14, "desenho": 18, "fornecedor": 18}
 
