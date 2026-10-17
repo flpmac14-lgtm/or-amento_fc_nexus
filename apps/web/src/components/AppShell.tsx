@@ -157,7 +157,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
-  if (!restrita) operacao.push({ href: "/", rotulo: "Orçamentos", icone: "orcamento" });
+  // Vendas/Orçamentos: só o flpmac14 (pedido do usuário, 17/10/2026; bloqueio de verdade no proxy.ts).
+  if (!restrita && podeVerFinanceiro(user.email)) operacao.push({ href: "/", rotulo: "Orçamentos", icone: "orcamento" });
   operacao.push({
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",

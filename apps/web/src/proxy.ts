@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
-import { ROTA_FINANCEIRO, perfilFinanceiro, podeAbrirFinanceiro } from "@/lib/financeiro";
+import { ROTA_FINANCEIRO, perfilFinanceiro, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 // /instalar, manifesto e ícones do app instalável (PWA): públicos — o celular
@@ -22,7 +22,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const soFollowUp = acessoSoFollowUp(user);
+  // Vendas (página "/" de orçamentos) — pedido do usuário (17/10/2026): só a
+  // conta flpmac14 abre; as outras contas de acesso total vão pro Follow up.
+  const semVendas = !podeVerFinanceiro(user?.email);
+  const soFollowUp = acessoSoFollowUp(user) || (!!user && semVendas && request.nextUrl.pathname === "/");
   // Perfil "financeiro" (gabriele): preso em /financeiro — pedido do usuário.
   const soFinanceiro = perfilFinanceiro(user);
 
@@ -31,7 +34,7 @@ export async function proxy(request: NextRequest) {
   // não, inclusive conta restrita (o celular busca o manifesto já logado).
   if (user && request.nextUrl.pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = soFinanceiro ? ROTA_FINANCEIRO : soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.pathname = soFinanceiro ? ROTA_FINANCEIRO : soFollowUp || semVendas ? ROTA_FOLLOW_UP : "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
@@ -55,7 +58,7 @@ export async function proxy(request: NextRequest) {
   if (user && request.nextUrl.pathname.startsWith(ROTA_VISAO_GERAL)) {
     if (ehEmailAdmin(user.email) || user.app_metadata?.acesso === ACESSO_SO_FOLLOW_UP) return response;
     const url = request.nextUrl.clone();
-    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.pathname = soFollowUp || semVendas ? ROTA_FOLLOW_UP : "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
@@ -64,7 +67,7 @@ export async function proxy(request: NextRequest) {
   // usuário (os dados também são conferidos em app/api/financeiro/route.ts).
   if (user && request.nextUrl.pathname.startsWith(ROTA_FINANCEIRO) && !podeAbrirFinanceiro(user)) {
     const url = request.nextUrl.clone();
-    url.pathname = soFollowUp ? ROTA_FOLLOW_UP : "/";
+    url.pathname = soFollowUp || semVendas ? ROTA_FOLLOW_UP : "/";
     url.search = "";
     return NextResponse.redirect(url);
   }

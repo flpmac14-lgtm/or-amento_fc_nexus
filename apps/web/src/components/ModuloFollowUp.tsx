@@ -194,7 +194,6 @@ export default function ModuloFollowUp({
             </button>
           ))}
         </div>
-        {telaCheia && <div ref={setAlvoCards} className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" />}
         {!telaCheia && (
           <button
             type="button"
@@ -208,8 +207,11 @@ export default function ModuloFollowUp({
             <span className="hidden sm:inline">Tela cheia</span> <kbd className="hidden rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400 sm:inline">F2</kbd>
           </button>
         )}
-        <div ref={setAlvoSino} className="mb-1 shrink-0" />
+        <div ref={setAlvoSino} className={`${telaCheia ? "ml-auto" : ""} mb-1 shrink-0`} />
       </div>
+      {/* Tela cheia: cards de ativos por cliente numa linha só, abaixo das abas
+          (pedido do usuário: antes ficavam espremidos ao lado das abas, em coluna). */}
+      {telaCheia && <div ref={setAlvoCards} className="flex shrink-0 items-center gap-1.5 overflow-x-auto pb-0.5 empty:hidden" />}
       {/* As duas ficam montadas (só escondidas) pra não recarregar/perder filtros ao alternar. */}
       {!soProjeto && (
         <>

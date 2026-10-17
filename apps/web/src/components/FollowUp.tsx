@@ -204,6 +204,7 @@ export default function FollowUp({
   const [filtrosColuna, setFiltrosColuna] = useState<Record<string, string>>({});
   const [ordem, setOrdem] = useState<{ campo: Coluna["campo"]; desc: boolean } | null>(ORDEM_PADRAO);
   const [todasColunas, setTodasColunas] = useState(false);
+  const [verPintura, setVerPintura] = useState(false); // grupos de pintura igual recolhidos
   const [mostrarAusentes, setMostrarAusentes] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [porPagina, setPorPagina] = useState(50);
@@ -690,10 +691,10 @@ export default function FollowUp({
               type="button"
               onClick={() => setFiltro("cliente", "")}
               title="Pedidos ativos (ST = A) — clique para ver todos os clientes"
-              className={`rounded-lg border px-2.5 py-1 text-left leading-tight border-green-600/50 bg-white dark:border-cyan-500/50 dark:bg-slate-900`}
+              className="inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap rounded-full border border-green-600/50 bg-white px-2.5 py-0.5 dark:border-cyan-500/50 dark:bg-slate-900"
             >
-              <span className="block text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">Ativos</span>
-              <span className="font-mono text-lg font-bold text-green-700 dark:text-cyan-300">{ativosPorCliente.total}</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">Ativos</span>
+              <span className="font-mono text-sm font-bold text-green-700 dark:text-cyan-300">{ativosPorCliente.total}</span>
             </button>
             {ativosPorCliente.clientes.map(([cliente, n]) => {
               const ativo = filtros.cliente === cliente;
@@ -703,16 +704,16 @@ export default function FollowUp({
                   type="button"
                   onClick={() => setFiltro("cliente", ativo || cliente === "—" ? "" : cliente)}
                   title={`${n} pedidos ativos de ${cliente} — clique para filtrar`}
-                  className={`rounded-lg border px-2.5 py-1 text-left leading-tight ${
+                  className={`inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 ${
                     ativo
                       ? "border-green-600 bg-green-50 dark:border-cyan-400 dark:bg-cyan-950/40"
                       : "border-stone-200 bg-white hover:border-green-600/50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/50"
                   }`}
                 >
-                  <span className="block max-w-[7rem] truncate text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">
+                  <span className="max-w-[9rem] truncate text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-400">
                     {cliente}
                   </span>
-                  <span className="font-mono text-lg font-bold text-stone-900 dark:text-white">{n}</span>
+                  <span className="font-mono text-sm font-bold text-stone-900 dark:text-white">{n}</span>
                 </button>
               );
             })}
@@ -864,7 +865,52 @@ export default function FollowUp({
           />
           <Seletor rotulo="Ano" valor={filtros.ano} opcoes={opcoes.ano} onChange={(v) => setFiltro("ano", v)} />
         </div>
-        {gruposPintura.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <Seletor
+            rotulo="ST"
+            valor={filtros.st}
+            opcoes={opcoes.st}
+            onChange={(v) => setFiltro("st", v)}
+            dica="Padrão A = o que a segmentação da planilha mostra"
+          />
+          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+            Prazo de
+            <input type="date" value={filtros.prazoDe} onChange={(e) => setFiltro("prazoDe", e.target.value)} className={classeCampo} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+            até
+            <input type="date" value={filtros.prazoAte} onChange={(e) => setFiltro("prazoAte", e.target.value)} className={classeCampo} />
+          </label>
+          {/* Pintura igual fica recolhida (pedido do usuário: menos poluído, mais obras na tela). */}
+          {gruposPintura.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setVerPintura((v) => !v)}
+              title="Mostrar/esconder os grupos de pintura igual (mesmo plano + COR2 + COR-2)"
+              className={`rounded-lg border px-3 py-1.5 text-sm ${
+                filtros.pintura
+                  ? "border-green-600 bg-green-50 text-green-800 dark:border-cyan-400 dark:bg-cyan-950/40 dark:text-cyan-200"
+                  : "border-stone-300 text-stone-700 hover:border-green-600/50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-cyan-500/50"
+              }`}
+            >
+              🎨 Pintura igual ({gruposPintura.length}){filtros.pintura ? " · filtrando" : ""} {verPintura ? "▴" : "▾"}
+            </button>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-stone-600 dark:text-slate-400">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={todasColunas} onChange={(e) => setTodasColunas(e.target.checked)} />
+              Todas as colunas
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={mostrarAusentes} onChange={(e) => {
+                  setMostrarAusentes(e.target.checked);
+                  setPagina(0);
+                }} />
+              Incluir itens que saíram da planilha
+            </label>
+          </div>
+        </div>
+        {gruposPintura.length > 0 && verPintura && (
           <div className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
             <span>
               Pintura igual (mesmo plano + COR2 + COR-2) — clique para filtrar o grupo
@@ -903,36 +949,6 @@ Plano: ${e.plano_pintura ?? "—"}`}
             </div>
           </div>
         )}
-        <div className="flex flex-wrap items-end gap-2">
-          <Seletor
-            rotulo="ST"
-            valor={filtros.st}
-            opcoes={opcoes.st}
-            onChange={(v) => setFiltro("st", v)}
-            dica="Padrão A = o que a segmentação da planilha mostra"
-          />
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
-            Prazo de
-            <input type="date" value={filtros.prazoDe} onChange={(e) => setFiltro("prazoDe", e.target.value)} className={classeCampo} />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
-            até
-            <input type="date" value={filtros.prazoAte} onChange={(e) => setFiltro("prazoAte", e.target.value)} className={classeCampo} />
-          </label>
-          <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-stone-600 dark:text-slate-400">
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={todasColunas} onChange={(e) => setTodasColunas(e.target.checked)} />
-              Todas as colunas
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={mostrarAusentes} onChange={(e) => {
-                  setMostrarAusentes(e.target.checked);
-                  setPagina(0);
-                }} />
-              Incluir itens que saíram da planilha
-            </label>
-          </div>
-        </div>
       </div>
 
       {/* Tabela */}
