@@ -342,5 +342,85 @@ def sincronizar(simular: bool = False) -> str | None:
     return resumo
 
 
+# --- Pedidos de venda (aba Financeiro → Pedidos) -----------------------------
+# Pedido do usuário (17/10/2026): consulta passada por ele, do jeito que veio
+# (obra com 4 dígitos, PO do cliente com o item tirado do "ITEM nn" da
+# descrição, status por item, semana ISO da entrega). Um item por linha.
+ESTADO_PEDIDOS = RAIZ / "sincronizar_financeiro_pedidos.estado"  # hash (fora do git)
+SQL_PEDIDOS_VENDA = r"""
+SELECT
+P.CODIGO AS [PEDIDO],
+CASE
+WHEN CHARINDEX('.', REPLACE(P.OBRA, 'MAC.', '')) > 0 THEN RIGHT('0000' + LEFT(REPLACE(P.OBRA, 'MAC.', ''), CHARINDEX('.', REPLACE(P.OBRA, 'MAC.', '')) - 1), 4) + SUBSTRING(REPLACE(P.OBRA, 'MAC.', ''), CHARINDEX('.', REPLACE(P.OBRA, 'MAC.', '')), 10)
+ELSE REPLACE(P.OBRA, 'MAC.', '') END AS [OBRA],
+(SELECT X.DESCRICAO FROM VE_OBRA AS X WHERE X.CODIGO = P.OBRA) AS [OBRA DESC],
+CASE
+WHEN CHARINDEX(' METI', REVERSE(RTRIM(CAST(PI.OBS AS VARCHAR(MAX))))) > 0 THEN P.PEDIDOCLI + '-' + LEFT(SUBSTRING(RTRIM(CAST(PI.OBS AS VARCHAR(MAX))), LEN(RTRIM(CAST(PI.OBS AS VARCHAR(MAX)))) - CHARINDEX(' METI', REVERSE(RTRIM(CAST(PI.OBS AS VARCHAR(MAX))))) + 2, 20), PATINDEX('%[^0-9]%', SUBSTRING(RTRIM(CAST(PI.OBS AS VARCHAR(MAX))), LEN(RTRIM(CAST(PI.OBS AS VARCHAR(MAX)))) - CHARINDEX(' METI', REVERSE(RTRIM(CAST(PI.OBS AS VARCHAR(MAX))))) + 2, 20) + 'X') - 1)
+ELSE P.PEDIDOCLI END AS [PEDIDO CLIENTE],
+CASE
+WHEN PI.STATUS = 'A' THEN 'EM ABERTO'
+WHEN PI.STATUS = 'L' THEN 'LIBERADO'
+WHEN PI.STATUS = 'F' THEN 'FATURADO'
+WHEN PI.STATUS = 'C' THEN 'CANCELADO'
+WHEN PI.STATUS = 'P' THEN 'EM PRODUCAO'
+ELSE 'FATURADO' END AS STATUS,
+PI.MATERIAL,
+PI.OBS AS [DESC MATERIAL],
+PI.QTDE,
+PI.VLRTOTAL,
+CONVERT(VARCHAR(10), P.DTENTREGA, 103) AS [PREV ENTREGA],
+'W' + RIGHT(CAST(YEAR(P.DTENTREGA) AS VARCHAR(4)), 2) + RIGHT('0' + CAST(DATEPART(ISO_WEEK, P.DTENTREGA) AS VARCHAR(2)), 2) AS [ANO-SEM ENTREGA],
+(SELECT X.FANTASIA FROM FN_FORNECEDORES AS X WHERE X.CODIGO = P.CLIENTE) AS CLIENTE
+FROM VE_PEDIDOITENS AS PI
+LEFT JOIN VE_PEDIDO AS P ON P.CODIGO = PI.PEDIDO
+WHERE P.DTPEDIDO >= '20240101'
+ORDER BY P.CODIGO DESC
+"""
+# Colunas gravadas (cada pedido vira uma lista, nessa ordem — ocupa bem menos que dicionário).
+COLUNAS_PEDIDOS = ["pedido", "obra", "obra_desc", "pedido_cliente", "status", "material", "descricao", "qtde",
+                   "valor", "entrega", "ano_semana", "cliente"]
+
+
+def montar_pedidos() -> dict:
+    linhas = []
+    with _conectar_erp() as erp:
+        cur = erp.cursor()
+        cur.execute(SQL_PEDIDOS_VENDA)
+        for pedido, obra, obra_desc, po, status, material, desc, qtde, valor, entrega, ano_sem, cliente in cur.fetchall():
+            # "21/10/2026" → "2026-10-21"
+            iso = None
+            if entrega and len(entrega.strip()) == 10:
+                d, m, a = entrega.strip().split("/")
+                iso = f"{a}-{m}-{d}"
+            linhas.append([
+                str(int(pedido)) if pedido is not None else None, _texto(obra), _texto(obra_desc), _texto(po),
+                _texto(status), _texto(material), _texto(desc), float(qtde or 0), round(float(valor or 0), 2),
+                iso, _texto(ano_sem), _texto(cliente),
+            ])
+    return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas}
+
+
+def sincronizar_pedidos(simular: bool = False) -> str | None:
+    """Grava os pedidos de venda se mudaram (None = nada mudou)."""
+    dados = montar_pedidos()
+    texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
+    assinatura = hashlib.sha256(texto.encode()).hexdigest()
+    resumo = f"{len(dados['linhas'])} itens de pedido de venda ({len({l[0] for l in dados['linhas']})} pedidos)"
+    if simular:
+        return resumo
+    if ESTADO_PEDIDOS.exists() and ESTADO_PEDIDOS.read_text(encoding="utf-8").strip() == assinatura:
+        return None
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into financeiro_pedidos (id, dados, gerado_em) values (1, %s, %s)
+               on conflict (id) do update set dados = excluded.dados, gerado_em = excluded.gerado_em""",
+            (texto, datetime.now(timezone.utc)),
+        )
+        conn.commit()
+    ESTADO_PEDIDOS.write_text(assinatura, encoding="utf-8")
+    return resumo
+
+
 if __name__ == "__main__":
     print(sincronizar(simular="--simular" in sys.argv) or "sem alteração")
+    print(sincronizar_pedidos(simular="--simular" in sys.argv) or "pedidos: sem alteração")

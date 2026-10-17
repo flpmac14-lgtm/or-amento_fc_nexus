@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
 from sincronizar_pdfs_corte import sincronizar_se_mudou as sincronizar_pdfs_corte_se_mudou  # noqa: E402
 from sincronizar_financeiro import sincronizar as sincronizar_financeiro  # noqa: E402
+from sincronizar_financeiro import sincronizar_pedidos as sincronizar_pedidos_venda  # noqa: E402
 from sincronizar_certificados import sincronizar_se_mudou as sincronizar_certificados_se_mudou  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
@@ -117,6 +118,10 @@ def main() -> int:
             resumo = sincronizar_financeiro()
             if resumo:
                 print(f"{agora} Financeiro - {resumo}")
+            # Aba Financeiro → Pedidos (pedidos de venda do ERP) — só grava se mudou.
+            resumo = sincronizar_pedidos_venda()
+            if resumo:
+                print(f"{agora} Financeiro (pedidos) - {resumo}")
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Financeiro (ERP) - {type(e).__name__}: {e}")
             return 1

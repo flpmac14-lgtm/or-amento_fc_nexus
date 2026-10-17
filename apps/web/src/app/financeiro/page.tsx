@@ -12,6 +12,7 @@ import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
 import FinanceiroNotas from "@/components/FinanceiroNotas";
 import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/FinanceiroPainel";
+import FinanceiroPedidos from "@/components/FinanceiroPedidos";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
 import { buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
 
@@ -49,8 +50,8 @@ export default function PaginaFinanceiro() {
   const [mesNotas, setMesNotas] = useState("");
   // Abas (pedido do usuário, 15/10/2026): Resumo, Compras, A pagar, A receber e
   // Faturamento (o painel de antes). Lembrada no endereço (?aba=).
-  const [aba, setAba] = useState<AbaPainel | "faturamento">("resumo");
-  function irAba(a: AbaPainel | "faturamento") {
+  const [aba, setAba] = useState<AbaPainel | "pedidos" | "faturamento">("resumo");
+  function irAba(a: AbaPainel | "pedidos" | "faturamento") {
     setAba(a);
     const url = new URL(window.location.href);
     url.searchParams.set("aba", a);
@@ -65,7 +66,7 @@ export default function PaginaFinanceiro() {
         setDados((antes) => {
           if (!antes) {
             const a = new URLSearchParams(window.location.search).get("aba");
-            if (a === "faturamento" || ABAS_PAINEL.some(([v]) => v === a)) setAba(a as AbaPainel | "faturamento");
+            if (a === "faturamento" || a === "pedidos" || ABAS_PAINEL.some(([v]) => v === a)) setAba(a as AbaPainel | "pedidos" | "faturamento");
           }
           return j;
         });
@@ -162,7 +163,7 @@ export default function PaginaFinanceiro() {
 
         {resumo && (
           <nav className="sticky top-14 z-20 -mx-3 flex gap-1 overflow-x-auto border-b border-stone-200 bg-stone-50/95 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border">
-            {[...ABAS_PAINEL, ["faturamento", "Faturamento"] as const].map(([v, r]) => (
+            {[...ABAS_PAINEL, ["pedidos", "Pedidos"] as const, ["faturamento", "Faturamento"] as const].map(([v, r]) => (
               <button
                 key={v}
                 type="button"
@@ -177,7 +178,10 @@ export default function PaginaFinanceiro() {
           </nav>
         )}
 
-        {resumo && aba !== "faturamento" && <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />}
+        {resumo && aba !== "faturamento" && aba !== "pedidos" && <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />}
+
+        {/* Pedidos de venda do ERP — pedido do usuário (17/10/2026); carrega só ao abrir. */}
+        {resumo && aba === "pedidos" && <FinanceiroPedidos />}
 
         {resumo && aba === "faturamento" && (
           <>
