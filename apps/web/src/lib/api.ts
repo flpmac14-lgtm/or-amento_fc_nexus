@@ -1403,6 +1403,18 @@ export async function historicoEtapasDatabook(itemId: string): Promise<Apontamen
   return (await resposta.json()).etapas;
 }
 
+// 🕘 Histórico pra todos: etapas + trocas de ST.BOOK/falta/obs. no período.
+export type EventoHistoricoDatabook = { id: number; item_id: string; por: string | null; em: string; desfeito: boolean } & (
+  | { tipo: "etapa"; etapa: string; acao: "inicio" | "fim"; observacao: string | null }
+  | { tipo: "campo"; campo: string; de: string | null; para: string | null }
+);
+
+export async function listarHistoricoGeralDatabook(dias: number): Promise<EventoHistoricoDatabook[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/historico-geral?dias=${dias}`);
+  if (!resposta.ok) throw await erroDe(resposta, "Falha ao carregar o histórico");
+  return (await resposta.json()).eventos;
+}
+
 // Só quem apontou ou o admin (conferido no servidor — app/databook_etapas.py).
 export async function desfazerEtapaDatabook(apontamentoId: number, por: string | null): Promise<ItemDatabook> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/databook/etapas/${apontamentoId}/desfazer`, {

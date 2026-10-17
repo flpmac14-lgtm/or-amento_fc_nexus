@@ -829,6 +829,15 @@ def databook_apontar_etapa(item_id: str, pedido: dict) -> dict:
     return {"item": item}
 
 
+@app.get("/databook/historico-geral")
+def databook_historico_geral(dias: int = 1) -> dict:
+    """🕘 Tudo o que foi apontado no Data book no período (etapas + ST.BOOK/falta/obs.)."""
+    try:
+        return {"eventos": databook_etapas.historico_geral(dias)}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @app.get("/databook/itens/{item_id}/etapas")
 def databook_historico_etapas(item_id: str) -> dict:
     try:

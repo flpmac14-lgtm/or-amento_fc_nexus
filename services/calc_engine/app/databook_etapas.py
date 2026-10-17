@@ -16,7 +16,7 @@ Pedido sem linha numa dessas três etapas mostra o que já estava no Data book.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.databook import PRONTOS, RASTREAB, RASTREAB_FIM, _carregar, _salvar
 from app.orcamentos_salvos import _conectar
@@ -275,3 +275,33 @@ def desfazer(apontamento_id: int, por: str | None = None) -> dict:
         excluir_status(item_id, por)  # volta o ST.BOOK (e as datas) como o 🗑 da planilha
     with _conectar() as conn, conn.cursor() as cur:
         return _item(cur, item_id)
+
+
+def historico_geral(dias: int = 1) -> list[dict]:
+    """🕘 Histórico pra todos (pedido do usuário, 17/10/2026): tudo o que a
+    Qualidade apontou no Data book no período — etapas e trocas de ST.BOOK,
+    falta e observação —, mais recente primeiro, com o pedido."""
+    dias = max(1, min(int(dias), 90))
+    desde = datetime.now(timezone.utc) - timedelta(days=dias)
+    out: list[dict] = []
+    with _conectar() as conn, conn.cursor() as cur:
+        if tabela_existe(cur):
+            cur.execute(
+                """select e.id, e.item_id, e.etapa, e.acao, e.observacao, e.por, e.em, e.desfeito
+                   from databook_etapas e where e.em >= %s order by e.em desc limit 2000""",
+                (desde,),
+            )
+            for aid, item_id, etapa, acao, obs, por, em, desfeito in cur.fetchall():
+                out.append({"tipo": "etapa", "id": aid, "item_id": str(item_id), "etapa": etapa, "acao": acao,
+                            "observacao": obs, "por": por, "em": em.isoformat(), "desfeito": desfeito})
+        cur.execute(
+            """select h.id, h.item_id, h.campo, h.de, h.para, h.por, h.em, h.desfeito from databook_historico h
+               where h.em >= %s and h.campo in ('st_book', 'st_book_excluido', 'falta', 'observacao')
+               order by h.em desc limit 2000""",
+            (desde,),
+        )
+        for hid, item_id, campo, de, para, por, em, desfeito in cur.fetchall():
+            out.append({"tipo": "campo", "id": hid, "item_id": str(item_id), "campo": campo, "de": de, "para": para,
+                        "por": por, "em": em.isoformat(), "desfeito": desfeito})
+    out.sort(key=lambda x: x["em"], reverse=True)
+    return out

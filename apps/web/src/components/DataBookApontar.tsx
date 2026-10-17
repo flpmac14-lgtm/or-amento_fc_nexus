@@ -19,6 +19,7 @@ import {
   type ApontamentoEtapaDatabook,
 } from "@/lib/api";
 import { quando } from "@/components/ApontamentoComum";
+import DataBookHistorico from "@/components/DataBookHistorico";
 import { EMAIL_FINANCEIRO } from "@/lib/financeiro";
 import { normalizarBusca } from "@/lib/followUp";
 import { minutosUteis } from "@/lib/jornada";
@@ -132,6 +133,7 @@ export default function DataBookApontar({
   const [hist, setHist] = useState<LinhaHist[] | null>(null);
   const [versaoHist, setVersaoHist] = useState(0);
   const [editando, setEditando] = useState<Edicao | null>(null);
+  const [tela, setTela] = useState<"pedidos" | "historico">("pedidos");
 
   // Pedido do usuário (17/10/2026): cada um só edita/exclui o que ELE apontou;
   // o admin (flpmac14) mexe em qualquer um. O servidor confere de novo.
@@ -336,6 +338,31 @@ export default function DataBookApontar({
         </div>
       )}
 
+      {/* Pedido do usuário (17/10/2026): histórico pra todos, igual à Usinagem. */}
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40">
+        {(
+          [
+            ["pedidos", "📋 Pedidos"],
+            ["historico", "🕘 Histórico"],
+          ] as const
+        ).map(([t, r]) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTela(t)}
+            className={`h-12 rounded-lg text-base font-bold ${
+              tela === t ? "bg-green-600 text-white dark:bg-cyan-500 dark:text-slate-950" : "text-stone-600 dark:text-slate-300"
+            }`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {tela === "historico" ? (
+        <DataBookHistorico itens={itens} etapas={ETAPAS} versao={versaoHist} abrir={abrir} />
+      ) : (
+      <>
       <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/40 sm:p-4">
         <div className="flex gap-2">
           <input
@@ -417,6 +444,8 @@ export default function DataBookApontar({
         </p>
       )}
       {lista.length === 0 && <p className="py-10 text-center text-stone-500 dark:text-slate-400">Nenhum pedido encontrado.</p>}
+      </>
+      )}
 
       {aberto && (
         <div className="fixed inset-0 z-[70] flex items-stretch justify-center bg-black/60 sm:items-center sm:p-4" onClick={() => setAbertoId(null)}>
