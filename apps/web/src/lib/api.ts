@@ -1403,9 +1403,29 @@ export async function historicoEtapasDatabook(itemId: string): Promise<Apontamen
   return (await resposta.json()).etapas;
 }
 
-export async function desfazerEtapaDatabook(apontamentoId: number): Promise<ItemDatabook> {
-  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/etapas/${apontamentoId}/desfazer`, { method: "POST" });
-  if (!resposta.ok) throw await erroDe(resposta, "Não desfez");
+// Só quem apontou ou o admin (conferido no servidor — app/databook_etapas.py).
+export async function desfazerEtapaDatabook(apontamentoId: number, por: string | null): Promise<ItemDatabook> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/etapas/${apontamentoId}/desfazer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ por }),
+  });
+  if (!resposta.ok) throw await erroDe(resposta, "Não excluiu");
+  return (await resposta.json()).item;
+}
+
+export async function editarEtapaDatabook(
+  apontamentoId: number,
+  em: string,
+  observacao: string | null,
+  por: string | null,
+): Promise<ItemDatabook> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/etapas/${apontamentoId}/editar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ em, observacao, por }),
+  });
+  if (!resposta.ok) throw await erroDe(resposta, "Não salvou");
   return (await resposta.json()).item;
 }
 

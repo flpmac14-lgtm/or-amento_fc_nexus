@@ -12,12 +12,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   apontarEtapaDatabook,
   desfazerEtapaDatabook,
+  editarEtapaDatabook,
   historicoDatabook,
   historicoEtapasDatabook,
   urlImagemFollowUp,
   type ApontamentoEtapaDatabook,
 } from "@/lib/api";
 import { quando } from "@/components/ApontamentoComum";
+import { EMAIL_FINANCEIRO } from "@/lib/financeiro";
 import { normalizarBusca } from "@/lib/followUp";
 import { minutosUteis } from "@/lib/jornada";
 import { duracao } from "@/lib/painel";
@@ -94,6 +96,15 @@ export function FaixaEtapas({ item, grande = false }: { item: ItemDatabook; gran
   );
 }
 
+// "2026-10-17T10:20" (campo datetime-local, hora deste aparelho) a partir do ISO.
+function paraLocal(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+type Edicao = { id: number; em: string; obs: string };
+
 function emAndamento(i: ItemDatabook): boolean {
   return Object.values(i.etapas ?? {}).some((e) => e.inicio_em && !e.fim_em);
 }
@@ -120,6 +131,12 @@ export default function DataBookApontar({
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [hist, setHist] = useState<LinhaHist[] | null>(null);
   const [versaoHist, setVersaoHist] = useState(0);
+  const [editando, setEditando] = useState<Edicao | null>(null);
+
+  // Pedido do usuário (17/10/2026): cada um só edita/exclui o que ELE apontou;
+  // o admin (flpmac14) mexe em qualquer um. O servidor confere de novo.
+  const ehAdmin = (usuario ?? "").toLowerCase() === EMAIL_FINANCEIRO;
+  const podeMexer = (por: string | null) => !!usuario && (ehAdmin || usuario.toLowerCase() === (por ?? "").toLowerCase());
 
   const aberto = abertoId ? (itens.find((i) => i.id === abertoId) ?? null) : null;
 
@@ -171,6 +188,7 @@ export default function DataBookApontar({
     setHist(null);
     setObs("");
     setConfirmar(null);
+    setEditando(null);
   }
 
   async function apontar(etapa: string, acao: "inicio" | "fim") {
@@ -197,20 +215,111 @@ export default function DataBookApontar({
     }
   }
 
-  async function desfazer(a: ApontamentoEtapaDatabook) {
-    const chave = `desfazer:${a.id}`;
+  async function desfazer(id: number) {
+    const chave = `desfazer:${id}`;
     if (confirmar !== chave) {
       setConfirmar(chave);
       return;
     }
     setConfirmar(null);
     try {
-      onItem(await desfazerEtapaDatabook(a.id));
+      onItem(await desfazerEtapaDatabook(id, usuario));
       setVersaoHist((v) => v + 1);
-      setAviso({ ok: true, texto: "🗑 Apontamento desfeito" });
+      setAviso({ ok: true, texto: "🗑 Apontamento excluído" });
     } catch (e) {
       setAviso({ ok: false, texto: (e as Error).message });
     }
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return;
+    const data = new Date(editando.em);
+    if (isNaN(data.getTime())) return setAviso({ ok: false, texto: "Data/hora inválida." });
+    setSalvando(`editar:${editando.id}`);
+    try {
+      onItem(await editarEtapaDatabook(editando.id, data.toISOString(), editando.obs.trim() || null, usuario));
+      setEditando(null);
+      setVersaoHist((v) => v + 1);
+      setAviso({ ok: true, texto: "✏️ Apontamento corrigido" });
+    } catch (e) {
+      setAviso({ ok: false, texto: (e as Error).message });
+    } finally {
+      setSalvando(null);
+    }
+  }
+
+  // ✏️ / 🗑 de um apontamento — só aparece pra quem apontou e pro admin.
+  // (Funções que devolvem JSX, não componentes: o campo em edição não perde o foco.)
+  function acoes(id: number | null | undefined, por: string | null, em: string, obsAtual: string | null) {
+    if (!id || !podeMexer(por)) return null;
+    return (
+      <span className="ml-1 inline-flex gap-1 align-middle">
+        <button
+          type="button"
+          onClick={() => setEditando({ id, em: paraLocal(em), obs: obsAtual ?? "" })}
+          title="Editar data/hora e observação"
+          className="rounded border border-stone-300 px-1.5 text-[11px] font-bold text-stone-600 hover:border-green-600 dark:border-slate-600 dark:text-slate-300"
+        >
+          ✏️ Editar
+        </button>
+        <button
+          type="button"
+          onClick={() => desfazer(id)}
+          title="Apontou errado? Exclui este apontamento"
+          className={`rounded border px-1.5 text-[11px] font-bold ${
+            confirmar === `desfazer:${id}`
+              ? "border-red-700 bg-red-600 text-white"
+              : "border-stone-300 text-stone-600 hover:border-red-500 hover:text-red-600 dark:border-slate-600 dark:text-slate-300"
+          }`}
+        >
+          {confirmar === `desfazer:${id}` ? "Excluir? toque de novo" : "🗑 Excluir"}
+        </button>
+      </span>
+    );
+  }
+
+  function editor(id: number | null | undefined) {
+    if (!editando || !id || editando.id !== id) return null;
+    return (
+      <span className="mt-1 flex flex-col gap-1.5 rounded-lg border-2 border-green-600 bg-green-50 p-2 text-left dark:border-cyan-500 dark:bg-slate-950">
+        <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-stone-700 dark:text-slate-300">
+          Data e hora
+          <input
+            type="datetime-local"
+            value={editando.em}
+            max={paraLocal(new Date().toISOString())}
+            onChange={(e) => setEditando({ ...editando, em: e.target.value })}
+            className="h-10 rounded-lg border-2 border-stone-300 bg-white px-2 text-sm text-stone-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-stone-700 dark:text-slate-300">
+          Observação
+          <input
+            value={editando.obs}
+            maxLength={500}
+            onChange={(e) => setEditando({ ...editando, obs: e.target.value })}
+            className="h-10 rounded-lg border-2 border-stone-300 bg-white px-2 text-sm text-stone-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+          />
+        </label>
+        <span className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={salvarEdicao}
+            disabled={salvando !== null}
+            className="h-10 rounded-lg bg-green-600 text-sm font-bold text-white disabled:opacity-60"
+          >
+            {salvando === `editar:${id}` ? "Salvando…" : "Salvar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditando(null)}
+            className="h-10 rounded-lg border-2 border-stone-300 text-sm font-bold text-stone-700 dark:border-slate-600 dark:text-slate-300"
+          >
+            Cancelar
+          </button>
+        </span>
+      </span>
+    );
   }
 
   return (
@@ -386,15 +495,19 @@ export default function DataBookApontar({
                       </div>
                       <p className="min-h-[2.5rem] text-xs leading-snug text-stone-600 dark:text-slate-400">
                         {e?.inicio_em && (
-                          <span className="block">
+                          <span className="block py-0.5">
                             ▶ Início {quando(e.inicio_em)}
                             {e.inicio_por && ` · ${e.inicio_por}`}
+                            {acoes(e.inicio_id, e.inicio_por, e.inicio_em, e.obs)}
+                            {editor(e.inicio_id)}
                           </span>
                         )}
                         {e?.fim_em && (
-                          <span className="block">
+                          <span className="block py-0.5">
                             ✔ Finalizado {quando(e.fim_em)}
                             {e.fim_por && ` · ${e.fim_por}`}
+                            {acoes(e.fim_id, e.fim_por, e.fim_em, e.obs)}
+                            {editor(e.fim_id)}
                           </span>
                         )}
                         {e?.inicio_em && (
@@ -449,7 +562,7 @@ export default function DataBookApontar({
                   <ul className="flex flex-col divide-y divide-stone-100 dark:divide-slate-800">
                     {hist.map((h) =>
                       h.tipo === "etapa" ? (
-                        <li key={`e${h.a.id}`} className={`flex items-start gap-2 py-1.5 text-sm ${h.a.desfeito ? "opacity-50 line-through" : ""}`}>
+                        <li key={`e${h.a.id}`} className={`flex flex-wrap items-start gap-2 py-1.5 text-sm ${h.a.desfeito ? "opacity-50 line-through" : ""}`}>
                           <span className="w-24 shrink-0 text-xs text-stone-500 dark:text-slate-400">{quando(h.em)}</span>
                           <span className="min-w-0 flex-1 text-stone-800 dark:text-slate-200">
                             {NOME_ETAPA.get(h.a.etapa)?.icone} <strong>{NOME_ETAPA.get(h.a.etapa)?.nome ?? h.a.etapa}</strong>:{" "}
@@ -458,16 +571,10 @@ export default function DataBookApontar({
                             {h.a.observacao && <span className="block text-xs italic text-stone-500">“{h.a.observacao}”</span>}
                           </span>
                           {!h.a.desfeito && (
-                            <button
-                              type="button"
-                              onClick={() => desfazer(h.a)}
-                              title="Apontado errado? Desfaz este toque (o ST.BOOK não volta — use o 🗑 do ST.BOOK na planilha)"
-                              className={`shrink-0 rounded px-1.5 text-xs font-bold ${
-                                confirmar === `desfazer:${h.a.id}` ? "bg-red-600 text-white" : "text-stone-400 hover:text-red-600"
-                              }`}
-                            >
-                              {confirmar === `desfazer:${h.a.id}` ? "Desfazer?" : "🗑"}
-                            </button>
+                            <span className="w-full text-right sm:w-auto sm:shrink-0">
+                              {acoes(h.a.id, h.a.por, h.a.em, h.a.observacao)}
+                              {editor(h.a.id)}
+                            </span>
                           )}
                         </li>
                       ) : (

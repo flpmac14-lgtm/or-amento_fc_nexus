@@ -837,10 +837,29 @@ def databook_historico_etapas(item_id: str) -> dict:
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.post("/databook/etapas/{apontamento_id}/desfazer")
-def databook_desfazer_etapa(apontamento_id: int) -> dict:
+@app.post("/databook/etapas/{apontamento_id}/editar")
+def databook_editar_etapa(apontamento_id: int, pedido: dict) -> dict:
+    """✏️ Corrige data/hora e observação de um apontamento de etapa (só quem apontou ou o admin)."""
     try:
-        item = databook_etapas.desfazer(apontamento_id)
+        item = databook_etapas.editar(apontamento_id, pedido.get("em"), pedido.get("observacao"), pedido.get("por"))
+    except databook_etapas.SemPermissao as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"item": item}
+
+
+@app.post("/databook/etapas/{apontamento_id}/desfazer")
+def databook_desfazer_etapa(apontamento_id: int, pedido: dict) -> dict:
+    """🗑 Exclui o apontamento feito errado (só quem apontou ou o admin)."""
+    try:
+        item = databook_etapas.desfazer(apontamento_id, pedido.get("por"))
+    except databook_etapas.SemPermissao as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BancoNaoConfigurado as e:

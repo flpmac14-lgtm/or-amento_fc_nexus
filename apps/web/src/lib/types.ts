@@ -816,6 +816,9 @@ export interface EtapaDatabook {
   fim_em: string | null;
   fim_por: string | null;
   obs: string | null;
+  // Apontamento por trás do início/fim (✏️ editar / 🗑 excluir); vazio = veio do ST.BOOK antigo.
+  inicio_id?: number | null;
+  fim_id?: number | null;
 }
 
 export interface ItemDatabook {

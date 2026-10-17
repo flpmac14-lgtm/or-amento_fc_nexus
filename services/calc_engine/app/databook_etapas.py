@@ -40,7 +40,9 @@ def tabela_existe(cur) -> bool:
 
 
 def _vazio() -> dict:
-    return {"inicio_em": None, "inicio_por": None, "fim_em": None, "fim_por": None, "obs": None}
+    # inicio_id / fim_id: o apontamento (linha) por trás — pra ✏️ editar / 🗑 excluir na etapa.
+    return {"inicio_em": None, "inicio_por": None, "fim_em": None, "fim_por": None, "obs": None,
+            "inicio_id": None, "fim_id": None}
 
 
 def situacao(cur, ids: list[str] | None = None) -> dict[str, dict[str, dict]]:
@@ -49,18 +51,19 @@ def situacao(cur, ids: list[str] | None = None) -> dict[str, dict[str, dict]]:
         return {}
     filtro, params = ("and item_id = any(%s::uuid[])", (ids,)) if ids is not None else ("", ())
     cur.execute(
-        f"""select item_id, etapa, acao, observacao, por, em from databook_etapas
+        f"""select item_id, etapa, acao, observacao, por, em, id from databook_etapas
             where not desfeito {filtro} order by em, id""",
         params,
     )
     out: dict[str, dict[str, dict]] = {}
-    for item_id, etapa, acao, obs, por, em in cur.fetchall():
+    for item_id, etapa, acao, obs, por, em, aid in cur.fetchall():
         e = out.setdefault(str(item_id), {}).setdefault(etapa, _vazio())
         if acao == "inicio":
             # Começou de novo: o fim anterior era de outro ciclo.
-            e.update(inicio_em=em.isoformat(), inicio_por=por, fim_em=None, fim_por=None, obs=None)
+            e.update(inicio_em=em.isoformat(), inicio_por=por, inicio_id=aid, fim_em=None, fim_por=None,
+                     fim_id=None, obs=None)
         else:
-            e.update(fim_em=em.isoformat(), fim_por=por)
+            e.update(fim_em=em.isoformat(), fim_por=por, fim_id=aid)
         if obs:
             e["obs"] = obs
     return out
@@ -103,14 +106,27 @@ def apontar(item_id: str, etapa: str, acao: str, observacao: str | None, por: st
             raise LookupError("Pedido não encontrado no Data book.")
         st_book = r[0]
         cur.execute(
-            "insert into databook_etapas (item_id, etapa, acao, observacao, por, em) values (%s, %s, %s, %s, %s, %s)",
+            """insert into databook_etapas (item_id, etapa, acao, observacao, por, em)
+               values (%s, %s, %s, %s, %s, %s) returning id""",
             (item_id, etapa, acao, obs, por, agora),
         )
+        apontamento_id = cur.fetchone()[0]
+
+        def trocar_status(novo: str) -> None:
+            # Troca o ST.BOOK e guarda qual troca foi (o 🗑 Excluir volta ela).
+            _salvar(cur, [item_id], {"st_book": novo}, por)
+            cur.execute(
+                """update databook_etapas set st_historico_id = (
+                     select id from databook_historico where item_id = %s and campo = 'st_book'
+                     order by em desc, id desc limit 1) where id = %s""",
+                (item_id, apontamento_id),
+            )
+
         # Mantém o ST.BOOK e as datas que o resto do app (tabela, relatório semanal) já usa.
         if etapa == "rastreabilidade":
             if acao == "inicio":
                 if st_book in (None, "Vazio", RASTREAB_FIM):
-                    _salvar(cur, [item_id], {"st_book": RASTREAB}, por)
+                    trocar_status(RASTREAB)
                 else:  # book em andamento/pronto: só grava o início, sem trocar o ST.BOOK
                     cur.execute(
                         """update databook_itens set rastreab_inicio_em = %s, rastreab_inicio_por = %s,
@@ -118,16 +134,16 @@ def apontar(item_id: str, etapa: str, acao: str, observacao: str | None, por: st
                         (agora, por, item_id),
                     )
             elif st_book == RASTREAB:
-                _salvar(cur, [item_id], {"st_book": RASTREAB_FIM}, por)
+                trocar_status(RASTREAB_FIM)
             else:
                 cur.execute(
                     "update databook_itens set rastreab_fim_em = %s, rastreab_fim_por = %s where id = %s",
                     (agora, por, item_id),
                 )
         elif etapa == "montando_book" and acao == "inicio" and st_book not in PRONTOS:
-            _salvar(cur, [item_id], {"st_book": "FAZENDO"}, por)
+            trocar_status("FAZENDO")
         elif etapa == "fim_book" and acao == "fim" and st_book not in PRONTOS:
-            _salvar(cur, [item_id], {"st_book": "PRONTO"}, por)
+            trocar_status("PRONTO")
         conn.commit()
         return _item(cur, item_id)
 
@@ -144,16 +160,118 @@ def historico(item_id: str) -> list[dict]:
                  "em": r[5].isoformat(), "desfeito": r[6]} for r in cur.fetchall()]
 
 
-def desfazer(apontamento_id: int) -> dict:
-    """🗑 Apontado errado: marca como desfeito (fica no histórico, riscado).
-    Não volta o ST.BOOK — pra isso há o 🗑 do ST.BOOK na tabela."""
+def _perto(a: datetime | None, b: datetime, segundos: int = 10) -> bool:
+    return a is not None and abs((a - b).total_seconds()) <= segundos
+
+
+def _sincronizar(cur, item_id: str, etapa: str, removido: tuple[str, datetime] | None = None) -> None:
+    """Depois de editar/excluir: as colunas que o resto do app usa (rastreab_*,
+    fazendo_em, finalizado_em) acompanham o que sobrou nas etapas."""
+    st = situacao(cur, [item_id]).get(item_id, {}).get(etapa)
+    cur.execute(
+        "select st_book, rastreab_inicio_em, rastreab_fim_em, fazendo_em, finalizado_em from databook_itens where id = %s",
+        (item_id,),
+    )
+    st_book, r_ini, r_fim, faz, fim = cur.fetchone()
+    if etapa == "rastreabilidade":
+        if st:
+            cur.execute(
+                """update databook_itens set rastreab_inicio_em = %s, rastreab_inicio_por = %s,
+                   rastreab_fim_em = %s, rastreab_fim_por = %s where id = %s""",
+                (st["inicio_em"], st["inicio_por"], st["fim_em"], st["fim_por"], item_id),
+            )
+        elif removido:  # não sobrou nada apontado: apaga o que esse apontamento tinha gravado
+            acao, em = removido
+            if acao == "inicio" and _perto(r_ini, em):
+                cur.execute("""update databook_itens set rastreab_inicio_em = null, rastreab_inicio_por = null,
+                               rastreab_fim_em = null, rastreab_fim_por = null where id = %s""", (item_id,))
+            elif acao == "fim" and _perto(r_fim, em):
+                cur.execute("update databook_itens set rastreab_fim_em = null, rastreab_fim_por = null where id = %s",
+                            (item_id,))
+    elif etapa == "montando_book" and st and st["inicio_em"] and faz:
+        cur.execute("update databook_itens set fazendo_em = %s, fazendo_por = %s where id = %s",
+                    (st["inicio_em"], st["inicio_por"], item_id))
+    elif etapa == "fim_book" and st and st["fim_em"] and fim and st_book in PRONTOS:
+        cur.execute("update databook_itens set finalizado_em = %s, finalizado_por = %s where id = %s",
+                    (st["fim_em"], st["fim_por"], item_id))
+
+
+# Pedido do usuário (17/10/2026): cada um só edita/exclui o que ELE apontou;
+# o admin (flpmac14) mexe em qualquer um.
+ADMIN = "flpmac14@gmail.com"
+
+
+class SemPermissao(Exception):
+    pass
+
+
+def _conferir_dono(dono: str | None, por: str | None) -> None:
+    quem = (por or "").strip().lower()
+    if not quem:
+        raise SemPermissao("Faça login de novo para editar ou excluir.")
+    if quem != ADMIN and quem != (dono or "").strip().lower():
+        raise SemPermissao(f"Só quem apontou ({dono or '—'}) ou o administrador pode editar/excluir este apontamento.")
+
+
+def editar(apontamento_id: int, em: str | None, observacao: str | None, por: str | None) -> dict:
+    """✏️ Corrige a data/hora e a observação de um apontamento (pedido do usuário)."""
     with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select item_id, etapa, por from databook_etapas where id = %s and not desfeito", (apontamento_id,))
+        r = cur.fetchone()
+        if not r:
+            raise LookupError("Apontamento não encontrado (ou excluído).")
+        item_id, etapa = str(r[0]), r[1]
+        _conferir_dono(r[2], por)
+        sets, params = [], []
+        if em:
+            quando = datetime.fromisoformat(em)
+            if quando.tzinfo is None:
+                raise ValueError("Data/hora sem fuso.")
+            if quando > datetime.now(timezone.utc):
+                raise ValueError("A data/hora não pode ser no futuro.")
+            sets.append("em = %s")
+            params.append(quando)
+        sets.append("observacao = %s")
+        params.append((observacao or "").strip()[:OBS_MAX] or None)
+        cur.execute(f"update databook_etapas set {', '.join(sets)} where id = %s", (*params, apontamento_id))
+        _sincronizar(cur, item_id, etapa)
+        cur.execute("update databook_itens set editado_em = now(), editado_por = %s where id = %s", (por, item_id))
+        conn.commit()
+        return _item(cur, item_id)
+
+
+def desfazer(apontamento_id: int, por: str | None = None) -> dict:
+    """🗑 Exclui o apontamento feito errado (fica no histórico, riscado). Se foi
+    ele que trocou o ST.BOOK (Rastreabilidade / Montando book / Fim de book) e
+    essa ainda é a última troca, o ST.BOOK volta pro anterior também."""
+    from app.databook import excluir_status
+
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select por from databook_etapas where id = %s and not desfeito", (apontamento_id,))
+        dono = cur.fetchone()
+        if not dono:
+            raise LookupError("Apontamento não encontrado (ou já excluído).")
+        _conferir_dono(dono[0], por)
         cur.execute(
-            "update databook_etapas set desfeito = true where id = %s and not desfeito returning item_id",
+            """update databook_etapas set desfeito = true where id = %s and not desfeito
+               returning item_id, etapa, acao, em, st_historico_id""",
             (apontamento_id,),
         )
         r = cur.fetchone()
-        if not r:
-            raise LookupError("Apontamento não encontrado (ou já desfeito).")
+        item_id, etapa, acao, em, st_hist = str(r[0]), r[1], r[2], r[3], r[4]
+        voltar_status = False
+        if st_hist:  # foi este apontamento que trocou o ST.BOOK: volta, se ainda for a última troca
+            cur.execute(
+                """select id from databook_historico where item_id = %s and campo = 'st_book' and not desfeito
+                   order by em desc, id desc limit 1""",
+                (item_id,),
+            )
+            ult = cur.fetchone()
+            voltar_status = bool(ult and ult[0] == st_hist)
+        if not voltar_status:
+            _sincronizar(cur, item_id, etapa, (acao, em))
         conn.commit()
-        return _item(cur, str(r[0]))
+    if voltar_status:
+        excluir_status(item_id, por)  # volta o ST.BOOK (e as datas) como o 🗑 da planilha
+    with _conectar() as conn, conn.cursor() as cur:
+        return _item(cur, item_id)
