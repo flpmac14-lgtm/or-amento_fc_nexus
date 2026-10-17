@@ -115,14 +115,20 @@ export default function FinanceiroPedidoAtivo() {
 
   const lista = useMemo(
     () =>
-      (itens ?? []).filter((i) => {
-        if (filtro === "duplicado" ? !i.duplicado : filtro !== "todos" && filtro !== "so_sectra" && i.situacao !== filtro) return false;
-        if (cliente && (i.cliente ?? "—") !== cliente) return false;
-        return (
-          !termo ||
-          normalizarBusca([i.po, i.mac, i.desenho, i.descricao, i.cliente, ...i.pedidos].filter(Boolean).join(" ")).includes(termo)
-        );
-      }),
+      {
+        const l = (itens ?? []).filter((i) => {
+          if (filtro === "duplicado" ? !i.duplicado : filtro !== "todos" && filtro !== "so_sectra" && i.situacao !== filtro) return false;
+          if (cliente && (i.cliente ?? "—") !== cliente) return false;
+          return (
+            !termo ||
+            normalizarBusca([i.po, i.mac, i.desenho, i.descricao, i.cliente, ...i.pedidos].filter(Boolean).join(" ")).includes(termo)
+          );
+        });
+        // Pendentes de entrada: prazo mais curto primeiro (sem prazo no fim) — pedido do usuário 17/10.
+        if (filtro === "sem_entrada")
+          l.sort((a, b) => (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") || (a.po ?? "").localeCompare(b.po ?? ""));
+        return l;
+      },
     [itens, filtro, cliente, termo],
   );
   const listaSectra = useMemo(
