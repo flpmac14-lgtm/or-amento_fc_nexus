@@ -74,7 +74,8 @@ _COLUNAS_PLANILHA = {
 # do book, mas também se aponta — início e finalização em colunas próprias.
 RASTREAB = "RASTREABILIDADE"
 RASTREAB_FIM = "RASTREABILIDADE FINALIZADA"
-ST_BOOK = ["PRONTO", "FAZENDO", "SEM BOOK", "Vazio", "Pronto Aguardando Coleta", RASTREAB, RASTREAB_FIM]
+# "Vazio" saiu da lista (pedido do usuário, 17/10/2026): vazio = sem status (null).
+ST_BOOK = ["PRONTO", "FAZENDO", "SEM BOOK", "Pronto Aguardando Coleta", RASTREAB, RASTREAB_FIM]
 # Book pronto → grava D.FINALIZAÇÃO e AUTOR(A).
 PRONTOS = {"PRONTO", "Pronto Aguardando Coleta"}
 
@@ -121,7 +122,9 @@ def _data(v) -> date | None:
 
 def normalizar_st_book(v) -> str | None:
     s = _texto(v)
-    return _ST_BOOK_POR_CHAVE.get(_chave(s), s) if s else None
+    if not s or _chave(s) == "vazio":
+        return None
+    return _ST_BOOK_POR_CHAVE.get(_chave(s), s)
 
 
 # --- importação da planilha (uma vez) -----------------------------------------
@@ -469,6 +472,7 @@ def excluir_status(item_id: str, por: str | None) -> dict | None:
         r_ini = next(((p, e) for s, p, e in reversed(trocas) if s == RASTREAB), None)
         r_fim = next(((p, e) for s, p, e in reversed(trocas)
                       if s == RASTREAB_FIM and (not r_ini or e >= r_ini[1])), None)
+        anterior = normalizar_st_book(anterior)  # "Vazio" antigo do histórico volta como sem status
         sets: dict = {"st_book": anterior}
         if ultima:
             # Sem FAZENDO no histórico que sobrou: o início some (veio do que foi desfeito).

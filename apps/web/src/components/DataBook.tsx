@@ -86,7 +86,6 @@ const COR_ST_BOOK: Record<string, string> = {
   PRONTO: "bg-green-600 text-white",
   FAZENDO: "bg-amber-400 text-stone-900",
   "SEM BOOK": "bg-stone-500 text-white",
-  Vazio: "bg-red-600 text-white",
   "Pronto Aguardando Coleta": "bg-sky-600 text-white",
   [RASTREAB]: "bg-violet-600 text-white",
   [RASTREAB_FIM]: "bg-violet-200 text-violet-900",
@@ -459,7 +458,7 @@ export default function DataBook() {
         <button
           type="button"
           onClick={() => setStBook(stBook === "pendente" ? "" : "pendente")}
-          title="Pedidos entregues (ST = E) com ST.BOOK Vazio ou sem status"
+          title="Pedidos encerrados (ST = E) com o book ainda não pronto (sem status, FAZENDO ou em rastreabilidade)"
           className={`rounded-lg border px-3 py-1.5 text-left ${
             stBook === "pendente" && !cliente
               ? "border-red-600 bg-red-600 text-white"
