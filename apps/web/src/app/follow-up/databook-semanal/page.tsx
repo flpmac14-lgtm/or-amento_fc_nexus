@@ -40,12 +40,15 @@ function duracao(min: number | null): string {
   const h = Math.floor(min / 60);
   return h ? `${h}h${String(min % 60).padStart(2, "0")}` : `${min} min`;
 }
+// Mesma pessoa com outro login — pedido do usuário (17/10/2026): "inspecao" é o Pedro.
+const APELIDOS: Record<string, string> = { inspecao: "pedro" };
 // Nome uniforme: login ("ana") ou nome da planilha ("Ana Paula") → "ana".
 function pessoa(v: string | null): string | null {
   const s = (v ?? "").trim();
   if (!s || s === "—") return null;
   const login = s.includes("@") ? emailParaLogin(s) : s;
-  return login.split(/[\s@.]/)[0].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() || null;
+  const p = login.split(/[\s@.]/)[0].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return p ? (APELIDOS[p] ?? p) : null;
 }
 const nomeBonito = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
 const dentro = (iso: string | null, ini: number, fim: number) => {

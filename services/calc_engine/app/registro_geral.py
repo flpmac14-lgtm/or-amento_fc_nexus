@@ -35,7 +35,8 @@ _MAX_FOTOS = 3
 
 
 # Mesmo nome pra login e nome (Croqui guarda "Honório", a edição guarda "honorio").
-_NOME_POR_LOGIN = {"joao": "João", "honorio": "Honório"}
+# "inspecao" é o Pedro (pedido do usuário, 17/10/2026).
+_NOME_POR_LOGIN = {"joao": "João", "honorio": "Honório", "inspecao": "Pedro", "inspeção": "Pedro"}
 
 
 def _pessoa(u: str | None) -> str:

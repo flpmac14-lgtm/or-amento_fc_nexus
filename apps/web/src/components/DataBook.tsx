@@ -78,6 +78,13 @@ function autorDica(i: ItemDatabook): string {
     .join("\n");
 }
 
+// "inspecao" é o Pedro (pedido do usuário, 17/10/2026) — junta no card de quem está fazendo.
+function quem(por: string | null): string {
+  const p = (por ?? "").trim();
+  if (!p) return "—";
+  return p.toLowerCase() === "inspecao" ? "pedro" : p;
+}
+
 function temFalta(i: ItemDatabook): boolean {
   return !!i.falta?.trim() && !(i.st_book && ["PRONTO", "Pronto Aguardando Coleta"].includes(i.st_book));
 }
@@ -294,9 +301,9 @@ export default function DataBook() {
   const fazendoPorPessoa = useMemo(() => {
     const m = new Map<string, ItemDatabook[]>();
     for (const i of lista)
-      if (i.st_book === "FAZENDO") m.set(i.fazendo_por ?? "—", [...(m.get(i.fazendo_por ?? "—") ?? []), i]);
+      if (i.st_book === "FAZENDO") m.set(quem(i.fazendo_por), [...(m.get(quem(i.fazendo_por)) ?? []), i]);
       else if (i.st_book === RASTREAB)
-        m.set(i.rastreab_inicio_por ?? "—", [...(m.get(i.rastreab_inicio_por ?? "—") ?? []), i]);
+        m.set(quem(i.rastreab_inicio_por), [...(m.get(quem(i.rastreab_inicio_por)) ?? []), i]);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [lista]);
 
