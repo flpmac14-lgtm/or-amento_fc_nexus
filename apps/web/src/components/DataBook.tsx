@@ -20,6 +20,7 @@ import { podeVerRelatorioSemanal } from "@/lib/databookRelatorio";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemDatabook } from "@/lib/types";
 import FollowUpSino from "@/components/FollowUpSino";
+import DataBookApontar, { FaixaEtapas } from "@/components/DataBookApontar";
 import { IconeCadeado } from "@/components/FollowUpEdicao";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -82,7 +83,8 @@ function autorDica(i: ItemDatabook): string {
 function quem(por: string | null): string {
   const p = (por ?? "").trim();
   if (!p) return "—";
-  return p.toLowerCase() === "inspecao" ? "pedro" : p;
+  const primeira = (p.split(/\s/)[0] ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return primeira === "inspecao" ? "pedro" : p;
 }
 
 function temFalta(i: ItemDatabook): boolean {
@@ -232,6 +234,22 @@ export default function DataBook() {
   const [opcoes, setOpcoes] = useState<string[]>([]);
   const [erro, setErro] = useState("");
   const [usuario, setUsuario] = useState<string | null>(null);
+  // Modo da aba: apontar por etapa (padrão) ou a planilha (lembrado no navegador).
+  const [modo, setModo] = useState<"apontar" | "planilha">(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem("fcnexus.databook.modo") === "planilha" ? "planilha" : "apontar";
+    } catch {
+      return "apontar";
+    }
+  });
+  function trocarModo(m: "apontar" | "planilha") {
+    setModo(m);
+    try {
+      localStorage.setItem("fcnexus.databook.modo", m);
+    } catch {
+      // sem persistência
+    }
+  }
   const [verRelatorio, setVerRelatorio] = useState(false); // botão do relatório semanal (flpmac14 e lailto)
   const [busca, setBusca] = useState("");
   const [cliente, setCliente] = useState("");
@@ -426,6 +444,37 @@ export default function DataBook() {
           }}
         />
       </div>
+
+      {/* Pedido do usuário (17/10/2026): apontar por etapa igual à Usinagem/Pintura
+          (celular e computador); a planilha continua do jeito que era. */}
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40 sm:max-w-md">
+        {(
+          [
+            ["apontar", "📱 Apontar etapas"],
+            ["planilha", "📋 Planilha"],
+          ] as const
+        ).map(([m, rotulo]) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => trocarModo(m)}
+            className={`h-11 rounded-lg text-base font-bold ${
+              modo === m ? "bg-green-600 text-white dark:bg-cyan-500 dark:text-slate-950" : "text-stone-600 dark:text-slate-300"
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {modo === "apontar" ? (
+        <DataBookApontar
+          itens={itens}
+          usuario={usuario}
+          onItem={(item) => setItens((l) => (l ?? []).map((i) => (i.id === item.id ? { ...i, ...item, foto: i.foto, foto_por: i.foto_por } : i)))}
+        />
+      ) : (
+      <>
 
       <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-800 dark:bg-amber-950/20">
         <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
@@ -678,6 +727,7 @@ export default function DataBook() {
               <th className={th} title="Foto do Follow up pelo PO (ou, sem foto, de outro pedido com o mesmo desenho)">Foto</th>
               <th className={th}>PO</th>
               <th className={th}>ST.BOOK</th>
+              <th className={th} title="Apontamento por etapa (📱 Apontar etapas): cinza = não iniciada, amarelo = em andamento, verde = finalizada">Etapas</th>
               <th className={th} title="O que está faltando pra finalizar o book">Falta p/ finalizar</th>
               <th className={th}>Obs.</th>
               <th className={th} title="Registro do pedido">🕘</th>
@@ -791,6 +841,9 @@ export default function DataBook() {
                       {confirmarExcluir === i.id ? "Excluir?" : "🗑"}
                     </button>
                   )}
+                </td>
+                <td className={td}>
+                  <FaixaEtapas item={i} />
                 </td>
                 <td className={td}>
                   <CelulaTexto
@@ -940,6 +993,8 @@ export default function DataBook() {
         >
           Mostrar mais {Math.min(PAGINA, filtrados.length - visiveis.length)} ▾
         </button>
+      )}
+      </>
       )}
     </div>
   );

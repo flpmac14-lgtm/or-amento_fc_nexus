@@ -345,6 +345,9 @@ def listar() -> dict:
     with _conectar() as conn, conn.cursor() as cur:
         itens = _carregar(cur)
         por_po, por_desenho = _fotos_do_follow_up(cur)
+        # Apontamento por etapa (app/databook_etapas.py, migration 0051).
+        from app import databook_etapas
+        databook_etapas.com_legado(itens, databook_etapas.situacao(cur))
     for i in itens:
         sha = por_po.get(str(i["po"]).upper())
         i["foto_por"] = "po" if sha else None

@@ -16,6 +16,8 @@ mesma regra da coluna Foto do Data book). Corte: as peças do programa na Croqui
 
 from __future__ import annotations
 
+import unicodedata
+
 from datetime import datetime, timedelta
 
 from app import apontamentos_setor
@@ -45,7 +47,9 @@ def _pessoa(u: str | None) -> str:
     u = u.strip()
     if "@" in u:
         u = u.split("@")[0]
-    return _NOME_POR_LOGIN.get(u.lower(), u[:1].upper() + u[1:])
+    # "Inspeção - Macfab" (autor da planilha) = Pedro: compara a 1ª palavra sem acento.
+    primeira = unicodedata.normalize("NFKD", u.split()[0] if u.split() else u).encode("ascii", "ignore").decode().lower()
+    return _NOME_POR_LOGIN.get(u.lower()) or _NOME_POR_LOGIN.get(primeira) or u[:1].upper() + u[1:]
 
 
 def registro(dias: int = 1) -> dict:
@@ -120,6 +124,23 @@ def registro(dias: int = 1) -> dict:
                 acao, tipo = f"{nome}: {para or '(apagou)'}", "falta" if campo == "falta" and para else "andamento"
             add("databook", em, por, acao + (" (desfeito)" if desfeito else ""), f"PO {po} · {cli or '—'}",
                 (desc or "")[:60] or None, tipo, [(po, desenho)])
+
+        # Apontamento por etapa do Data book (migration 0051, app/databook_etapas.py).
+        from app.databook_etapas import ETAPAS as ETAPAS_DATABOOK, tabela_existe
+        etapas_db = []
+        if tabela_existe(cur):
+            cur.execute(
+                """select e.em, e.por, e.etapa, e.acao, e.observacao, e.desfeito, d.po, d.cliente, d.descricao, d.desenho
+                   from databook_etapas e join databook_itens d on d.id = e.item_id
+                   where e.em >= %s order by e.em desc""",
+                (ini,),
+            )
+            etapas_db = cur.fetchall()
+        for em, por, etapa, acao_e, obs, desfeito, po, cli, desc, desenho in etapas_db:
+            nome = ETAPAS_DATABOOK.get(etapa, etapa)
+            acao = f"{nome}: {'início' if acao_e == 'inicio' else 'finalizado'}" + (" (desfeito)" if desfeito else "")
+            add("databook", em, por, acao, f"PO {po} · {cli or '—'}", obs or (desc or "")[:60] or None,
+                "fim" if acao_e == "fim" else "andamento", [(po, desenho)])
 
         cur.execute(
             "select programa, marca, valor, por, em from corte_historico where em >= %s order by em desc", (ini,)

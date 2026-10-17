@@ -810,6 +810,14 @@ export interface ItemFollowUpCompleto {
 
 // Data book (filha da Controle de obras) — ver services/calc_engine/app/databook.py.
 // Fixas (PROCV pelo PO): cliente..meta. Editáveis: st_book, observacao.
+export interface EtapaDatabook {
+  inicio_em: string | null;
+  inicio_por: string | null;
+  fim_em: string | null;
+  fim_por: string | null;
+  obs: string | null;
+}
+
 export interface ItemDatabook {
   id: string;
   po: string;
@@ -838,6 +846,8 @@ export interface ItemDatabook {
   rastreab_inicio_por: string | null;
   rastreab_fim_em: string | null;
   rastreab_fim_por: string | null;
+  // Apontamento por etapa (migration 0051, app/databook_etapas.py): só as etapas com algo.
+  etapas?: Record<string, EtapaDatabook>;
   linha_planilha: number;
   origem: "importacao_planilha" | "controle_obras";
   foto: string | null; // sha256 da 1ª foto do Follow up (pelo PO, senão pelo desenho)

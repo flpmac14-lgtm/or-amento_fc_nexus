@@ -1360,6 +1360,55 @@ export async function excluirStatusDatabook(itemId: string, editadoPor: string |
   return (await resposta.json()).item;
 }
 
+async function erroDe(resposta: Response, padrao: string): Promise<Error> {
+  let detalhe = "";
+  try {
+    detalhe = (await resposta.json()).detail ?? "";
+  } catch {
+    detalhe = await resposta.text().catch(() => "");
+  }
+  return new Error(detalhe || `${padrao} (${resposta.status}).`);
+}
+
+// Apontamento por etapa do Data book (Início / Finalizado) — app/databook_etapas.py.
+export async function apontarEtapaDatabook(
+  itemId: string,
+  etapa: string,
+  acao: "inicio" | "fim",
+  observacao: string | null,
+  por: string | null,
+): Promise<ItemDatabook> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/${itemId}/etapas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ etapa, acao, observacao, por }),
+  });
+  if (!resposta.ok) throw await erroDe(resposta, "Não salvou");
+  return (await resposta.json()).item;
+}
+
+export interface ApontamentoEtapaDatabook {
+  id: number;
+  etapa: string;
+  acao: "inicio" | "fim";
+  observacao: string | null;
+  por: string | null;
+  em: string;
+  desfeito: boolean;
+}
+
+export async function historicoEtapasDatabook(itemId: string): Promise<ApontamentoEtapaDatabook[]> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/itens/${itemId}/etapas`);
+  if (!resposta.ok) throw await erroDe(resposta, "Falha ao carregar o histórico");
+  return (await resposta.json()).etapas;
+}
+
+export async function desfazerEtapaDatabook(apontamentoId: number): Promise<ItemDatabook> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/databook/etapas/${apontamentoId}/desfazer`, { method: "POST" });
+  if (!resposta.ok) throw await erroDe(resposta, "Não desfez");
+  return (await resposta.json()).item;
+}
+
 // Sininho do Data book — mesmo formato do sininho do Follow up.
 export async function listarNotificacoesDatabook(): Promise<NotificacaoFollowUp[]> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/databook/notificacoes`);

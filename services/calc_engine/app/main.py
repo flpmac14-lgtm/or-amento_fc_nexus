@@ -122,6 +122,7 @@ from app.databook import listar as listar_databook
 from app.databook import excluir_status as excluir_status_databook
 from app.databook import historico as historico_databook
 from app.databook import listar_notificacoes as listar_notificacoes_databook
+from app import databook_etapas
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -811,6 +812,40 @@ def databook_historico(item_id: str) -> dict:
         return {"historico": historico_databook(item_id)}
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/databook/itens/{item_id}/etapas")
+def databook_apontar_etapa(item_id: str, pedido: dict) -> dict:
+    """Apontamento por etapa (Início / Finalizado) — ver app/databook_etapas.py."""
+    try:
+        item = databook_etapas.apontar(item_id, pedido.get("etapa") or "", pedido.get("acao") or "",
+                                       pedido.get("observacao"), pedido.get("por"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"item": item}
+
+
+@app.get("/databook/itens/{item_id}/etapas")
+def databook_historico_etapas(item_id: str) -> dict:
+    try:
+        return {"etapas": databook_etapas.historico(item_id)}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/databook/etapas/{apontamento_id}/desfazer")
+def databook_desfazer_etapa(apontamento_id: int) -> dict:
+    try:
+        item = databook_etapas.desfazer(apontamento_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"item": item}
 
 
 @app.post("/databook/itens/{item_id}/excluir-status")
