@@ -115,13 +115,17 @@ function CelulaTexto({
   onSalvar,
   destaque = false,
   sugestoes,
+  comAcoes = false,
 }: {
   atual: string | null;
   onSalvar: (valor: string) => Promise<void>;
   destaque?: boolean;
   sugestoes?: string;
+  comAcoes?: boolean; // botões ✏️ editar e 🗑 apagar (pedido do usuário, 17/10 — "Falta p/ finalizar")
 }) {
   const [valor, setValor] = useState(atual ?? "");
+  const [confirmarApagar, setConfirmarApagar] = useState(false);
+  const campo = useRef<HTMLInputElement>(null);
   const [de, setDe] = useState(atual ?? "");
   const [salvando, setSalvando] = useState(false);
   if (de !== (atual ?? "")) {
@@ -137,8 +141,24 @@ function CelulaTexto({
       setSalvando(false);
     }
   }
-  return (
+  async function apagar() {
+    if (!confirmarApagar) {
+      setConfirmarApagar(true);
+      setTimeout(() => setConfirmarApagar(false), 3000);
+      return;
+    }
+    setConfirmarApagar(false);
+    setValor("");
+    setSalvando(true);
+    try {
+      await onSalvar("");
+    } finally {
+      setSalvando(false);
+    }
+  }
+  const entrada = (
     <input
+      ref={campo}
       value={valor}
       onChange={(e) => setValor(e.target.value)}
       onBlur={salvar}
@@ -149,10 +169,42 @@ function CelulaTexto({
       title={valor}
       placeholder="—"
       list={sugestoes}
-      className={`w-32 rounded border px-1 py-0.5 text-[11px] outline-none focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
+      className={`w-32 rounded border px-1 py-0.5 text-[11px] outline-none focus:w-64 focus:border-green-600 focus:bg-white dark:focus:border-cyan-500 dark:focus:bg-slate-950 ${
         destaque ? "bg-amber-100 font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" : "bg-transparent"
       } ${salvando ? "border-amber-400" : "border-transparent hover:border-stone-300 dark:hover:border-slate-600"}`}
     />
+  );
+  if (!comAcoes) return entrada;
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {entrada}
+      {(atual ?? "").trim() && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              campo.current?.focus();
+              campo.current?.select();
+            }}
+            title="Editar"
+            className="rounded px-1 text-[11px] text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            ✏️
+          </button>
+          <button
+            type="button"
+            onClick={apagar}
+            disabled={salvando}
+            title="Apagar o que foi anotado"
+            className={`rounded px-1 text-[11px] font-bold ${
+              confirmarApagar ? "bg-red-600 text-white" : "text-stone-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+            }`}
+          >
+            {confirmarApagar ? "Apagar?" : "🗑"}
+          </button>
+        </>
+      )}
+    </span>
   );
 }
 
@@ -693,6 +745,7 @@ export default function DataBook() {
                     atual={i.falta}
                     destaque={temFalta(i)}
                     sugestoes="databook-sugestoes-falta"
+                    comAcoes
                     onSalvar={(v) => salvar([i.id], { falta: v || null })}
                   />
                 </td>
