@@ -1,13 +1,13 @@
 // Jornada de trabalho da Macfab — pedido explícito do usuário: todo cálculo
 // de hora/duração conta só o horário de trabalho: segunda a sexta, das 7:30
-// às 17:17, com almoço das 12:00 às 13:00. Noite, almoço e fim de semana não
+// às 17:18, com almoço das 12:00 às 13:00. Noite, almoço e fim de semana não
 // contam. Espelho do backend: services/calc_engine/app/jornada.py.
 // Usa o horário local do aparelho (Brasília na fábrica).
 
 // Turnos do dia em minutos desde 0h (sem o almoço).
 const TURNOS: [number, number][] = [
   [7 * 60 + 30, 12 * 60],
-  [13 * 60, 17 * 60 + 17],
+  [13 * 60, 17 * 60 + 18],
 ];
 
 /** Minutos de jornada entre `ini` e `fim` (0 se fim <= ini). */

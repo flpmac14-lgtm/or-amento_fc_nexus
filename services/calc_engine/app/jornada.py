@@ -1,6 +1,6 @@
 """Jornada de trabalho da Macfab — pedido explícito do usuário: todo cálculo
 de hora/duração conta só o horário de trabalho: segunda a sexta, das 7:30 às
-17:17, com almoço das 12:00 às 13:00 (8h47 úteis por dia). Noite, almoço e
+17:18, com almoço das 12:00 às 13:00 (8h48 úteis por dia). Noite, almoço e
 fim de semana não contam. Espelho no front: apps/web/src/lib/jornada.ts.
 """
 
@@ -10,7 +10,7 @@ from datetime import datetime, time, timedelta, timezone
 
 FUSO = timezone(timedelta(hours=-3))
 # Turnos do dia (início, fim), sem o almoço.
-TURNOS = ((time(7, 30), time(12, 0)), (time(13, 0), time(17, 17)))
+TURNOS = ((time(7, 30), time(12, 0)), (time(13, 0), time(17, 18)))
 DIAS_UTEIS = {0, 1, 2, 3, 4}  # segunda a sexta
 
 

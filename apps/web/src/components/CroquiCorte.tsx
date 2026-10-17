@@ -468,8 +468,8 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           className={`font-mono font-semibold ${item.status === "Fazendo" ? "text-amber-600 dark:text-amber-400" : ""}`}
           title={
             item.status === "Fazendo"
-              ? "Fazendo agora — conta até agora (só a jornada: seg–sex 7:30–17:17, sem almoço)"
-              : "Tempo Fazendo até Feito / Pausado (só a jornada: seg–sex 7:30–17:17, sem almoço)"
+              ? "Fazendo agora — conta até agora (só a jornada: seg–sex 7:30–17:18, sem o almoço 12–13)"
+              : "Tempo Fazendo até Feito / Pausado (só a jornada: seg–sex 7:30–17:18, sem o almoço 12–13)"
           }
         >
           {duracao(m)}
@@ -935,7 +935,7 @@ function CorrigirTempos({
             <p className="rounded bg-stone-50 dark:bg-slate-800/60 px-3 py-2 text-sm text-stone-700 dark:text-slate-300">
               Tempo: <strong className="font-mono">{tempo === null ? "—" : duracao(tempo)}</strong>
               <span className="block text-[11px] text-stone-500 dark:text-slate-400">
-                só a jornada (seg–sex 7:30–17:17, sem almoço)
+                só a jornada (seg–sex 7:30–17:18, sem o almoço 12–13)
                 {item.status === "Fazendo" ? " · ainda Fazendo, conta até agora" : ""}
               </span>
             </p>

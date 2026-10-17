@@ -648,7 +648,7 @@ export default function DataBook() {
               <th className={th}>Início</th>
               <th className={th} title="D.Finalização (book pronto)">Final.</th>
               <th className={th}>Autor</th>
-              <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:17, sem almoço">Tempo</th>
+              <th className={th} title="FAZENDO → PRONTO (ou até agora), só a jornada: seg–sex 7:30–17:18, sem o almoço 12–13">Tempo</th>
               <th className={th} title="Início da rastreabilidade (ST.BOOK RASTREABILIDADE)">Rastr. início</th>
               <th className={th} title="Finalização da rastreabilidade (ST.BOOK RASTREABILIDADE FINALIZADA)">Rastr. final.</th>
               <th className={th} title="Foto do Follow up pelo PO (ou, sem foto, de outro pedido com o mesmo desenho)">Foto</th>
