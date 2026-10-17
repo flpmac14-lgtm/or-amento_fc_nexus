@@ -105,9 +105,12 @@ function quando(iso: string | null): string {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-// Book pendente (como os contadores Y1:AE1 da planilha): pedido entregue sem book começado.
+// Book pendente — regra do usuário (17/10/2026): pedido Encerrado (ST = E) cujo book
+// ainda não fechou: vazio/sem nada, FAZENDO, RASTREABILIDADE e RASTREABILIDADE
+// FINALIZADA contam. Só sai quando fica PRONTO, Pronto Aguardando Coleta ou SEM BOOK.
+const BOOK_FECHADO = new Set(["PRONTO", "PRONTO AGUARDANDO COLETA", "SEM BOOK"]);
 function pendente(i: ItemDatabook): boolean {
-  return i.st === "E" && (!i.st_book || i.st_book === "Vazio");
+  return i.st === "E" && !BOOK_FECHADO.has((i.st_book ?? "").trim().toUpperCase());
 }
 
 function CelulaTexto({
@@ -259,7 +262,7 @@ export default function DataBook() {
     () => [...new Set(lista.map((i) => i.cliente ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [lista],
   );
-  // Contadores por cliente (como Y1:AE1): book pendente = entregue e Vazio / sem status.
+  // Contadores por cliente: book pendente = encerrado e book ainda não fechado (ver pendente()).
   const pendentesPorCliente = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of lista) if (pendente(i)) m.set(i.cliente ?? "—", (m.get(i.cliente ?? "—") ?? 0) + 1);
@@ -451,7 +454,7 @@ export default function DataBook() {
         )}
       </div>
 
-      {/* Book pendente por cliente — pedido entregue com ST.BOOK vazio (como os contadores da planilha). */}
+      {/* Book pendente por cliente — encerrado e book ainda não pronto (ver pendente()). */}
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
@@ -525,7 +528,7 @@ export default function DataBook() {
           ))}
           <option value={SEM_STATUS}>Sem ST.BOOK ({formatarNumero(contagemStBook.get(SEM_STATUS) ?? 0, 0)})</option>
           <option value={COM_FALTA}>⚠ Com falta p/ finalizar ({formatarNumero(contagemStBook.get(COM_FALTA) ?? 0, 0)})</option>
-          <option value="pendente">Book pendente (entregue sem book)</option>
+          <option value="pendente">Book pendente (encerrado, book não pronto)</option>
         </select>
         <select value={st} onChange={(e) => setSt(e.target.value)} className={classeFiltro} aria-label="Status do pedido">
           <option value="">Status: todos</option>
