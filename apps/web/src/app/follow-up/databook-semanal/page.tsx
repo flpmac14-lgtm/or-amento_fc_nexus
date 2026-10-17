@@ -47,7 +47,7 @@ function pessoa(v: string | null): string | null {
   const s = (v ?? "").trim();
   if (!s || s === "—") return null;
   const login = s.includes("@") ? emailParaLogin(s) : s;
-  const p = login.split(/[\s@.]/)[0].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const p = login.split(/[\s@.]/)[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   return p ? (APELIDOS[p] ?? p) : null;
 }
 const nomeBonito = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
