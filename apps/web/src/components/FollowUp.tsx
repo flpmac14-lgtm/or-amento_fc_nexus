@@ -80,6 +80,8 @@ const COLUNAS: Coluna[] = [
   { campo: "fornecedor", rotulo: "Fornecedor / Terceirizado", tipo: "texto", principal: true, maxW: "max-w-[10rem]" },
   // Colunas de pintura sempre visíveis — pedido do usuário. Plano de pintura é
   // longo: corta e mostra inteiro ao passar o mouse.
+  // Pedido do usuário (17/10): Tipagem sempre visível, logo antes da cor.
+  { campo: "tipagem", rotulo: "Tipagem", tipo: "codigo", principal: true },
   { campo: "cor2", rotulo: "COR2", tipo: "texto", principal: true },
   { campo: "cor_2", rotulo: "COR-2", tipo: "texto", principal: true },
   { campo: "plano_pintura", rotulo: "Plano de pintura", tipo: "texto", principal: true, maxW: "max-w-[16rem]" },
@@ -88,7 +90,6 @@ const COLUNAS: Coluna[] = [
   { campo: "obs_alisson", rotulo: "Obs. Alisson", tipo: "texto", principal: false, largura: "min-w-[14rem]" },
   { campo: "st", rotulo: "ST", tipo: "codigo", principal: false },
   { campo: "nf", rotulo: "NF", tipo: "codigo", principal: false },
-  { campo: "tipagem", rotulo: "Tipagem", tipo: "codigo", principal: false },
   { campo: "peso_unid", rotulo: "Peso unid", tipo: "peso", principal: false },
   { campo: "peso_total", rotulo: "Peso total", tipo: "peso", principal: false },
   { campo: "ano", rotulo: "Ano", tipo: "numero", principal: false },
