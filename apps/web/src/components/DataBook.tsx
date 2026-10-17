@@ -16,6 +16,7 @@ import { normalizarBusca } from "@/lib/followUp";
 import { minutosUteis } from "@/lib/jornada";
 import { duracao } from "@/lib/painel";
 import { emailParaLogin } from "@/lib/loginInterno";
+import { podeVerRelatorioSemanal } from "@/lib/databookRelatorio";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemDatabook } from "@/lib/types";
 import FollowUpSino from "@/components/FollowUpSino";
@@ -224,6 +225,7 @@ export default function DataBook() {
   const [opcoes, setOpcoes] = useState<string[]>([]);
   const [erro, setErro] = useState("");
   const [usuario, setUsuario] = useState<string | null>(null);
+  const [verRelatorio, setVerRelatorio] = useState(false); // botão do relatório semanal (flpmac14 e lailto)
   const [busca, setBusca] = useState("");
   const [cliente, setCliente] = useState("");
   const [st, setSt] = useState("");
@@ -254,7 +256,11 @@ export default function DataBook() {
     const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
-      .then(({ data }) => ativo && data.user?.email && setUsuario(emailParaLogin(data.user.email)));
+      .then(({ data }) => {
+        if (!ativo || !data.user?.email) return;
+        setUsuario(emailParaLogin(data.user.email));
+        setVerRelatorio(podeVerRelatorioSemanal(data.user.email));
+      });
     return () => {
       ativo = false;
       clearInterval(id);
@@ -385,6 +391,17 @@ export default function DataBook() {
         <div>
           <h2 className="text-lg font-bold text-stone-900 dark:text-white">Data book</h2>
         </div>
+        {verRelatorio && (
+          <a
+            href="/follow-up/databook-semanal"
+            target="_blank"
+            rel="noopener"
+            title="Desempenho semanal de cada um: books iniciados e entregues, rastreabilidade, tempo médio, gráficos e observações"
+            className="ml-auto rounded-lg border border-green-600/60 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-50 dark:border-cyan-500/60 dark:text-cyan-300 dark:hover:bg-cyan-950/30"
+          >
+            📊 Relatório semanal
+          </a>
+        )}
         <FollowUpSino
           carregar={listarNotificacoesDatabook}
           chaveVisto="fcnexus.databook.notificacoes.vistoAte"
