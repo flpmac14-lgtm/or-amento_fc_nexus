@@ -19,6 +19,7 @@ import { podeVerRelatorioSemanal } from "@/lib/databookRelatorio";
 import type { ItemDatabook } from "@/lib/types";
 
 const SEMANAS_GRAFICO = 8;
+const BOOK_PRONTO = new Set(["PRONTO", "PRONTO AGUARDANDO COLETA"]);
 const DIA = 86400000;
 const CORES = ["#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626", "#0891b2", "#4d7c0f", "#be185d"];
 
@@ -268,6 +269,9 @@ function Relatorio() {
     const p = i.st_book === "FAZENDO" ? pessoa(i.fazendo_por) : i.st_book === "RASTREABILIDADE" ? pessoa(i.rastreab_inicio_por) : null;
     if (p) andamentoAgora.set(p, (andamentoAgora.get(p) ?? 0) + 1);
   }
+  const pendencias = itens
+    .filter((i) => i.falta?.trim() && !BOOK_PRONTO.has((i.st_book ?? "").trim().toUpperCase()))
+    .sort((a, b) => (a.cliente ?? "").localeCompare(b.cliente ?? "") || a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
   const th = "border border-stone-300 bg-stone-100 px-2 py-1 text-[11px] font-semibold";
   const td = "border border-stone-300 px-2 py-1 text-center text-xs";
 
@@ -434,6 +438,51 @@ function Relatorio() {
               </label>
             ))}
           </div>
+        </section>
+
+        {/* Pendências anotadas no "Falta p/ finalizar" — pedido do usuário (17/10/2026), no fim do relatório.
+            Mesma regra do Data book: some quando o book fica PRONTO / Pronto Aguardando Coleta. */}
+        <section>
+          <h2 className="mb-1 text-sm font-bold">Pendências anotadas (Falta p/ finalizar) — {pendencias.length}</h2>
+          {pendencias.length === 0 ? (
+            <p className="text-sm text-stone-500">Nenhuma pendência anotada.</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={th}>PO</th>
+                  <th className={th}>Cliente</th>
+                  <th className={th}>MAC</th>
+                  <th className={th}>ST</th>
+                  <th className={th}>ST.BOOK</th>
+                  <th className={`${th} text-left`}>Falta p/ finalizar</th>
+                  <th className={`${th} text-left`}>Obs.</th>
+                  <th className={th} title="Quem mexeu por último no pedido do Data book">Última edição</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendencias.map((i) => (
+                  <tr key={i.id} className="break-inside-avoid">
+                    <td className={`${td} font-mono`}>{i.po}</td>
+                    <td className={td}>{i.cliente ?? ""}</td>
+                    <td className={`${td} font-mono`}>{i.mac ?? ""}</td>
+                    <td className={td}>{i.st ?? ""}</td>
+                    <td className={td}>{i.st_book ?? "—"}</td>
+                    <td className={`${td} text-left font-semibold text-amber-800`}>{i.falta}</td>
+                    <td className={`${td} text-left`}>{i.observacao ?? ""}</td>
+                    <td className={td}>
+                      {i.editado_por ? nomeBonito(pessoa(i.editado_por) ?? i.editado_por) : ""}
+                      {i.editado_em && (
+                        <span className="block text-[10px] text-stone-500">
+                          {new Date(i.editado_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
 
         <p className="text-[10px] text-stone-500">
