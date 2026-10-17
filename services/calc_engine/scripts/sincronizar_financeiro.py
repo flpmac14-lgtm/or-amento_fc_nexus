@@ -397,7 +397,86 @@ def montar_pedidos() -> dict:
                 _texto(status), _texto(material), _texto(desc), float(qtde or 0), round(float(valor or 0), 2),
                 iso, _texto(ano_sem), _texto(cliente),
             ])
-    return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas}
+    return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas, "comparativo": comparar_com_follow_up(linhas)}
+
+
+# --- Pedido - ativo (comparativo) --------------------------------------------
+# Pedido do usuário (17/10/2026): pros pedidos ATIVOS do Follow up (ST = A,
+# filha da Controle de obras — descrição, MAC etc. vêm de lá), saber se já foi
+# dada entrada no Sectra e em que situação está, e achar duplicidade. A
+# referência é o número do pedido do cliente + item ("4501742482-010" no
+# Follow up = "4501742482-10" no Sectra).
+
+def chave_po(po: str | None, descricao: str | None = None) -> tuple[str, int | None]:
+    po = re.sub(r"\s+", "", (po or "").upper())
+    m = re.match(r"^(.*?)-0*(\d+)$", po)
+    if m:
+        return m.group(1), int(m.group(2))
+    # Sectra sem o "ITEM nn" na descrição: às vezes o item vem só como "... - 10" no fim.
+    m = re.search(r"-\s*0*(\d{1,4})\s*$", descricao or "")
+    return po, (int(m.group(1)) if m else None)
+
+
+ABERTOS_ERP = {"EM ABERTO", "LIBERADO", "EM PRODUCAO"}
+
+
+def comparar_com_follow_up(linhas: list[list]) -> dict:
+    col = {c: i for i, c in enumerate(COLUNAS_PEDIDOS)}
+    erp: dict[tuple, list[list]] = {}
+    for l in linhas:
+        erp.setdefault(chave_po(l[col["pedido_cliente"]], l[col["descricao"]]), []).append(l)
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select po, mac, cliente, desenho, descricao, quantidade, prazo_contratual, status
+               from follow_up_itens where st = 'A' and presente_na_ultima_importacao order by po"""
+        )
+        ativos = cur.fetchall()
+    vistos: dict[tuple, int] = {}
+    for a in ativos:
+        k = chave_po(a[0])
+        vistos[k] = vistos.get(k, 0) + 1
+    itens = []
+    for po, mac, cliente, desenho, descricao, qtd, prazo, status_fu in ativos:
+        k = chave_po(po)
+        ls = erp.get(k, [])
+        validas = [l for l in ls if l[col["status"]] != "CANCELADO"]
+        pedidos = sorted({l[col["pedido"]] for l in ls}, key=lambda x: int(x or 0))
+        status_erp = sorted({l[col["status"]] for l in ls})
+        alertas = []
+        if not ls:
+            situacao = "sem_entrada"
+        elif not validas:
+            situacao = "cancelado"
+        elif all(l[col["status"]] == "FATURADO" for l in validas):
+            situacao = "faturado"
+        else:
+            situacao = "em_aberto"
+        if len(validas) > 1:
+            alertas.append(f"Duplicado no Sectra: {len(validas)} linhas (pedido {', '.join(sorted({l[col['pedido']] for l in validas}))})")
+        if vistos[k] > 1:
+            alertas.append(f"Duplicado no Follow up: {vistos[k]} linhas ativas com esse pedido/item")
+        qtd_erp = sum(l[col["qtde"]] for l in validas)
+        if validas and qtd and abs(float(qtd) - qtd_erp) > 0.001 and len(validas) == 1:
+            alertas.append(f"Quantidade diferente: Follow up {float(qtd):g} × Sectra {qtd_erp:g}")
+        itens.append({
+            "po": po, "mac": mac, "cliente": cliente, "desenho": desenho, "descricao": descricao,
+            "qtd": float(qtd) if qtd is not None else None, "prazo": prazo.isoformat() if prazo else None,
+            "status_fu": status_fu, "situacao": situacao, "duplicado": len(validas) > 1 or vistos[k] > 1,
+            "pedidos": pedidos, "status_erp": status_erp, "qtd_erp": qtd_erp if validas else None,
+            "valor": round(sum(l[col["valor"]] for l in validas), 2) if validas else None,
+            "entrega": min((l[col["entrega"]] for l in validas if l[col["entrega"]]), default=None),
+            "cliente_erp": next((l[col["cliente"]] for l in validas), None), "alertas": alertas,
+        })
+    # Ao contrário: em aberto no Sectra sem pedido ativo no Follow up.
+    so_sectra = []
+    for k, ls in erp.items():
+        if k in vistos:
+            continue
+        for l in ls:
+            if l[col["status"]] in ABERTOS_ERP:
+                so_sectra.append({c: l[i] for c, i in col.items()})
+    so_sectra.sort(key=lambda x: (-(int(x["pedido"] or 0)), x["pedido_cliente"] or ""))
+    return {"itens": itens, "so_sectra": so_sectra}
 
 
 def sincronizar_pedidos(simular: bool = False) -> str | None:
@@ -405,7 +484,10 @@ def sincronizar_pedidos(simular: bool = False) -> str | None:
     dados = montar_pedidos()
     texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
     assinatura = hashlib.sha256(texto.encode()).hexdigest()
-    resumo = f"{len(dados['linhas'])} itens de pedido de venda ({len({l[0] for l in dados['linhas']})} pedidos)"
+    comp = dados["comparativo"]["itens"]
+    resumo = (f"{len(dados['linhas'])} itens de pedido de venda ({len({l[0] for l in dados['linhas']})} pedidos) · "
+              f"ativos: {sum(i['situacao'] == 'sem_entrada' for i in comp)} sem entrada, "
+              f"{sum(i['duplicado'] for i in comp)} duplicados")
     if simular:
         return resumo
     if ESTADO_PEDIDOS.exists() and ESTADO_PEDIDOS.read_text(encoding="utf-8").strip() == assinatura:
