@@ -112,6 +112,15 @@ function pendente(i: ItemDatabook): boolean {
   return i.st === "E" && !BOOK_FECHADO.has((i.st_book ?? "").trim().toUpperCase());
 }
 
+// Falta iniciar rastreabilidade — pedido do usuário (17/10/2026): pedido ativo
+// (ST = A) que ainda não começou a rastreabilidade. SEM BOOK não conta; book já
+// pronto ou já em rastreabilidade também não.
+const FALTA_RASTREAB = "__falta_rastreab__";
+const SEM_RASTREAB_A_FAZER = new Set(["SEM BOOK", "PRONTO", "PRONTO AGUARDANDO COLETA", RASTREAB, RASTREAB_FIM]);
+function faltaRastreab(i: ItemDatabook): boolean {
+  return i.st === "A" && !i.rastreab_inicio_em && !SEM_RASTREAB_A_FAZER.has((i.st_book ?? "").trim().toUpperCase());
+}
+
 function CelulaTexto({
   atual,
   onSalvar,
@@ -267,6 +276,7 @@ export default function DataBook() {
     for (const i of lista) if (pendente(i)) m.set(i.cliente ?? "—", (m.get(i.cliente ?? "—") ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [lista]);
+  const totalFaltaRastreab = useMemo(() => lista.filter(faltaRastreab).length, [lista]);
   const contagemStBook = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of lista) m.set(i.st_book ?? SEM_STATUS, (m.get(i.st_book ?? SEM_STATUS) ?? 0) + 1);
@@ -293,6 +303,8 @@ export default function DataBook() {
         if (
           stBook === "pendente"
             ? !pendente(i)
+            : stBook === FALTA_RASTREAB
+              ? !faltaRastreab(i)
             : stBook === SEM_STATUS
               ? !!i.st_book
               : stBook === COM_FALTA
@@ -488,6 +500,19 @@ export default function DataBook() {
             <span className="font-mono text-lg font-bold">{n}</span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setStBook(stBook === FALTA_RASTREAB ? "" : FALTA_RASTREAB)}
+          title="Pedidos ativos (ST = A) que ainda não iniciaram a rastreabilidade — SEM BOOK, book pronto e quem já está em rastreabilidade não contam"
+          className={`ml-2 rounded-lg border px-3 py-1.5 text-left ${
+            stBook === FALTA_RASTREAB
+              ? "border-violet-600 bg-violet-600 text-white"
+              : "border-violet-300 bg-white text-violet-700 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-300"
+          }`}
+        >
+          <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-80">Falta iniciar rastreab.</span>
+          <span className="font-mono text-lg font-bold">{formatarNumero(totalFaltaRastreab, 0)}</span>
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -528,6 +553,7 @@ export default function DataBook() {
           <option value={SEM_STATUS}>Sem ST.BOOK ({formatarNumero(contagemStBook.get(SEM_STATUS) ?? 0, 0)})</option>
           <option value={COM_FALTA}>⚠ Com falta p/ finalizar ({formatarNumero(contagemStBook.get(COM_FALTA) ?? 0, 0)})</option>
           <option value="pendente">Book pendente (encerrado, book não pronto)</option>
+          <option value={FALTA_RASTREAB}>Falta iniciar rastreabilidade (ativos)</option>
         </select>
         <select value={st} onChange={(e) => setSt(e.target.value)} className={classeFiltro} aria-label="Status do pedido">
           <option value="">Status: todos</option>
