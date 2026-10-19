@@ -232,14 +232,16 @@ function CelulaTexto({
   );
 }
 
-export default function DataBook() {
+// somenteLeitura: o marcelo (PCP) só consulta — pedido do usuário (19/10/2026):
+// sem Apontar etapas, sem mudar ST.BOOK / Falta / Obs.
+export default function DataBook({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const [itens, setItens] = useState<ItemDatabook[] | null>(null);
   const [opcoes, setOpcoes] = useState<string[]>([]);
   const [erro, setErro] = useState("");
   const [usuario, setUsuario] = useState<string | null>(null);
   // Modo da aba: apontar por etapa (padrão) ou a planilha (lembrado no navegador).
   // Pedido do usuário (17/10): a Qualidade também vê o Histórico de serviço do Corte.
-  const [modo, setModo] = useState<ModoDatabook>(() => {
+  const [modoSalvo, setModo] = useState<ModoDatabook>(() => {
     try {
       const salvo = typeof window !== "undefined" ? localStorage.getItem("fcnexus.databook.modo") : null;
       return salvo === "planilha" || salvo === "corte" ? salvo : "apontar";
@@ -247,6 +249,7 @@ export default function DataBook() {
       return "apontar";
     }
   });
+  const modo: ModoDatabook = somenteLeitura && modoSalvo === "apontar" ? "planilha" : modoSalvo;
   function trocarModo(m: ModoDatabook) {
     setModo(m);
     try {
@@ -452,14 +455,20 @@ export default function DataBook() {
 
       {/* Pedido do usuário (17/10/2026): apontar por etapa igual à Usinagem/Pintura
           (celular e computador); a planilha continua do jeito que era. */}
-      <div className="grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40 sm:max-w-xl">
+      <div
+        className={`grid gap-1 rounded-xl border border-stone-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900/40 sm:max-w-xl ${
+          somenteLeitura ? "grid-cols-2" : "grid-cols-3"
+        }`}
+      >
         {(
           [
             ["apontar", "📱 Apontar etapas"],
             ["planilha", "📋 Planilha"],
             ["corte", "✂️ Histórico do corte"],
           ] as const
-        ).map(([m, rotulo]) => (
+        )
+          .filter(([m]) => !somenteLeitura || m !== "apontar")
+          .map(([m, rotulo]) => (
           <button
             key={m}
             type="button"
@@ -683,7 +692,7 @@ export default function DataBook() {
         )}
       </div>
 
-      {selecionados.size > 0 && (
+      {selecionados.size > 0 && !somenteLeitura && (
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-green-600 bg-green-50 px-3 py-2 text-sm dark:border-cyan-600 dark:bg-cyan-950/40">
           <strong>{selecionados.size} selecionado(s)</strong> — ST.BOOK pra todos:
           {opcoes.map((o) => (
@@ -824,6 +833,7 @@ export default function DataBook() {
                 <td className={td}>
                   <select
                     value={i.st_book ?? ""}
+                    disabled={somenteLeitura}
                     onChange={(e) => salvar([i.id], { st_book: e.target.value || null })}
                     title={i.editado_por ? `Última edição: ${i.editado_por} · ${quando(i.editado_em)}` : undefined}
                     className={`w-[7.5rem] rounded px-1 py-0.5 text-[11px] font-bold outline-none ${
@@ -837,7 +847,7 @@ export default function DataBook() {
                       </option>
                     ))}
                   </select>
-                  {i.st_book && (
+                  {i.st_book && !somenteLeitura && (
                     <button
                       type="button"
                       onClick={() => excluirStatus(i)}
@@ -854,16 +864,31 @@ export default function DataBook() {
                   <FaixaEtapas item={i} />
                 </td>
                 <td className={td}>
-                  <CelulaTexto
-                    atual={i.falta}
-                    destaque={temFalta(i)}
-                    sugestoes="databook-sugestoes-falta"
-                    comAcoes
-                    onSalvar={(v) => salvar([i.id], { falta: v || null })}
-                  />
+                  {somenteLeitura ? (
+                    <span
+                      className={`block max-w-[8rem] truncate px-1 text-[11px] ${temFalta(i) ? "rounded bg-amber-100 font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" : ""}`}
+                      title={i.falta ?? undefined}
+                    >
+                      {i.falta}
+                    </span>
+                  ) : (
+                    <CelulaTexto
+                      atual={i.falta}
+                      destaque={temFalta(i)}
+                      sugestoes="databook-sugestoes-falta"
+                      comAcoes
+                      onSalvar={(v) => salvar([i.id], { falta: v || null })}
+                    />
+                  )}
                 </td>
                 <td className={td}>
-                  <CelulaTexto atual={i.observacao} onSalvar={(v) => salvar([i.id], { observacao: v || null })} />
+                  {somenteLeitura ? (
+                    <span className="block max-w-[8rem] truncate px-1 text-[11px]" title={i.observacao ?? undefined}>
+                      {i.observacao}
+                    </span>
+                  ) : (
+                    <CelulaTexto atual={i.observacao} onSalvar={(v) => salvar([i.id], { observacao: v || null })} />
+                  )}
                 </td>
                 <td className={td}>
                   <button

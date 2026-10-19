@@ -241,9 +241,12 @@ export default function ModuloFollowUp({
           <Corte comHistorico={perfil !== "corte"} />
         </ProvedorPdfsCorte>
       )}
-      {visao === "usinagem" && <ApontamentoSetor key="usinagem" config={CONFIG_USINAGEM} />}
-      {visao === "caldeiraria" && <ApontamentoSetor key="caldeiraria" config={CONFIG_CALDEIRARIA} />}
-      {visao === "pintura" && <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} somenteLeitura={perfil === "qualidade"} />}
+      {/* marcelo (PCP, perfil follow_up): só consulta — pedido do usuário (19/10/2026). */}
+      {visao === "usinagem" && <ApontamentoSetor key="usinagem" config={CONFIG_USINAGEM} somenteLeitura={perfil === "follow_up"} />}
+      {visao === "caldeiraria" && <ApontamentoSetor key="caldeiraria" config={CONFIG_CALDEIRARIA} somenteLeitura={perfil === "follow_up"} />}
+      {visao === "pintura" && (
+        <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} somenteLeitura={perfil === "qualidade" || perfil === "follow_up"} />
+      )}
       {visao === "qualidade" && <Qualidade key="principal" />}
       {visao === "backup" && (
         <Qualidade
@@ -254,7 +257,7 @@ export default function ModuloFollowUp({
         />
       )}
       {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
-      {visao === "databook" && <DataBook />}
+      {visao === "databook" && <DataBook somenteLeitura={perfil === "follow_up"} />}
       {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
       {visao === "cortados" && <CortadosQualidade />}

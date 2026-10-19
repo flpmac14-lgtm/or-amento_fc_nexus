@@ -1,13 +1,13 @@
 "use client";
 
-// Registro — pedido explícito do usuário (13/10/2026, só o admin flpmac14):
+// Registro — pedido explícito do usuário (13/10/2026, o admin flpmac14; 19/10 também o marcelo, PCP):
 // tudo o que cada um está apontando, fácil de ver e separado por área
 // (Caldeiraria, Usinagem, Pintura, Data book, Corte, Projeto).
 // Dados: services/calc_engine/app/registro_geral.py.
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { buscarRegistro, urlImagemFollowUp, type EventoRegistro, type RespostaRegistro } from "@/lib/api";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { podeVerRegistro } from "@/lib/acesso";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
 const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
@@ -49,7 +49,7 @@ export default function PaginaRegistro() {
   useEffect(() => {
     criarClienteSupabaseNavegador()
       .auth.getUser()
-      .then(({ data }) => setAdmin(podeVerFinanceiro(data.user?.email)));
+      .then(({ data }) => setAdmin(podeVerRegistro(data.user)));
   }, []);
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export default function PaginaRegistro() {
   return (
     <AppShell titulo="Registro" subtitulo="Tudo o que cada um está apontando, por área">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4 sm:px-6">
-        {admin === false && <p className="rounded-lg bg-red-50 p-4 text-red-700">Só o administrador (flpmac14) abre esta tela.</p>}
+        {admin === false && <p className="rounded-lg bg-red-50 p-4 text-red-700">Esta tela é só para o administrador e o PCP.</p>}
         {admin && (
           <>
             <div className="flex flex-wrap items-center gap-2">

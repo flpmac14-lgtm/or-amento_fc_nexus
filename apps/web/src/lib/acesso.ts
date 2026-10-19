@@ -64,10 +64,19 @@ export function perfilModulo(
   return "total";
 }
 
-// Aba QUALIDADE e os dados dela (/api/qualidade/*): a conta flpmac14 e o
-// perfil "qualidade". Conferido no servidor (rotas e proxy.ts).
+// Aba QUALIDADE e os dados dela (/api/qualidade/*): a conta flpmac14, o
+// perfil "qualidade" e o marcelo (PCP, só consulta — pedido do usuário,
+// 19/10/2026). Conferido no servidor (rotas e proxy.ts).
 export function podeVerQualidade(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
-  return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_QUALIDADE;
+  const acesso = user?.app_metadata?.acesso;
+  return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || acesso === ACESSO_QUALIDADE || acesso === ACESSO_SO_FOLLOW_UP;
+}
+
+// Painel /registro (apontamentos por área): a conta flpmac14 e o marcelo
+// (PCP, só consulta — pedido do usuário, 19/10/2026). Liberado no proxy.ts.
+export const ROTA_REGISTRO = "/registro";
+export function podeVerRegistro(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_SO_FOLLOW_UP;
 }
 
 export function acessoProjeto(user: Pick<User, "app_metadata"> | null | undefined): boolean {

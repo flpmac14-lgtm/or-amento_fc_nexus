@@ -44,6 +44,9 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // "consulta" (jeferson, diego) = Consulta + Caldeiraria (apontam a fabricação);
 // total e follow_up também veem a Consulta; a Caldeiraria, só o total.
 // "pintura" (felipe) = Consulta + Pintura.
+// "follow_up" (marcelo, PCP) — pedido do usuário (19/10/2026): tudo pra consulta
+// (Usinagem, Caldeiraria, Pintura, Data book, Recebimento, Cortados, QUALIDADE),
+// sem apontar (ver somenteLeitura em components/ModuloFollowUp.tsx); Financeiro não.
 export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
@@ -58,7 +61,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
     v.valor === "coletas"
       ? perfil === "qualidade"
       : v.valor === "databook" || v.valor === "recebimento" || v.valor === "cortados"
-        ? perfil === "qualidade" || perfil === "total"
+        ? perfil === "qualidade" || perfil === "total" || perfil === "follow_up"
       : v.valor === "qualidade" || v.valor === "backup"
       ? comQualidade || perfil === "qualidade"
       : perfil === "qualidade"
@@ -70,7 +73,7 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
           : perfil === "projeto"
             ? v.valor === "material" || v.valor === "croqui" || v.valor === "corte"
             : v.valor === "usinagem" || v.valor === "caldeiraria" || v.valor === "pintura"
-              ? perfil === "total"
+              ? perfil === "total" || perfil === "follow_up"
               : v.valor === "consulta"
                 ? perfil === "total" || perfil === "follow_up"
               : v.valor !== "referencia" || comReferenciaPrecos,

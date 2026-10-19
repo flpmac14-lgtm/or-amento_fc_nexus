@@ -23,7 +23,7 @@ import {
   visoesDoPerfil,
   type ValorVisao,
 } from "@/lib/abasFollowUp";
-import { acessoSoFollowUp, perfilModulo, podeVerQualidade } from "@/lib/acesso";
+import { acessoSoFollowUp, perfilModulo, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -169,10 +169,9 @@ function montarMenu(real: User): Conta {
   const admin: ItemMenu[] = [];
   if (!restrita) admin.push({ href: "/orcamentistas", rotulo: "Orçamentistas", icone: "usuarios" });
   // Só o flpmac14 (pedido do usuário): ver como cada um enxerga e o registro de tudo que apontam.
-  if (podeVerFinanceiro(real.email)) {
-    admin.push({ href: "/ver-como", rotulo: "Ver como usuário", icone: "usuarios" });
-    admin.push({ href: "/registro", rotulo: "Registro", icone: "painel" });
-  }
+  if (podeVerFinanceiro(real.email)) admin.push({ href: "/ver-como", rotulo: "Ver como usuário", icone: "usuarios" });
+  // Registro: também o marcelo (PCP, só consulta — pedido do usuário, 19/10/2026).
+  if (podeVerRegistro(user) || podeVerFinanceiro(real.email)) admin.push({ href: "/registro", rotulo: "Registro", icone: "painel" });
   if (admin.length) secoes.push({ secao: "Administração", itens: admin });
   return { login: emailParaLogin(user.email ?? ""), perfil, itens: secoes };
 }
