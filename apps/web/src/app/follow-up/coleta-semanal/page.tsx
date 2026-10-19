@@ -446,7 +446,7 @@ function Relatorio() {
                             {nomeCliente(c)}
                           </td>
                           <td className={`${td} font-bold`}>{lista.length}</td>
-                          <td className={`${td} text-left font-mono text-[11px]`}>{lista.map((i) => i.po).join(" · ")}</td>
+                          <td className={`${td} text-left font-mono text-[11px]`}>{lista.map((i) => (i.mac?.trim() ? `${i.po} (${i.mac.trim()})` : i.po)).join(" · ")}</td>
                         </tr>
                       )),
                   )}
