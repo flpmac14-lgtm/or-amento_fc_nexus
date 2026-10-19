@@ -17,6 +17,9 @@ import type { ItemFollowUp } from "@/lib/types";
 const MAX_DIAS = 366;
 const DIAS_GRAFICO_DIARIO = 31; // acima disso o gráfico agrupa por semana
 const NOMES_DIA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+// Nome do cliente pelo código do Follow up — pedido do usuário (19/10/2026).
+const NOMES_CLIENTE: Record<string, string> = { A1: "Andritz", A2: "ALSN (Dana)", W1: "Weir", F2: "FTSX" };
+const nomeCliente = (c: string) => (NOMES_CLIENTE[c.toUpperCase()] ? `${c} · ${NOMES_CLIENTE[c.toUpperCase()]}` : c);
 const CORES = ["#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626", "#0891b2", "#4d7c0f", "#be185d", "#57534e", "#0f766e"];
 
 // Segunda-feira 00:00 (hora local) da semana do dia.
@@ -344,8 +347,8 @@ function Relatorio() {
                                   className={`flex items-center justify-between rounded px-1.5 text-white ${compacto ? "py-0 text-[11px]" : "py-1 text-sm"}`}
                                   style={{ backgroundColor: corDe(c) }}
                                 >
-                                  <span className="font-bold">{c}</span>
-                                  <span className="font-mono font-bold">
+                                  <span className="truncate font-bold">{nomeCliente(c)}</span>
+                                  <span className="shrink-0 pl-1 font-mono font-bold">
                                     {n} <span className="text-[9px] font-normal">{n === 1 ? "item" : "itens"}</span>
                                   </span>
                                 </div>
@@ -363,13 +366,13 @@ function Relatorio() {
               <h2 className="mb-1 text-sm font-bold">Itens por {porSemana ? "semana" : "dia"} de coleta</h2>
               <GraficoEmpilhado
                 categorias={baldes.map((b) => b.rotulo)}
-                series={clientes.map((c) => ({ nome: c, cor: corDe(c), valores: baldes.map((b) => somaBalde(b.ks, c)) }))}
+                series={clientes.map((c) => ({ nome: nomeCliente(c), cor: corDe(c), valores: baldes.map((b) => somaBalde(b.ks, c)) }))}
               />
               <div className="mt-1 flex flex-wrap justify-center gap-3 text-[11px] text-stone-600">
                 {clientes.map((c) => (
                   <span key={c} className="inline-flex items-center gap-1">
                     <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: corDe(c) }} />
-                    {c}
+                    {nomeCliente(c)}
                   </span>
                 ))}
               </div>
@@ -392,7 +395,7 @@ function Relatorio() {
                   <tr key={c}>
                     <td className={`${td} text-left font-semibold`}>
                       <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ backgroundColor: corDe(c) }} />
-                      {c}
+                      {nomeCliente(c)}
                     </td>
                     {baldesTabela.map((b) => (
                       <td key={b.rotulo} className={td}>
