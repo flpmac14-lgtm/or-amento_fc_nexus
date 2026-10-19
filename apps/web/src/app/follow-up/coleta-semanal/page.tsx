@@ -12,14 +12,13 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { listarFollowUp } from "@/lib/api";
+import { nomeClienteRelatorio } from "@/lib/clientes";
 import type { ItemFollowUp } from "@/lib/types";
 
 const MAX_DIAS = 366;
 const DIAS_GRAFICO_DIARIO = 31; // acima disso o gráfico agrupa por semana
 const NOMES_DIA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
-// Nome do cliente pelo código do Follow up — pedido do usuário (19/10/2026).
-const NOMES_CLIENTE: Record<string, string> = { A1: "Andritz", A2: "ALSN (Dana)", W1: "Weir", F2: "FTSX" };
-const nomeCliente = (c: string) => (NOMES_CLIENTE[c.toUpperCase()] ? `${c} · ${NOMES_CLIENTE[c.toUpperCase()]}` : c);
+const nomeCliente = nomeClienteRelatorio;
 const CORES = ["#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626", "#0891b2", "#4d7c0f", "#be185d", "#57534e", "#0f766e"];
 
 // Segunda-feira 00:00 (hora local) da semana do dia.

@@ -88,7 +88,7 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
             <span className="text-sm text-stone-600 dark:text-slate-400">Nenhuma data de coleta marcada para esse cliente.</span>
           )}
         </label>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => gerar(true)}
@@ -108,6 +108,19 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
             className="rounded-lg px-2 py-1.5 text-xs text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 hover:text-stone-800 dark:hover:text-slate-200"
           >
             Diagrama semanal
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const qs = new URLSearchParams();
+              if (cliente) qs.set("cliente", cliente);
+              window.open(`/follow-up/carga${qs.size ? `?${qs}` : ""}`, "_blank");
+              onFechar();
+            }}
+            title="Relatório de carga: o que já foi feito e quanto falta (pelo % das etapas) nas coletas do período, e onde aplicar mais energia na fabricação"
+            className="rounded-lg px-2 py-1.5 text-xs text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 hover:text-stone-800 dark:hover:text-slate-200"
+          >
+            Relatório de carga
           </button>
           <button
             type="button"
