@@ -8,7 +8,7 @@
 // Parâmetros: ?de=AAAA-MM-DD&ate=AAAA-MM-DD&cliente=A1 (vazio = de hoje a
 // +14 dias, todos os clientes). Aberto pela janela "Relatório de coleta".
 //
-// Conta: cada pedido tem 8 etapas; a etapa vale de 0 a 100 (vazio = 0), igual
+// Conta: cada pedido tem 8 etapas (7 se tiver SP na pintura = sem pintura); a etapa vale de 0 a 100 (vazio = 0), igual
 // à fórmula do Status da planilha (Pronto = as 8 em 100). % do pedido = média
 // das 8. Carga em kg = peso total × o que falta; pedidos sem peso entram só
 // na contagem.
@@ -40,7 +40,16 @@ function hoje(): Date {
 const somarDias = (d: Date, n: number) => new Date(d.getTime() + n * DIA);
 const diasAte = (iso: string) => Math.round((deIso(iso)!.getTime() - hoje().getTime()) / DIA);
 const valorEtapa = (i: ItemFollowUp, e: EtapaFollowUp) => Math.max(0, Math.min(100, i[e] ?? 0));
-const pctPedido = (i: ItemFollowUp) => ETAPAS.reduce((s, e) => s + valorEtapa(i, e.campo), 0) / ETAPAS.length;
+// SP na pintura (COR2 / Plano) = pedido sem pintura — pedido do usuário (19/10/2026):
+// a etapa Pintura não conta pra esse pedido (nem no % nem no gargalo).
+const ehSP = (v: string | null) => (v ?? "").trim().toUpperCase() === "SP";
+const semPintura = (i: ItemFollowUp) => ehSP(i.cor2) || ehSP(i.cor_2) || ehSP(i.plano_pintura);
+const aplica = (i: ItemFollowUp, e: EtapaFollowUp) => e !== "pin" || !semPintura(i);
+const etapasDo = (i: ItemFollowUp) => ETAPAS.filter((e) => aplica(i, e.campo));
+const pctPedido = (i: ItemFollowUp) => {
+  const l = etapasDo(i);
+  return l.reduce((s, e) => s + valorEtapa(i, e.campo), 0) / l.length;
+};
 const kg = (v: number) => `${formatarNumero(v, 0)} kg`;
 const pct = (v: number) => `${formatarNumero(v, 0)}%`;
 
@@ -57,12 +66,22 @@ function Barra({ valor, altura = "h-2.5", cor }: { valor: number; altura?: strin
   );
 }
 
-// As 8 etapas do pedido em quadradinhos: verde = 100, âmbar = parcial, cinza = não iniciada.
+// As 8 etapas do pedido em quadradinhos: verde = 100, âmbar = parcial, cinza = não iniciada, riscada = não tem (SP).
 function FaixaEtapas({ item }: { item: ItemFollowUp }) {
   return (
     <span className="inline-flex gap-[2px]">
       {ETAPAS.map((e) => {
         const v = valorEtapa(item, e.campo);
+        if (!aplica(item, e.campo))
+          return (
+            <span
+              key={e.campo}
+              title={`${e.nome}: não tem (SP — sem pintura)`}
+              className="inline-flex h-[14px] w-[22px] items-center justify-center rounded-[2px] border border-dashed border-stone-300 text-[7px] font-bold text-stone-400"
+            >
+              SP
+            </span>
+          );
         return (
           <span
             key={e.campo}
@@ -170,13 +189,16 @@ function Relatorio() {
     let faltamPedidos = 0;
     let faltaKg = 0;
     let soma = 0;
+    let aplicaveis = 0;
     for (const i of lista) {
+      if (!aplica(i, e.campo)) continue;
+      aplicaveis++;
       const v = valorEtapa(i, e.campo);
       soma += v;
       if (v < 100) faltamPedidos++;
       faltaKg += ((i.peso_total ?? 0) * (100 - v)) / 100;
     }
-    return { ...e, faltamPedidos, faltaKg, pct: lista.length ? soma / lista.length : 100 };
+    return { ...e, faltamPedidos, faltaKg, aplicaveis, pct: aplicaveis ? soma / aplicaveis : 100 };
   });
   const prioridade = [...etapas]
     .filter((e) => e.faltamPedidos > 0)
@@ -358,7 +380,7 @@ function Relatorio() {
                         </div>
                       </div>
                       <span className="text-xs text-stone-600">
-                        faltam <strong>{e.faltamPedidos}</strong> de {lista.length} pedido(s)
+                        faltam <strong>{e.faltamPedidos}</strong> de {e.aplicaveis} pedido(s)
                       </span>
                       <span className="text-right font-mono text-xs font-bold" style={{ color: corPct(e.pct) }}>
                         {pct(e.pct)} feito
@@ -475,6 +497,7 @@ function Relatorio() {
                   <span className="inline-block h-2.5 w-3 rounded-[2px] bg-green-600" /> etapa concluída
                   <span className="inline-block h-2.5 w-3 rounded-[2px] bg-amber-400" /> parcial
                   <span className="inline-block h-2.5 w-3 rounded-[2px] bg-stone-200" /> não iniciada
+                  <span className="inline-block h-2.5 w-3 rounded-[2px] border border-dashed border-stone-300" /> SP = sem pintura
                 </span>
               </h2>
               {faltando.length === 0 ? (
@@ -538,7 +561,8 @@ function Relatorio() {
 
         <p className="text-[10px] text-stone-500">
           Como é calculado: cada pedido tem 8 etapas (Engenharia, Corte, Montagem, Solda, Usinagem, Dobra, Jato, Pintura), cada uma de 0 a 100% como no
-          Follow up; o pedido está pronto quando as 8 estão em 100% (mesma regra do Status). % do pedido = média das 8 etapas. Carga = peso total do
+          Follow up; o pedido está pronto quando as etapas estão em 100% (mesma regra do Status). % do pedido = média das etapas. Pedido com SP na
+          pintura (COR2 ou Plano) não tem pintura: a etapa Pintura não conta pra ele. Carga = peso total do
           pedido; o que falta em kg = peso × (100% − concluído). Base: pedidos com data na coluna COLETA dentro do período. F.MAT = esperando material.
         </p>
       </main>
