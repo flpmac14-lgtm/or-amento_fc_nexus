@@ -187,20 +187,23 @@ function Relatorio() {
     const dias = Array.from({ length: n }, (_, k) => somarDias(de, k));
     const indice = new Map(dias.map((d, k) => [isoDia(d), k]));
     const porDia = dias.map(() => new Map<string, number>());
+    const pedidos = dias.map(() => new Map<string, ItemFollowUp[]>());
     for (const i of itens ?? []) {
       const k = i.coleta_data ? indice.get(i.coleta_data) : undefined;
       if (k === undefined) continue;
       const c = i.cliente?.trim() || "Sem cliente";
       porDia[k].set(c, (porDia[k].get(c) ?? 0) + 1);
+      pedidos[k].set(c, [...(pedidos[k].get(c) ?? []), i]);
     }
+    for (const m of pedidos) for (const l of m.values()) l.sort((a, b) => a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
     const clientes = [...new Set(porDia.flatMap((m) => [...m.keys()]))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return { dias, porDia, clientes };
+    return { dias, porDia, pedidos, clientes };
   }, [itens, de, ate]);
 
   if (erro) return <p className="p-8 text-red-600">{erro}</p>;
   if (!itens) return <p className="p-8 text-stone-500">Carregando relatório… (o servidor pode levar até 1 minuto para acordar)</p>;
 
-  const { dias, porDia, clientes } = periodo;
+  const { dias, porDia, pedidos, clientes } = periodo;
   const corDe = (c: string) => CORES[Math.max(0, clientes.indexOf(c)) % CORES.length];
   const totalDia = porDia.map((m) => [...m.values()].reduce((s, n) => s + n, 0));
   const totalItens = totalDia.reduce((s, n) => s + n, 0);
@@ -416,6 +419,40 @@ function Relatorio() {
                 </tr>
               </tbody>
             </table>
+
+            {/* Pedidos de cada coleta — pedido do usuário (19/10/2026). */}
+            <section>
+              <h2 className="mb-1 text-sm font-bold">Pedidos por coleta</h2>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className={th}>Coleta</th>
+                    <th className={`${th} text-left`}>Cliente</th>
+                    <th className={th}>Itens</th>
+                    <th className={`${th} text-left`}>Pedidos (PO)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dias.flatMap((d, k) =>
+                    [...pedidos[k].entries()]
+                      .sort((a, b) => a[0].localeCompare(b[0], "pt-BR"))
+                      .map(([c, lista]) => (
+                        <tr key={`${k}-${c}`} className="break-inside-avoid">
+                          <td className={`${td} whitespace-nowrap`}>
+                            {NOMES_DIA[diaSemana(d)].slice(0, 3)} {dm(d)}
+                          </td>
+                          <td className={`${td} whitespace-nowrap text-left font-semibold`}>
+                            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ backgroundColor: corDe(c) }} />
+                            {nomeCliente(c)}
+                          </td>
+                          <td className={`${td} font-bold`}>{lista.length}</td>
+                          <td className={`${td} text-left font-mono text-[11px]`}>{lista.map((i) => i.po).join(" · ")}</td>
+                        </tr>
+                      )),
+                  )}
+                </tbody>
+              </table>
+            </section>
           </>
         )}
 
