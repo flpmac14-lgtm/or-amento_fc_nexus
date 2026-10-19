@@ -100,6 +100,17 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
           </button>
           <button
             type="button"
+            onClick={() => {
+              window.open(`/follow-up/coleta-semanal${dataValida ? `?semana=${dataValida}` : ""}`, "_blank");
+              onFechar();
+            }}
+            title="Diagrama da semana: em cada dia, os clientes com coleta e a quantidade de itens"
+            className="rounded-lg px-2 py-1.5 text-xs text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 hover:text-stone-800 dark:hover:text-slate-200"
+          >
+            Diagrama semanal
+          </button>
+          <button
+            type="button"
             onClick={onFechar}
             className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300"
           >
