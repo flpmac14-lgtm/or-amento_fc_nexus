@@ -558,7 +558,11 @@ function Relatorio() {
                             </div>
                           </td>
                           {comPeso && (
-                            <td className={`${td} whitespace-nowrap text-right font-mono text-[11px]`}>
+                            <td
+                              className={`${td} whitespace-nowrap text-right font-mono text-[11px] ${
+                                ((i.peso_total ?? 0) * (100 - p)) / 100 > KG_ATENCAO ? "font-bold text-red-600" : ""
+                              }`}
+                            >
                               {i.peso_total ? kg(((i.peso_total ?? 0) * (100 - p)) / 100) : "—"}
                             </td>
                           )}
@@ -576,7 +580,7 @@ function Relatorio() {
           Como é calculado: cada pedido tem 8 etapas (Engenharia, Corte, Montagem, Solda, Usinagem, Dobra, Jato, Pintura), cada uma de 0 a 100% como no
           Follow up; o pedido está pronto quando as etapas estão em 100% (mesma regra do Status). % do pedido = média das etapas. Pedido com SP na
           pintura (COR2 ou Plano) não tem pintura: a etapa Pintura não conta pra ele. Carga = peso total do
-          pedido; o que falta em kg = peso × (100% − concluído). Base: pedidos com data na coluna COLETA dentro do período. F.MAT = esperando material. ! = item acima de 100 kg (atenção). Aguardando Engenharia = nenhuma etapa apontada ainda.
+          pedido; o que falta em kg = peso × (100% − concluído). Base: pedidos com data na coluna COLETA dentro do período. F.MAT = esperando material. ! = item acima de 100 kg (atenção); falta acima de 100 kg em vermelho. Aguardando Engenharia = nenhuma etapa apontada ainda.
         </p>
       </main>
     </div>
