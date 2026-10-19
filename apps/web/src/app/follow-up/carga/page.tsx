@@ -23,6 +23,8 @@ import type { EtapaFollowUp, ItemFollowUp } from "@/lib/types";
 
 const DIA = 86400000;
 const DIAS_PADRAO = 14;
+// Item pesado — pedido do usuário (19/10/2026): "!" discreto na frente do PO pra dar atenção.
+const KG_ATENCAO = 100;
 
 function isoDia(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -324,18 +326,23 @@ function Relatorio() {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  ["Pedidos no período", geral.pedidos, "text-stone-900", ""],
-                  ["Prontos (100%)", geral.prontos, "text-green-700", "bg-green-50 border-green-300"],
-                  ["Em andamento", geral.andamento, "text-amber-700", "bg-amber-50 border-amber-300"],
-                  ["Não iniciados", geral.naoIniciados, "text-red-700", "bg-red-50 border-red-300"],
-                ].map(([rotulo, n, cor, fundo]) => (
-                  <div key={rotulo as string} className={`rounded-xl border p-2.5 ${fundo || "border-stone-300"}`}>
+                {/* Termos do PCP — pedido do usuário (19/10/2026): sem nenhuma etapa apontada =
+                    aguardando a Engenharia, que é a etapa inicial de tudo. */}
+                {(
+                  [
+                    ["Pedidos no período", geral.pedidos, "text-stone-900", "", "com coleta no período"],
+                    ["Concluídos (100%)", geral.prontos, "text-green-700", "bg-green-50 border-green-300", "dos pedidos"],
+                    ["Em fabricação", geral.andamento, "text-amber-700", "bg-amber-50 border-amber-300", "dos pedidos · já liberados"],
+                    ["Aguardando Engenharia", geral.naoIniciados, "text-red-700", "bg-red-50 border-red-300", "dos pedidos · não liberados p/ fabricação"],
+                  ] as const
+                ).map(([rotulo, n, cor, fundo, dica], k) => (
+                  <div key={rotulo} className={`rounded-xl border p-2.5 ${fundo || "border-stone-300"}`}>
                     <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{rotulo}</p>
-                    <p className={`font-mono text-3xl font-extrabold ${cor}`}>{n as number}</p>
-                    {rotulo !== "Pedidos no período" && (
-                      <p className="text-[10px] text-stone-500">{pct(((n as number) / geral.pedidos) * 100)} dos pedidos</p>
-                    )}
+                    <p className={`font-mono text-3xl font-extrabold ${cor}`}>{n}</p>
+                    <p className="text-[10px] text-stone-500">
+                      {k > 0 && `${pct((n / geral.pedidos) * 100)} `}
+                      {dica}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -525,6 +532,12 @@ function Relatorio() {
                           <td className={`${td} whitespace-nowrap font-semibold ${atrasado ? "text-red-700" : ""}`}>{formatarDataBr(i.coleta_data).slice(0, 5)}</td>
                           <td className={td}>{i.cliente}</td>
                           <td className={`${td} whitespace-nowrap font-mono text-[11px]`}>
+                            <span
+                              className={`mr-0.5 inline-block w-1.5 font-sans font-bold text-amber-600 ${(i.peso_total ?? 0) > KG_ATENCAO ? "" : "invisible"}`}
+                              title={`Item pesado: ${kg(i.peso_total ?? 0)} (acima de ${KG_ATENCAO} kg)`}
+                            >
+                              !
+                            </span>
                             {i.po}
                             {i.mac?.trim() && <span className="text-stone-500"> ({i.mac.trim()})</span>}
                             {i.falta_material && <span className="ml-1 rounded bg-red-600 px-1 text-[8px] font-bold text-white">F.MAT</span>}
@@ -563,7 +576,7 @@ function Relatorio() {
           Como é calculado: cada pedido tem 8 etapas (Engenharia, Corte, Montagem, Solda, Usinagem, Dobra, Jato, Pintura), cada uma de 0 a 100% como no
           Follow up; o pedido está pronto quando as etapas estão em 100% (mesma regra do Status). % do pedido = média das etapas. Pedido com SP na
           pintura (COR2 ou Plano) não tem pintura: a etapa Pintura não conta pra ele. Carga = peso total do
-          pedido; o que falta em kg = peso × (100% − concluído). Base: pedidos com data na coluna COLETA dentro do período. F.MAT = esperando material.
+          pedido; o que falta em kg = peso × (100% − concluído). Base: pedidos com data na coluna COLETA dentro do período. F.MAT = esperando material. ! = item acima de 100 kg (atenção). Aguardando Engenharia = nenhuma etapa apontada ainda.
         </p>
       </main>
     </div>
