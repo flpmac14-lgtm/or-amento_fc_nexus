@@ -10,7 +10,9 @@ coluna preenchida:
   4501690746-010), o mesmo PO do Follow up / Controle de obras;
 - Follow up (coleta marcada, ST e NF que vêm da Controle de obras) e, pro
   que não está no Follow up, a própria Controle de obras (ST e NF);
-- sem data de coleta marcada → "À confirmar" em vermelho (o usuário analisa).
+- sem data de coleta marcada → "À confirmar" em vermelho (o usuário analisa);
+- coluna nova "MAC" logo depois (pedido do usuário, 20/10/2026), com a cara
+  das outras colunas da planilha.
 """
 
 from __future__ import annotations
@@ -109,6 +111,7 @@ def preencher(conteudo: bytes) -> tuple[bytes, dict]:
     if "po" in colunas:
         ip, ist = colunas.index("po"), colunas.index("st") if "st" in colunas else None
         inf = colunas.index("nf") if "nf" in colunas else None
+        imac = colunas.index("mac") if "mac" in colunas else None
         for linha in co["linhas"]:
             v = linha["valores"]
             k = _chave(v[ip] if ip < len(v) else None)
@@ -116,7 +119,23 @@ def preencher(conteudo: bytes) -> tuple[bytes, dict]:
                 controle[k] = {
                     "st": v[ist] if ist is not None and ist < len(v) else None,
                     "nf": v[inf] if inf is not None and inf < len(v) else None,
+                    "mac": v[imac] if imac is not None and imac < len(v) else None,
                 }
+
+    # Coluna MAC do lado da Fornecedor Confirmação: cabeçalho igual ao das
+    # outras colunas (cinza, Arial 9 negrito); as células copiam o estilo da
+    # coluna Pedido da mesma linha (fonte, fundo amarelo do IMEDIATO…).
+    from copy import copy
+
+    c_mac = c_conf + 1
+    ws.insert_cols(c_mac)
+    ref = ws.cell(cab, c_ped)
+    cab_mac = ws.cell(cab, c_mac, "MAC")
+    for atributo in ("font", "fill", "border", "alignment", "protection"):
+        setattr(cab_mac, atributo, copy(getattr(ref, atributo)))
+    from openpyxl.utils import get_column_letter
+
+    ws.column_dimensions[get_column_letter(c_mac)].width = 14
 
     resumo = {"linhas": 0, "entregues": 0, "faturados": 0, "com_coleta": 0, "a_confirmar": 0, "nao_consta": 0, "cancelados": 0}
     for r in range(cab + 1, ws.max_row + 1):
@@ -128,6 +147,15 @@ def preencher(conteudo: bytes) -> tuple[bytes, dict]:
         k = f"{pedido}-{int(item):03d}"
         celula = ws.cell(r, c_conf)
         vermelho = False
+        mac = None
+        if k in follow:
+            mac = follow[k].get("mac")
+        elif k in controle:
+            mac = controle[k]["mac"]
+        celula_mac = ws.cell(r, c_mac, str(mac).strip() if mac not in (None, "") else None)
+        origem = ws.cell(r, c_ped)
+        for atributo in ("font", "fill", "border", "alignment", "number_format", "protection"):
+            setattr(celula_mac, atributo, copy(getattr(origem, atributo)))
         if k in follow:
             i = follow[k]
             texto, vermelho = _texto(i.get("st"), _nf(i.get("nf")), _data_br(i.get("coleta_data")) or (i.get("coleta") or "").strip() or None)
