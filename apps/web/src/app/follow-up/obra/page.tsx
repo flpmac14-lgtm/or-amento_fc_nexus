@@ -295,8 +295,9 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
   );
 }
 
-// META da Controle de obras (pedido do usuário, 15/10/2026 — obra 723: 1P, 2P,
-// 3P…): resumo de cada META e os cartões agrupados por ela.
+// Meta da obra (pedido do usuário, 15/10/2026 — obra 723: 1P, 2P, 3P…): resumo
+// de cada Meta e os cartões agrupados por ela. Desde 20/10 vem da Obs. Diretoria
+// (lib/followUp.ts::metaDoItem).
 const SEM_META = "Sem meta";
 function chaveMeta(i: ItemFollowUp): string {
   return metaDoItem(i) || SEM_META;
@@ -457,7 +458,7 @@ function Relatorio() {
   // Avanço = média das 8 etapas de todos os itens (etapa vazia conta 0%).
   const avanco = media(itens.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)));
   const prazos = itens.map((i) => i.prazo_contratual).filter((p): p is string => !!p).sort();
-  const porMeta = itens.some((i) => (i.meta ?? "").trim()) ? agruparPorMeta(itens) : null;
+  const porMeta = itens.some((i) => metaDoItem(i)) ? agruparPorMeta(itens) : null;
 
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">

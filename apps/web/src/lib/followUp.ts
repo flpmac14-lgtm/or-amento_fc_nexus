@@ -224,8 +224,12 @@ export function obraDoItem(item: ItemFollowUp, tipo: TipoObra): string {
   return (item.mac ?? "").split(".").slice(0, 2).join(".");
 }
 
-// META da Controle de obras (1P, 2P…) normalizada — "" se vazia. Usada no
-// Relatório por obra (agrupar e gerar só de uma Meta).
+// Meta da obra (1P, 2P…) normalizada — "" se não tiver. Usada no Relatório
+// por obra (agrupar e gerar só de uma Meta). Pedido do usuário (20/10/2026):
+// o 1P, 2P… agora fica na Obs. Diretoria (OBS da Controle de obras) — a META
+// virou data. Aceita "1P", "1 P" ou "1P - texto"; a META ainda vale se tiver nP.
+const RE_META = /^\s*(\d+)\s*P\b/i;
 export function metaDoItem(i: ItemFollowUp): string {
-  return (i.meta ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+  const m = RE_META.exec(i.obs_alisson ?? "") ?? RE_META.exec(i.meta ?? "");
+  return m ? `${Number(m[1])}P` : "";
 }
