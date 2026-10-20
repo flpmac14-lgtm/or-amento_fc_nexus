@@ -32,6 +32,7 @@ import {
   corrigirApontamento,
   criarServicoInterno,
   listarFollowUp,
+  lotesPreenchidos,
   salvarLoteSetor,
   urlImagemFollowUp,
   type Apontamento,
@@ -138,9 +139,10 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   const [novaDescricao, setNovaDescricao] = useState("");
   const [novaQtd, setNovaQtd] = useState("");
   // Lote (Pintura — pedido do usuário, 14/10/2026): igual ao NRI do Corte, um por pedido.
+  // 20/10/2026: Lote 1, Lote 2 e Lote 3 (o pintor preenche os que tiver).
   const [rotuloLote, setRotuloLote] = useState<string | null>(null);
   const [lotes, setLotes] = useState<Record<string, LoteSetor>>({});
-  const [lote, setLote] = useState("");
+  const [lote, setLote] = useState<[string, string, string]>(["", "", ""]);
   // Correção de apontamento errado (✏️ no histórico): id em edição.
   const [editando, setEditando] = useState<number | null>(null);
   const [corrigindo, setCorrigindo] = useState(false);
@@ -294,7 +296,8 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     setPausarOutros(true);
     setNovaDescricao("");
     setNovaQtd("");
-    setLote(novoAlvo.tipo === "pedido" ? (lotes[novoAlvo.id]?.lote ?? "") : "");
+    const l = novoAlvo.tipo === "pedido" ? lotes[novoAlvo.id] : undefined;
+    setLote([l?.lote ?? "", l?.lote2 ?? "", l?.lote3 ?? ""]);
   }
 
   function fechar() {
@@ -312,8 +315,13 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
 
   const qtdNova = novaQtd.trim() ? Number(novaQtd) : null;
   const qtdInvalida = qtdNova !== null && (!Number.isInteger(qtdNova) || qtdNova <= 0);
-  const loteNovo = lote.trim().replace(/\s+/g, " ").toUpperCase();
-  const loteMudou = !!aberto && !!rotuloLote && loteNovo !== (lotes[aberto.id]?.lote ?? "");
+  const loteNovo = lote.map((v) => v.trim().replace(/\s+/g, " ").toUpperCase()) as [string, string, string];
+  const loteSalvo = aberto ? lotes[aberto.id] : undefined;
+  const loteMudou =
+    !!aberto &&
+    !!rotuloLote &&
+    [loteSalvo?.lote, loteSalvo?.lote2, loteSalvo?.lote3].some((v, n) => (v ?? "") !== loteNovo[n]);
+  const textoLoteNovo = loteNovo.filter(Boolean).join(" / ") || "apagado";
   // Só o lote mudou: dá pra salvar sem marcar status (como o NRI no Corte).
   const falta = !escolha && loteMudou
     ? ""
@@ -346,7 +354,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         return;
       }
       if (!escolha) {
-        setSalvo(`✔ ${rotuloLote}: ${loteNovo || "apagado"} — ${aberto?.desenho ?? aberto?.po ?? ""}`);
+        setSalvo(`✔ ${rotuloLote}: ${textoLoteNovo} — ${aberto?.desenho ?? aberto?.po ?? ""}`);
         setTimeout(() => setSalvo(""), 5000);
         setSalvando(false);
         fechar();
@@ -390,7 +398,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
       setSalvo(
         `✔ Salvo: ${opcao.get(escolha)?.rotulo} (${operador}) — ${nome}` +
           (pausados ? ` · ${pausados} pausado(s)` : "") +
-          (loteMudou ? ` · ${rotuloLote}: ${loteNovo || "apagado"}` : ""),
+          (loteMudou ? ` · ${rotuloLote}: ${textoLoteNovo}` : ""),
       );
       setTimeout(() => setSalvo(""), 5000);
       fechar();
@@ -604,7 +612,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                 <SeloAtual a={atuais[i.id]} opcao={opcao} />
                 {lotes[i.id] && (
                   <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-xs font-bold text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">
-                    Lote {lotes[i.id].lote}
+                    Lote {lotesPreenchidos(lotes[i.id]).join(" / ")}
                   </span>
                 )}
                 {comFotos && fotosContagem[i.id] > 0 && (
@@ -858,7 +866,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                 )}
 
                 {aberto && rotuloLote && (
-                  <label className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1">
                     <span className="text-sm font-semibold text-stone-700 dark:text-slate-300">
                       {rotuloLote}
                       {lotes[aberto.id]?.por && (
@@ -867,22 +875,32 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                         </span>
                       )}
                     </span>
-                    <input
-                      value={lote}
-                      onChange={(e) => setLote(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !falta && !salvando) salvar();
-                      }}
-                      maxLength={40}
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      placeholder="Digite o lote"
-                      className="h-20 w-full rounded-2xl border-4 border-stone-300 bg-white px-4 font-mono text-4xl font-bold text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
-                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      {lote.map((v, n) => (
+                        <label key={n} className="flex min-w-0 flex-col gap-0.5">
+                          <span className="text-xs font-bold uppercase text-stone-500 dark:text-slate-400">Lote {n + 1}</span>
+                          <input
+                            value={v}
+                            onChange={(e) => {
+                              const valor = e.target.value.toUpperCase();
+                              setLote((l) => l.map((x, k) => (k === n ? valor : x)) as [string, string, string]);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !falta && !salvando) salvar();
+                            }}
+                            maxLength={40}
+                            autoComplete="off"
+                            autoCapitalize="characters"
+                            placeholder="—"
+                            className="h-16 w-full min-w-0 rounded-2xl border-4 border-stone-300 bg-white px-2 text-center font-mono text-2xl font-bold text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+                          />
+                        </label>
+                      ))}
+                    </div>
                     {outros.size > 0 && loteMudou && (
                       <span className="text-xs text-stone-500 dark:text-slate-400">Vale também pros {outros.size} pedido(s) marcados acima.</span>
                     )}
-                  </label>
+                  </div>
                 )}
 
                 {aberto && comFotos && (
@@ -969,7 +987,16 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                       {rotuloLote && (
                         <Campo rotulo={rotuloLote}>
                           {lotes[aberto.id] ? (
-                            <span className="rounded-md bg-violet-600 px-2 py-0.5 font-mono font-extrabold text-white">{lotes[aberto.id].lote}</span>
+                            <span className="flex flex-wrap gap-1">
+                              {[lotes[aberto.id].lote, lotes[aberto.id].lote2, lotes[aberto.id].lote3].map((v, n) =>
+                                v ? (
+                                  <span key={n} className="rounded-md bg-violet-600 px-2 py-0.5 font-mono font-extrabold text-white">
+                                    <span className="mr-1 text-[10px] font-semibold opacity-80">L{n + 1}</span>
+                                    {v}
+                                  </span>
+                                ) : null,
+                              )}
+                            </span>
                           ) : null}
                         </Campo>
                       )}

@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Foto, FotoServico, quando, type Alvo } from "@/components/ApontamentoComum";
-import { buscarHistoricoSetor, type Apontamento, type LoteSetor } from "@/lib/api";
+import { buscarHistoricoSetor, lotesPreenchidos, type Apontamento, type LoteSetor } from "@/lib/api";
 import { emAndamento, type ConfigSetor } from "@/lib/apontamento";
 import type { ItemFollowUp } from "@/lib/types";
 
@@ -136,7 +136,7 @@ export default function ApontamentoHistorico({
                         {a.status === "pausado" ? "⏸" : "▶"} {nome(a)} · {a.status === "pausado" ? "pausado" : "desde"} {quando(a.em)}
                         {a.item_id && lotes[a.item_id] && (
                           <span className="ml-1.5 rounded bg-violet-600 px-1.5 py-0.5 font-mono text-xs font-extrabold text-white">
-                            Lote {lotes[a.item_id].lote}
+                            Lote {lotesPreenchidos(lotes[a.item_id]).join(" / ")}
                           </span>
                         )}
                       </button>
@@ -209,7 +209,7 @@ export default function ApontamentoHistorico({
                     <span className="text-sm font-bold text-stone-800 dark:text-slate-200">{l.operador ?? "—"}</span>
                     {l.item_id && lotes[l.item_id] && (
                       <span className="rounded-md bg-violet-600 px-2 py-0.5 font-mono text-sm font-extrabold text-white dark:bg-violet-500">
-                        Lote {lotes[l.item_id].lote}
+                        Lote {lotesPreenchidos(lotes[l.item_id]).join(" / ")}
                       </span>
                     )}
                   </span>

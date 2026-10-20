@@ -249,23 +249,38 @@ def remover_foto(setor: str, foto_id: str, por: str | None) -> bool:
     return True
 
 
+def texto_lotes(lote: str | None, lote2: str | None = None, lote3: str | None = None) -> str:
+    """'A1', None, 'C3' → 'L1 A1 · L3 C3'; só o Lote 1 → 'A1' (como era antes)."""
+    if not lote2 and not lote3:
+        return lote or ""
+    return " · ".join(f"L{n} {v}" for n, v in ((1, lote), (2, lote2), (3, lote3)) if v)
+
+
 def lotes(setor: str) -> dict[str, dict]:
-    """Lote gravado de cada pedido do setor (item_id → {lote, por, em})."""
+    """Lotes gravados de cada pedido do setor (item_id → {lote, lote2, lote3, por, em})."""
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute("select item_id, lote, por, em from lotes_setor where setor = %s", (setor,))
-        return {str(i): {"lote": lote, "por": por, "em": em.isoformat()} for i, lote, por, em in cur.fetchall()}
+        cur.execute("select item_id, lote, lote2, lote3, por, em from lotes_setor where setor = %s", (setor,))
+        return {str(i): {"lote": l1, "lote2": l2, "lote3": l3, "por": por, "em": em.isoformat()}
+                for i, l1, l2, l3, por, em in cur.fetchall()}
 
 
-def salvar_lote(setor: str, item_id: str, lote: str | None, por: str | None,
-                outros_itens: list[str] | None = None) -> dict[str, dict] | None:
-    """Grava o lote do pedido (+ `outros_itens` do mesmo desenho apontados junto)
-    e anota no Registro diário. Vazio apaga. None = pedido não existe."""
-    cfg = _setor(setor)
-    if not cfg.get("lote"):
-        raise ValueError(f"{cfg['nome']} não tem lote.")
+def _limpar_lote(lote: str | None) -> str | None:
     lote = re.sub(r"\s+", " ", str(lote or "")).strip().upper() or None
     if lote and (len(lote) > LOTE_MAX or not _LOTE_OK.fullmatch(lote)):
         raise ValueError(f"Lote inválido (letras, números, - . / e no máximo {LOTE_MAX} caracteres).")
+    return lote
+
+
+def salvar_lote(setor: str, item_id: str, lote: str | None, por: str | None,
+                outros_itens: list[str] | None = None, lote2: str | None = None,
+                lote3: str | None = None) -> dict[str, dict] | None:
+    """Grava os lotes do pedido — Lote 1, 2 e 3 (pedido do usuário, 20/10/2026)
+    — (+ `outros_itens` do mesmo desenho apontados junto) e anota no Registro
+    diário. Tudo vazio apaga. None = pedido não existe."""
+    cfg = _setor(setor)
+    if not cfg.get("lote"):
+        raise ValueError(f"{cfg['nome']} não tem lote.")
+    novos = (_limpar_lote(lote), _limpar_lote(lote2), _limpar_lote(lote3))
     alvos = list(dict.fromkeys([item_id, *(outros_itens or [])]))
     if len(alvos) > OUTROS_MAX + 1:
         raise ValueError(f"Pedidos demais de uma vez (máximo {OUTROS_MAX + 1}).")
@@ -275,19 +290,21 @@ def salvar_lote(setor: str, item_id: str, lote: str | None, por: str | None,
         if item_id not in achados:
             return None
         for alvo in [a for a in alvos if a in achados]:
-            cur.execute("select lote from lotes_setor where setor = %s and item_id = %s", (setor, alvo))
-            antes = (cur.fetchone() or [None])[0]
-            if antes == lote:
+            cur.execute("select lote, lote2, lote3 from lotes_setor where setor = %s and item_id = %s", (setor, alvo))
+            antes = tuple(cur.fetchone() or (None, None, None))
+            if antes == novos:
                 continue
-            if lote:
+            if any(novos):
                 cur.execute(
-                    """insert into lotes_setor (setor, item_id, lote, por) values (%s, %s, %s, %s)
-                       on conflict (setor, item_id) do update set lote = excluded.lote, por = excluded.por, em = now()""",
-                    (setor, alvo, lote, por),
+                    """insert into lotes_setor (setor, item_id, lote, lote2, lote3, por) values (%s, %s, %s, %s, %s, %s)
+                       on conflict (setor, item_id) do update set lote = excluded.lote, lote2 = excluded.lote2,
+                         lote3 = excluded.lote3, por = excluded.por, em = now()""",
+                    (setor, alvo, *novos, por),
                 )
             else:
                 cur.execute("delete from lotes_setor where setor = %s and item_id = %s", (setor, alvo))
-            texto = f"{cfg['nome']}: {cfg['lote']} {lote}" if lote else f"{cfg['nome']}: apagou o lote ({antes})"
+            texto = (f"{cfg['nome']}: {cfg['lote']} {texto_lotes(*novos)}" if any(novos)
+                     else f"{cfg['nome']}: apagou o lote ({texto_lotes(*antes)})")
             cur.execute(
                 "insert into follow_up_registros (item_id, data, texto, autor) values (%s, %s, %s, %s)",
                 (alvo, datetime.now(_BRASILIA).date(), texto, por),

@@ -945,21 +945,31 @@ export async function apontarItem(
 }
 
 // Lote do pedido no setor (Pintura) — igual ao NRI do Corte; vazio apaga.
+// Pedido do usuário (20/10/2026): 3 lotes por pedido — "lote" é o Lote 1.
 export interface LoteSetor {
-  lote: string;
+  lote: string | null;
+  lote2?: string | null;
+  lote3?: string | null;
   por: string | null;
   em: string;
+}
+
+/** Lotes preenchidos, na ordem: ["A1", "", "C3"] → texto "A1 / C3" na tela. */
+export function lotesPreenchidos(l: LoteSetor | undefined): string[] {
+  return l ? [l.lote, l.lote2, l.lote3].filter((v): v is string => !!v) : [];
 }
 
 export async function salvarLoteSetor(
   setor: string,
   itemId: string,
-  lote: string,
+  lotes: [string, string, string],
   por: string | null,
   outrosItens: string[] = [],
 ): Promise<Record<string, LoteSetor>> {
   const r = await postarApontamento(`${CALC_ENGINE_URL}/apontamentos/${setor}/itens/${itemId}/lote`, {
-    lote,
+    lote: lotes[0],
+    lote2: lotes[1],
+    lote3: lotes[2],
     por,
     outros_itens: outrosItens,
   });

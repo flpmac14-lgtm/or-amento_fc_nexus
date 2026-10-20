@@ -98,13 +98,14 @@ def registro(dias: int = 1) -> dict:
 
         # Lote (Pintura) — só o valor atual fica gravado (lotes_setor).
         cur.execute(
-            """select l.setor, l.em, l.por, l.lote, i.po, i.desenho from lotes_setor l
+            """select l.setor, l.em, l.por, l.lote, l.lote2, l.lote3, i.po, i.desenho from lotes_setor l
                join follow_up_itens i on i.id = l.item_id where l.em >= %s""",
             (ini,),
         )
-        for setor, em, por, lote, po, desenho in cur.fetchall():
+        for setor, em, por, lote, lote2, lote3, po, desenho in cur.fetchall():
             if setor in apontamentos_setor.SETORES:
-                add(setor, em, por, f"{apontamentos_setor.SETORES[setor].get('lote') or 'Lote'}: {lote}",
+                add(setor, em, por,
+                    f"{apontamentos_setor.SETORES[setor].get('lote') or 'Lote'}: {apontamentos_setor.texto_lotes(lote, lote2, lote3)}",
                     f"{desenho or '—'} · PO {po or '—'}", None, "andamento", [(po, desenho)])
 
         cur.execute(

@@ -614,7 +614,8 @@ def apontamentos_lote(setor: str, item_id: str, pedido: dict) -> dict:
     """Lote do pedido no setor (Pintura) — igual ao NRI do Corte; vazio apaga."""
     try:
         lotes = apontamentos_setor.salvar_lote(setor, item_id, pedido.get("lote"), pedido.get("por"),
-                                               pedido.get("outros_itens") or [])
+                                               pedido.get("outros_itens") or [], pedido.get("lote2"),
+                                               pedido.get("lote3"))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except BancoNaoConfigurado as e:
