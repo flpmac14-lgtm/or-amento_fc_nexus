@@ -26,6 +26,7 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
   }, [comColeta, cliente]);
   const [data, setData] = useState("");
   const dataValida = data || datas[0]?.[0] || "";
+  const [comNf, setComNf] = useState(false);
 
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
@@ -40,6 +41,7 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
     const qs = new URLSearchParams({ data: dataValida });
     if (cliente) qs.set("cliente", cliente);
     if (fracionado) qs.set("fracionado", "1");
+    if (comNf) qs.set("nf", "1");
     window.open(`/follow-up/coleta?${qs}`, "_blank");
     onFechar();
   }
@@ -87,6 +89,15 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
           ) : (
             <span className="text-sm text-stone-600 dark:text-slate-400">Nenhuma data de coleta marcada para esse cliente.</span>
           )}
+        </label>
+        <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={comNf}
+            onChange={(e) => setComNf(e.target.checked)}
+            className="h-4 w-4 accent-green-600 dark:accent-cyan-500"
+          />
+          Com Nota fiscal <span className="text-xs text-stone-500 dark:text-slate-400">(NF e dia de emissão de cada pedido)</span>
         </label>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button

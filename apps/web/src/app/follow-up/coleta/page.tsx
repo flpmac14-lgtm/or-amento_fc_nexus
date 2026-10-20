@@ -9,6 +9,10 @@
 // &ativos=1 (só pedidos ativos, ST = A — usado pela aba Consulta).
 // Coleta fracionada (pedido do usuário): botão discreto deixa editar a Qtd
 // de cada pedido só neste relatório; Qtd 0 tira o pedido da folha.
+// Com Nota fiscal (pedido do usuário, 20/10/2026; ?nf=1): colunas NF e
+// Emissão depois da MAC. A NF é a do Follow up (vem da Controle de obras); se
+// não tiver, a do ERP pelo pedido/item mais perto da data da coleta. O dia de
+// emissão vem do ERP (FN_NFS, /api/follow-up/notas-fiscais).
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -21,6 +25,35 @@ import type { ItemFollowUp } from "@/lib/types";
 // Pedido do usuário: sem Prazo, Cliente, pintura (já está na faixa do grupo),
 // Coleta (já está no título) e NF; no fim, 3 colunas em branco pra anotar o lote.
 const COLUNAS = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem", "N° Lote 1", "N° Lote 2", "N° Lote 3"];
+const COLUNAS_NF = ["NF", "Emissão"];
+
+interface NotasFiscais {
+  po: Record<string, [string, string][]>; // "4501690746-010" → [[NF, emissão AAAA-MM-DD], …]
+  nf: Record<string, string>; // NF → emissão
+}
+interface NotaItem {
+  nf: string;
+  emissao: string | null;
+}
+
+// "4501690746-10" / "4501690746-010" → "4501690746-010" (mesma chave do ERP).
+function chavePo(po: string): string {
+  const s = po.replace(/\s+/g, "").toUpperCase();
+  const m = /^(.*?)-0*(\d+)$/.exec(s);
+  return m ? `${m[1]}-${m[2].padStart(3, "0")}` : s;
+}
+
+function notasDoItem(i: ItemFollowUp, n: NotasFiscais): NotaItem[] {
+  // "8039" / "8039.0" / "8039/8040" → ["8039"] / ["8039", "8040"]
+  const doFollowUp = [...new Set((i.nf ?? "").split(/\.0\b|[^\d]+/).map((s) => s.replace(/^0+/, "")).filter(Boolean))];
+  if (doFollowUp.length) return doFollowUp.map((nf) => ({ nf, emissao: n.nf[nf] ?? null }));
+  const doErp = n.po[chavePo(i.po)] ?? [];
+  if (!doErp.length) return [];
+  // Mais de uma NF pro mesmo pedido/item (entrega parcial, reenvio): a mais perto da coleta.
+  const alvo = i.coleta_data ? Date.parse(i.coleta_data) : Date.now();
+  const [nf, emissao] = doErp.reduce((a, b) => (Math.abs(Date.parse(b[1]) - alvo) < Math.abs(Date.parse(a[1]) - alvo) ? b : a));
+  return [{ nf, emissao }];
+}
 
 interface Grupo {
   chave: string;
@@ -77,6 +110,25 @@ function Relatorio() {
   const [fracionado, setFracionado] = useState(() => params.get("fracionado") === "1");
   const [qtdColeta, setQtdColeta] = useState<Record<string, number>>({});
   const [gerandoEmail, setGerandoEmail] = useState(false);
+  const [comNf, setComNf] = useState(() => params.get("nf") === "1");
+  const [notas, setNotas] = useState<NotasFiscais | null>(null);
+  const [erroNotas, setErroNotas] = useState("");
+
+  // Só busca as NFs quando a opção é ligada (uma vez).
+  useEffect(() => {
+    if (!comNf || notas) return;
+    let ativo = true;
+    fetch("/api/follow-up/notas-fiscais", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.erro ?? `Erro ${r.status}`);
+        if (ativo) setNotas(j.notas as NotasFiscais);
+      })
+      .catch((e: Error) => ativo && setErroNotas(`Não consegui buscar as notas fiscais: ${e.message}`));
+    return () => {
+      ativo = false;
+    };
+  }, [comNf, notas]);
 
   useEffect(() => {
     document.title = `Coleta ${formatarDataBr(data)}${cliente ? ` - ${cliente}` : ""}`; // nome sugerido do PDF
@@ -108,6 +160,12 @@ function Relatorio() {
   const pecas = naFolha.reduce((s, i) => s + qtd(i), 0);
   const peso = naFolha.reduce((s, i) => s + pesoColeta(i), 0);
   const algumParcial = fracionado && itens.some((i) => qtd(i) !== (i.quantidade ?? 0));
+  const colunas = comNf ? [...COLUNAS.slice(0, 4), ...COLUNAS_NF, ...COLUNAS.slice(4)] : COLUNAS;
+  const notasDe = (i: ItemFollowUp) => (notas ? notasDoItem(i, notas) : []);
+  const textoNf = (i: ItemFollowUp, campo: "nf" | "emissao", separador: string) =>
+    notasDe(i)
+      .map((n) => (campo === "nf" ? n.nf : formatarDataBr(n.emissao)))
+      .join(separador);
 
   // Pedido do usuário: igual ao alívio de tensão, o relatório já sai como
   // e-mail do Outlook pra encaminhar (lib/emailEml.ts). Mesmo conteúdo da
@@ -124,7 +182,7 @@ function Relatorio() {
       ).filter((im): im is ImagemEml => !!im);
       const temCid = new Set(imagens.map((im) => im.cid));
       const td = "border:1px solid #a8a29e;padding:3px 6px;font-size:12px;text-align:center";
-      const colunas = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem", "Peso (kg)"];
+      const colunas = ["Foto", "PO", "Qtd", "MAC", ...(comNf ? COLUNAS_NF : []), "Desenho", "Descrição", "Tipagem", "Peso (kg)"];
       const linhas = grupos
         .map((g) => {
           const doGrupo = fracionado ? g.itens.filter((i) => qtd(i) > 0) : g.itens;
@@ -142,7 +200,12 @@ function Relatorio() {
               return (
                 `<tr><td style="${td}">${foto}</td><td style="${td}">${escaparHtml(i.po)}</td>` +
                 `<td style="${td}">${qtd(i)}${qtd(i) !== (i.quantidade ?? 0) ? ` <span style="color:#78716c">de ${i.quantidade ?? 0}</span>` : ""}</td>` +
-                `<td style="${td}">${escaparHtml(i.mac)}</td><td style="${td}">${escaparHtml(i.desenho)}</td>` +
+                `<td style="${td}">${escaparHtml(i.mac)}</td>` +
+                (comNf
+                  ? `<td style="${td}">${escaparHtml(textoNf(i, "nf", " / "))}</td>` +
+                    `<td style="${td}">${escaparHtml(textoNf(i, "emissao", " / "))}</td>`
+                  : "") +
+                `<td style="${td}">${escaparHtml(i.desenho)}</td>` +
                 `<td style="${td};text-align:left">${escaparHtml(i.descricao)}</td><td style="${td}">${escaparHtml(i.tipagem)}</td>` +
                 `<td style="${td}">${formatarNumero(pesoColeta(i), 2)}</td></tr>`
               );
@@ -191,8 +254,20 @@ function Relatorio() {
         )}
         <button
           type="button"
+          onClick={() => setComNf((v) => !v)}
+          title="Inclui as colunas NF e Emissão (dia de emissão da nota, do ERP) de cada pedido"
+          className={`rounded-lg px-3 py-2 text-xs ${
+            comNf
+              ? "border border-blue-500 bg-blue-50 font-semibold text-blue-800"
+              : "text-stone-500 hover:bg-stone-300/60 hover:text-stone-800"
+          }`}
+        >
+          {comNf ? (notas || erroNotas ? "✓ Com Nota fiscal" : "Buscando notas…") : "Com Nota fiscal"}
+        </button>
+        <button
+          type="button"
           onClick={criarEmail}
-          disabled={gerandoEmail || naFolha.length === 0}
+          disabled={gerandoEmail || naFolha.length === 0 || (comNf && !notas && !erroNotas)}
           title="Baixa um e-mail pronto (.eml): abra o arquivo e o Outlook cria a mensagem nova com o relatório — só pôr o destinatário e enviar"
           className="rounded-lg border border-blue-600 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
         >
@@ -240,6 +315,8 @@ function Relatorio() {
           </div>
         </header>
 
+        {comNf && erroNotas && <p className="text-xs text-red-600 print:hidden">{erroNotas}</p>}
+
         {itens.length === 0 ? (
           <p className="py-10 text-center text-stone-500">
             Nenhum pedido{cliente ? ` do cliente ${cliente}` : ""} com coleta em {formatarDataBr(data)}.
@@ -248,7 +325,7 @@ function Relatorio() {
           <table className="w-full border-collapse text-[10px]">
             <thead>
               <tr className="bg-stone-100">
-                {COLUNAS.map((c) => (
+                {colunas.map((c) => (
                   <th key={c} className="border border-stone-400 px-1 py-1 text-center font-bold uppercase">
                     {c}
                   </th>
@@ -262,7 +339,7 @@ function Relatorio() {
               return (
                 <tbody key={g.chave} className={doGrupo.length === 0 ? "print:hidden" : undefined}>
                   <tr className="break-after-avoid" style={{ backgroundColor: fundo }}>
-                    <td colSpan={COLUNAS.length} className="border border-stone-400 px-2 py-1 text-[11px]">
+                    <td colSpan={colunas.length}className="border border-stone-400 px-2 py-1 text-[11px]">
                       <span className="mr-2 inline-block h-3 w-3 rounded-sm align-middle" style={{ backgroundColor: cor }} />
                       <strong>Pintura:</strong> COR2 <strong>{g.cor2 || "—"}</strong> · COR-2 <strong>{g.cor_2 || "—"}</strong> ·
                       Plano <strong>{g.plano || "—"}</strong>
@@ -306,12 +383,22 @@ function Relatorio() {
                         )}
                       </td>
                       <td className="border border-stone-400 px-1 font-mono">{i.mac}</td>
+                      {comNf && (
+                        <>
+                          <td className="whitespace-pre-line border border-stone-400 px-1 font-mono font-semibold">
+                            {notas ? textoNf(i, "nf", "\n") || "—" : "…"}
+                          </td>
+                          <td className="whitespace-pre-line border border-stone-400 px-1">
+                            {notas ? textoNf(i, "emissao", "\n") || "—" : "…"}
+                          </td>
+                        </>
+                      )}
                       <td className="border border-stone-400 px-1 font-mono">{i.desenho}</td>
                       <td className="border border-stone-400 px-1 text-[9px]">{i.descricao}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.tipagem}</td>
-                      <td className="w-[24mm] border border-stone-400" />
-                      <td className="w-[24mm] border border-stone-400" />
-                      <td className="w-[24mm] border border-stone-400" />
+                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
+                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
+                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
                     </tr>
                   ))}
                 </tbody>

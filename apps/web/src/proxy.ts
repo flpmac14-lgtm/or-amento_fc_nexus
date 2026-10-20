@@ -79,7 +79,9 @@ export async function proxy(request: NextRequest) {
   // E o painel /registro pro marcelo (podeVerRegistro — pedido do usuário, 19/10/2026).
   const apiQualidade = request.nextUrl.pathname.startsWith("/api/qualidade/") && podeVerQualidade(user);
   const registro = request.nextUrl.pathname.startsWith(ROTA_REGISTRO) && podeVerRegistro(user);
-  if (user && soFollowUp && !apiQualidade && !registro && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
+  // NF de cada pedido do relatório de coleta "com Nota fiscal" (a rota confere o login).
+  const apiFollowUp = request.nextUrl.pathname.startsWith("/api/follow-up/");
+  if (user && soFollowUp && !apiQualidade && !registro && !apiFollowUp && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ erro: `Conta com acesso restrito (${user.app_metadata?.acesso ?? ACESSO_SO_FOLLOW_UP}).` }, { status: 403 });
     }

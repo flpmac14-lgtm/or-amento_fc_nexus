@@ -503,6 +503,69 @@ def sincronizar_pedidos(simular: bool = False) -> str | None:
     return resumo
 
 
+# --- NF de cada pedido (relatório de coleta) ---------------------------------
+# Pedido do usuário (20/10/2026): opção "com Nota fiscal" no relatório de
+# coleta, com a NF de cada pedido e o dia de emissão vindos do ERP. Cada item
+# de NF de saída guarda o pedido do cliente e o item (PEDCOMPRA +
+# PEDCOMPRAITEM: 4501690746 + 10 = 4501690746-010 do Follow up). Só número e
+# data de emissão (nada de valor) — tabela follow_up_notas_fiscais (0054).
+ESTADO_NOTAS_PEDIDO = RAIZ / "sincronizar_financeiro_notas_pedido.estado"  # hash (fora do git)
+DIAS_NOTAS_PEDIDO = 400
+SQL_NOTAS_PEDIDO = """
+SELECT DISTINCT F.NRONOTA, F.DTEMISSAO, I.PEDCOMPRA, I.PEDCOMPRAITEM
+FROM FN_NFSITENS I
+INNER JOIN FN_NFS F ON I.NFS = F.CODIGO
+WHERE F.DTEMISSAO >= ? AND F.ENTSAIDA = 'S' AND F.STATUSNF = 'F' AND F.FILIAL = ?
+"""
+
+
+def montar_notas_pedido(hoje: date | None = None) -> dict:
+    from datetime import timedelta
+
+    hoje = hoje or date.today()
+    por_po: dict[str, list[list[str]]] = {}
+    por_nf: dict[str, str] = {}
+    with _conectar_erp() as erp:
+        cur = erp.cursor()
+        cur.execute(SQL_NOTAS_PEDIDO, hoje - timedelta(days=DIAS_NOTAS_PEDIDO), FILIAL)
+        for nronota, emissao, pedcompra, item in cur.fetchall():
+            nf = (nronota or "").strip().lstrip("0")
+            if not nf or not emissao:
+                continue
+            dia = emissao.date().isoformat()
+            por_nf[nf] = dia
+            po = re.sub(r"\s+", "", (pedcompra or "").upper())
+            if po and item is not None:
+                lista = por_po.setdefault(f"{po}-{int(item):03d}", [])
+                if [nf, dia] not in lista:
+                    lista.append([nf, dia])
+    for lista in por_po.values():
+        lista.sort(key=lambda n: (n[1], int(n[0]) if n[0].isdigit() else 0))
+    return {"po": por_po, "nf": por_nf}
+
+
+def sincronizar_notas_pedido(simular: bool = False) -> str | None:
+    """Grava NF × pedido se mudou (None = nada mudou)."""
+    dados = montar_notas_pedido()
+    texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
+    assinatura = hashlib.sha256(texto.encode()).hexdigest()
+    resumo = f"{len(dados['nf'])} NFs · {len(dados['po'])} pedidos/itens com NF"
+    if simular:
+        return resumo
+    if ESTADO_NOTAS_PEDIDO.exists() and ESTADO_NOTAS_PEDIDO.read_text(encoding="utf-8").strip() == assinatura:
+        return None
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into follow_up_notas_fiscais (id, dados, gerado_em) values (1, %s, %s)
+               on conflict (id) do update set dados = excluded.dados, gerado_em = excluded.gerado_em""",
+            (texto, datetime.now(timezone.utc)),
+        )
+        conn.commit()
+    ESTADO_NOTAS_PEDIDO.write_text(assinatura, encoding="utf-8")
+    return resumo
+
+
 if __name__ == "__main__":
     print(sincronizar(simular="--simular" in sys.argv) or "sem alteração")
     print(sincronizar_pedidos(simular="--simular" in sys.argv) or "pedidos: sem alteração")
+    print(sincronizar_notas_pedido(simular="--simular" in sys.argv) or "NF × pedido: sem alteração")
