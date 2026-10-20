@@ -118,3 +118,24 @@ export function NumeroPrograma({ programa, className = "" }: { programa: string;
     </span>
   );
 }
+
+/** Botão "📄 PDF" ao lado do nº — pedido do usuário (20/10/2026): a Qualidade
+ *  abre o PDF do plano de corte com 1 toque (Cortados e Histórico do corte). */
+export function BotaoPdfPrograma({ programa }: { programa: string }) {
+  const { pdfsDe, abrir } = usePdfsCorte();
+  const n = pdfsDe(programa).length;
+  if (!n) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        abrir(programa);
+      }}
+      title={`Abrir o PDF do plano de corte${n > 1 ? ` (${n} arquivos)` : ""}`}
+      className="ml-1.5 rounded border border-blue-300 px-1.5 py-0.5 align-middle font-sans text-[11px] font-semibold text-blue-700 hover:bg-blue-50 dark:border-sky-700 dark:text-sky-400 dark:hover:bg-slate-800"
+    >
+      📄 PDF
+    </button>
+  );
+}

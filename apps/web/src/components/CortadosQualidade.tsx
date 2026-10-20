@@ -6,6 +6,7 @@
 // Só consulta: mesma lista da aba Corte (GET /corte/programas), só finalizados.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { BotaoPdfPrograma } from "@/components/PdfPrograma";
 import { listarProgramasCorte } from "@/lib/api";
 import { rotuloCliente } from "@/lib/clientes";
 import { formatarNumero } from "@/lib/format";
@@ -230,6 +231,7 @@ export default function CortadosQualidade() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className="font-mono text-base font-bold text-stone-900 dark:text-white">{p.programa}</span>
+                      <BotaoPdfPrograma programa={p.programa} />
                       <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${m.etiqueta}`}>
                         {m.icone} {m.rotulo}
                       </span>

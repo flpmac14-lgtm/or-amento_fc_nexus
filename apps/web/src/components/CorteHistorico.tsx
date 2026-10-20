@@ -6,6 +6,7 @@
 // Em "Finalizado" mostra o tempo desde o último "Cortando" (app/corte.py::historico).
 
 import { useEffect, useMemo, useState } from "react";
+import { BotaoPdfPrograma } from "@/components/PdfPrograma";
 import { listarHistoricoCorte } from "@/lib/api";
 import { formatarNumero } from "@/lib/format";
 import { MAQUINAS, infoMaquina } from "@/lib/maquinaCorte";
@@ -318,6 +319,7 @@ export default function CorteHistorico() {
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-base font-bold">
                   {l.programa}
+                  <BotaoPdfPrograma programa={l.programa} />
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5">
                   <span className={`whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold ${infoMaquina(l.maquina).etiqueta}`}>

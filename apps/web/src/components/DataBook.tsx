@@ -22,6 +22,7 @@ import type { ItemDatabook } from "@/lib/types";
 import FollowUpSino from "@/components/FollowUpSino";
 import DataBookApontar, { FaixaEtapas } from "@/components/DataBookApontar";
 import CorteHistorico from "@/components/CorteHistorico";
+import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import { IconeCadeado } from "@/components/FollowUpEdicao";
 
 type ModoDatabook = "apontar" | "planilha" | "corte";
@@ -483,7 +484,9 @@ export default function DataBook({ somenteLeitura = false }: { somenteLeitura?: 
       </div>
 
       {modo === "corte" ? (
-        <CorteHistorico />
+        <ProvedorPdfsCorte>
+          <CorteHistorico />
+        </ProvedorPdfsCorte>
       ) : modo === "apontar" ? (
         <DataBookApontar
           itens={itens}

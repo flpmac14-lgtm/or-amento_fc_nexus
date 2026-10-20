@@ -260,7 +260,11 @@ export default function ModuloFollowUp({
       {visao === "databook" && <DataBook somenteLeitura={perfil === "follow_up"} />}
       {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
-      {visao === "cortados" && <CortadosQualidade />}
+      {visao === "cortados" && (
+        <ProvedorPdfsCorte>
+          <CortadosQualidade />
+        </ProvedorPdfsCorte>
+      )}
       {visao === "consulta" && (
         <Consulta
           key="consulta"
