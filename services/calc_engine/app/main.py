@@ -123,6 +123,8 @@ from app.databook import excluir_status as excluir_status_databook
 from app.databook import historico as historico_databook
 from app.databook import listar_notificacoes as listar_notificacoes_databook
 from app import databook_etapas
+from app.carteira_weir import PlanilhaInvalida as PlanilhaWeirInvalida
+from app.carteira_weir import preencher as preencher_carteira_weir
 from app.follow_up import listar as listar_follow_up
 from app.follow_up import obter_midia as obter_midia_follow_up
 from app.follow_up_excel import gerar_excel as gerar_excel_follow_up
@@ -181,6 +183,8 @@ app.add_middleware(
     allow_origins=["http://localhost:3000", *_ORIGENS_EXTRA],
     allow_methods=["*"],
     allow_headers=["*"],
+    # Resumo da Carteira WEIR preenchida (app/carteira_weir.py) vai no cabeçalho.
+    expose_headers=["X-Resumo"],
 )
 
 
@@ -398,6 +402,25 @@ def follow_up_midia(sha256: str) -> Response:
     conteudo, tipo = achado
     return Response(content=conteudo, media_type=tipo,
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.post("/follow-up/carteira-weir")
+def follow_up_carteira_weir(file: UploadFile) -> Response:
+    """Follow up Report da WEIR com a coluna Fornecedor Confirmação preenchida
+    (coleta / entregue / NF / À confirmar / Não consta) — app/carteira_weir.py."""
+    import json
+
+    try:
+        conteudo, resumo = preencher_carteira_weir(file.file.read())
+    except PlanilhaWeirInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=follow-up-report-weir.xlsx", "X-Resumo": json.dumps(resumo)},
+    )
 
 
 @app.post("/follow-up/excel")

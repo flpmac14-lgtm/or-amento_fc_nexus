@@ -230,6 +230,45 @@ export async function extrairPedidosWeir(arquivos: File[]): Promise<RespostaPedi
 
 /** Planilha dos pedidos WEIR extraídos, no formato da planilha de
  * controle que o usuário já usa. */
+export interface ResumoCarteiraWeir {
+  linhas: number;
+  entregues: number;
+  faturados: number;
+  com_coleta: number;
+  a_confirmar: number;
+  nao_consta: number;
+  cancelados: number;
+}
+
+/** Follow up Report da WEIR (planilha deles) → a mesma planilha com a coluna
+ *  "Fornecedor Confirmação" preenchida (services/calc_engine/app/carteira_weir.py).
+ *  Baixa o arquivo com o nome original + " - Macfab" e devolve o resumo. */
+export async function preencherCarteiraWeir(arquivo: File): Promise<ResumoCarteiraWeir> {
+  const corpo = new FormData();
+  corpo.append("file", arquivo);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/follow-up/carteira-weir`, { method: "POST", body: corpo });
+  if (!resposta.ok) {
+    const texto = await resposta.text().catch(() => "");
+    let detalhe = texto;
+    try {
+      detalhe = JSON.parse(texto).detail ?? texto;
+    } catch {
+      // texto puro
+    }
+    throw new Error(`Falha ao preencher a carteira da WEIR (${resposta.status}). ${detalhe}`);
+  }
+  const resumo = JSON.parse(resposta.headers.get("X-Resumo") ?? "{}") as ResumoCarteiraWeir;
+  const url = URL.createObjectURL(await resposta.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${arquivo.name.replace(/\.xlsx?$/i, "")} - Macfab.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return resumo;
+}
+
 export async function baixarExcelPedidoWeir(itens: ItemPedidoWeir[]): Promise<void> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/pedidos-weir/excel`, {
     method: "POST",

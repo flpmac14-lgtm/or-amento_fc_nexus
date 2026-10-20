@@ -31,6 +31,7 @@ import type { ItemFollowUp, RespostaFollowUp } from "@/lib/types";
 import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } from "@/components/FollowUpDetalhe";
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
+import FollowUpCarteiraWeir from "@/components/FollowUpCarteiraWeir";
 import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
@@ -797,6 +798,7 @@ export default function FollowUp({
           >
             Relatório de coleta
           </button>
+          <FollowUpCarteiraWeir />
           <button
             type="button"
             onClick={() => setRelatorioAlivio(true)}
