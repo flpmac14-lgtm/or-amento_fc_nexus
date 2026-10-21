@@ -295,6 +295,67 @@ export default function FollowUp({
     [editadoPor, aplicarItem],
   );
 
+  // Arrastar pra copiar (alça do Excel) — pedido do usuário (21/10/2026): o
+  // quadradinho no canto da célula editável; arrasta pra cima/baixo e, ao
+  // soltar, o valor vai pras mesmas colunas dos pedidos do meio e já salva.
+  // linhas = as linhas da página na hora em que começou a arrastar.
+  const [arrasto, setArrasto] = useState<{
+    campo: string;
+    valor: string;
+    origem: number;
+    fim: number;
+    linhas: ItemFollowUp[];
+  } | null>(null);
+  const emArrasto = !!arrasto;
+  const arrastoAtual = useRef(arrasto); // onde o mouse parou, pra hora de soltar
+  useEffect(() => {
+    arrastoAtual.current = arrasto;
+  }, [arrasto]);
+
+  useEffect(() => {
+    if (!emArrasto) return;
+    document.body.style.userSelect = "none";
+    async function soltar() {
+      const fim = arrastoAtual.current;
+      setArrasto(null);
+      document.body.style.userSelect = "";
+      if (!fim || fim.fim === fim.origem) return;
+      const [de, ate] = fim.origem < fim.fim ? [fim.origem + 1, fim.fim] : [fim.fim, fim.origem - 1];
+      const alvos = fim.linhas.slice(de, ate + 1);
+      const campo = fim.campo;
+      const valor = fim.valor;
+      setAvisoSalvo({ ok: true, texto: `Copiando para ${alvos.length} pedido(s)…` });
+      let falhou = 0;
+      // Poucos de cada vez pra não afogar o servidor.
+      for (let n = 0; n < alvos.length; n += 5) {
+        const r = await Promise.allSettled(alvos.slice(n, n + 5).map((i) => salvarCampo(i, campo, valor)));
+        falhou += r.filter((x) => x.status === "rejected").length;
+      }
+      setAvisoSalvo(
+        falhou
+          ? { ok: false, texto: `${alvos.length - falhou} salvo(s), ${falhou} com erro — confira e tente de novo` }
+          : { ok: true, texto: `✓ Copiado e salvo em ${alvos.length} pedido(s)` },
+      );
+    }
+    window.addEventListener("mouseup", soltar, { once: true });
+    return () => {
+      window.removeEventListener("mouseup", soltar);
+      document.body.style.userSelect = "";
+    };
+  }, [emArrasto, salvarCampo]);
+
+  function valorParaCopiar(item: ItemFollowUp, campo: string): string {
+    const tipo = CAMPOS_EDITAVEIS[campo];
+    if (tipo === "booleano") return item[campo as "falta_material" | "material_chegou"] ? "true" : "false";
+    const bruto = campo === "coleta" ? item.coleta : (item[campo as keyof ItemFollowUp] as number | string | null);
+    return valorParaEdicao(bruto, tipo);
+  }
+
+  function noArrasto(indice: number, campo: string): boolean {
+    if (!arrasto || arrasto.campo !== campo || indice === arrasto.origem) return false;
+    return indice >= Math.min(arrasto.origem, arrasto.fim) && indice <= Math.max(arrasto.origem, arrasto.fim);
+  }
+
   async function salvarTudo() {
     setSalvandoTudo(true);
     setAvisoSalvo(null);
@@ -1077,11 +1138,12 @@ Plano: ${e.plano_pintura ?? "—"}`}
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((item) => {
+            {visiveis.map((item, indice) => {
               const destaque = item.grupo_pintura ? coresGrupo.get(item.grupo_pintura) : undefined;
               return (
                 <tr
                   key={item.id}
+                  onMouseEnter={arrasto ? () => setArrasto((a) => (a && a.fim !== indice ? { ...a, fim: indice } : a)) : undefined}
                   // Pedido do usuário: 1 clique edita a célula; o card do item só com 2 cliques.
                   onDoubleClick={() => setItemAberto(item)}
                   title="Dois cliques para abrir o card do item"
@@ -1097,7 +1159,9 @@ Plano: ${e.plano_pintura ?? "—"}`}
                       style={estiloCelula(item, col)}
                       className={`border-b border-stone-100 dark:border-slate-800/80 ${col.tipo === "etapa" || col.curto ? "px-1" : "px-2"} py-1.5 align-middle ${col.largura ?? ""} ${
                         fixa(col.campo, "z-[1] bg-white dark:bg-slate-900")
-                      } ${col.curto ? "whitespace-nowrap" : ""} ${col.centro ? "text-center" : ""} ${col.maxW ? `${col.maxW} truncate` : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""}`}
+                      } ${col.curto ? "whitespace-nowrap" : ""} ${col.centro ? "text-center" : ""} ${col.maxW ? `${col.maxW} truncate` : ""} ${col.campo === "descricao" ? "max-w-[22rem] truncate" : ""} ${
+                        CAMPOS_EDITAVEIS[col.campo] ? "group/celula relative" : ""
+                      } ${noArrasto(indice, col.campo) ? "outline outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""}`}
                       title={
                         col.campo === "descricao"
                           ? item.descricao ?? ""
@@ -1113,6 +1177,29 @@ Plano: ${e.plano_pintura ?? "—"}`}
                         </span>
                       ) : (
                         renderCelula(item, col)
+                      )}
+                      {CAMPOS_EDITAVEIS[col.campo] && (
+                        <span
+                          role="presentation"
+                          title="Arraste pra cima ou pra baixo pra copiar este valor (salva ao soltar)"
+                          onMouseDown={(e) => {
+                            if (e.button !== 0) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setArrasto({
+                              campo: col.campo,
+                              valor: valorParaCopiar(item, col.campo),
+                              origem: indice,
+                              fim: indice,
+                              linhas: visiveis,
+                            });
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                          className={`absolute bottom-0 right-0 z-[2] h-2 w-2 cursor-crosshair bg-green-600 dark:bg-cyan-400 ${
+                            arrasto?.campo === col.campo && arrasto.origem === indice ? "block" : "hidden group-hover/celula:block"
+                          }`}
+                        />
                       )}
                     </td>
                   ))}
