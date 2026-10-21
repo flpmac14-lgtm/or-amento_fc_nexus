@@ -41,8 +41,11 @@ def tabela_existe(cur) -> bool:
 
 def _vazio() -> dict:
     # inicio_id / fim_id: o apontamento (linha) por trás — pra ✏️ editar / 🗑 excluir na etapa.
+    # Pausa (migration 0057): pausado_* = pausada agora; pausas = [[pausou, retomou|None], …]
+    # do ciclo, pra o ⏱ descontar o tempo parado.
     return {"inicio_em": None, "inicio_por": None, "fim_em": None, "fim_por": None, "obs": None,
-            "inicio_id": None, "fim_id": None}
+            "inicio_id": None, "fim_id": None, "pausado_em": None, "pausado_por": None, "pausado_id": None,
+            "pausas": []}
 
 
 def situacao(cur, ids: list[str] | None = None) -> dict[str, dict[str, dict]]:
@@ -58,12 +61,23 @@ def situacao(cur, ids: list[str] | None = None) -> dict[str, dict[str, dict]]:
     out: dict[str, dict[str, dict]] = {}
     for item_id, etapa, acao, obs, por, em, aid in cur.fetchall():
         e = out.setdefault(str(item_id), {}).setdefault(etapa, _vazio())
-        if acao == "inicio":
+        if acao == "inicio" and e["pausado_em"] and not e["fim_em"]:
+            # Retomou depois da pausa: continua o mesmo ciclo.
+            e["pausas"][-1][1] = em.isoformat()
+            e.update(pausado_em=None, pausado_por=None, pausado_id=None)
+        elif acao == "inicio":
             # Começou de novo: o fim anterior era de outro ciclo.
             e.update(inicio_em=em.isoformat(), inicio_por=por, inicio_id=aid, fim_em=None, fim_por=None,
-                     fim_id=None, obs=None)
+                     fim_id=None, obs=None, pausado_em=None, pausado_por=None, pausado_id=None, pausas=[])
+        elif acao == "pausa":
+            if e["inicio_em"] and not e["fim_em"] and not e["pausado_em"]:
+                e.update(pausado_em=em.isoformat(), pausado_por=por, pausado_id=aid)
+                e["pausas"].append([em.isoformat(), None])
         else:
-            e.update(fim_em=em.isoformat(), fim_por=por, fim_id=aid)
+            if e["pausado_em"]:  # finalizou pausada: a pausa termina no fim
+                e["pausas"][-1][1] = em.isoformat()
+            e.update(fim_em=em.isoformat(), fim_por=por, fim_id=aid, pausado_em=None, pausado_por=None,
+                     pausado_id=None)
         if obs:
             e["obs"] = obs
     return out
@@ -95,8 +109,8 @@ def _item(cur, item_id: str) -> dict:
 def apontar(item_id: str, etapa: str, acao: str, observacao: str | None, por: str | None) -> dict:
     if etapa not in ETAPAS:
         raise ValueError(f"Etapa desconhecida: {etapa}")
-    if acao not in ("inicio", "fim"):
-        raise ValueError("Ação deve ser inicio ou fim.")
+    if acao not in ("inicio", "pausa", "fim"):
+        raise ValueError("Ação deve ser inicio, pausa ou fim.")
     obs = (observacao or "").strip()[:OBS_MAX] or None
     agora = datetime.now(timezone.utc)
     with _conectar() as conn, conn.cursor() as cur:
@@ -105,6 +119,23 @@ def apontar(item_id: str, etapa: str, acao: str, observacao: str | None, por: st
         if not r:
             raise LookupError("Pedido não encontrado no Data book.")
         st_book = r[0]
+        # Situação da etapa agora (com o que já estava no Data book): pausar só
+        # em andamento; retomar (início depois da pausa) não mexe no ST.BOOK.
+        atual = _item(cur, item_id)["etapas"].get(etapa) or {}
+        retomar = acao == "inicio" and bool(atual.get("pausado_em")) and not atual.get("fim_em")
+        if acao == "pausa":
+            if not atual.get("inicio_em") or atual.get("fim_em"):
+                raise ValueError("Só dá pra pausar uma etapa em andamento.")
+            if atual.get("pausado_em"):
+                raise ValueError("Essa etapa já está pausada.")
+            if etapa not in situacao(cur, [item_id]).get(item_id, {}):
+                # Início que veio do Data book antigo (rastreab_*/fazendo_em), sem linha
+                # aqui: grava ele como linha, senão a pausa ficaria sem o início.
+                cur.execute(
+                    "insert into databook_etapas (item_id, etapa, acao, por, em) values (%s, %s, 'inicio', %s, %s)",
+                    (item_id, etapa, atual.get("inicio_por"), datetime.fromisoformat(atual["inicio_em"])
+                     if isinstance(atual["inicio_em"], str) else atual["inicio_em"]),
+                )
         cur.execute(
             """insert into databook_etapas (item_id, etapa, acao, observacao, por, em)
                values (%s, %s, %s, %s, %s, %s) returning id""",
@@ -123,7 +154,9 @@ def apontar(item_id: str, etapa: str, acao: str, observacao: str | None, por: st
             )
 
         # Mantém o ST.BOOK e as datas que o resto do app (tabela, relatório semanal) já usa.
-        if etapa == "rastreabilidade":
+        if acao == "pausa" or retomar:
+            pass  # pausa / retomada: só fica no histórico da etapa
+        elif etapa == "rastreabilidade":
             if acao == "inicio":
                 if st_book in (None, "Vazio", RASTREAB_FIM):
                     trocar_status(RASTREAB)

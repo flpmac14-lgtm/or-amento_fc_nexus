@@ -821,6 +821,11 @@ export interface EtapaDatabook {
   // Apontamento por trás do início/fim (✏️ editar / 🗑 excluir); vazio = veio do ST.BOOK antigo.
   inicio_id?: number | null;
   fim_id?: number | null;
+  // Pausa (migration 0057): pausada agora; pausas do ciclo [pausou, retomou|null] pra descontar do ⏱.
+  pausado_em?: string | null;
+  pausado_por?: string | null;
+  pausado_id?: number | null;
+  pausas?: [string, string | null][];
 }
 
 export interface ItemDatabook {

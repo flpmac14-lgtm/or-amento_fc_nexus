@@ -2,7 +2,8 @@
 
 // Apontamento do Data book por etapa — pedido do usuário (17/10/2026): igual à
 // Usinagem/Pintura (botões grandes, um toque, pelo celular e no computador).
-// Cada etapa tem ▶ Início e ✔ Finalizado e o histórico vai se montando:
+// Cada etapa tem ▶ Início, ⏸ Pausar (21/10/2026 — volta com ▶ Retomar, o tempo
+// parado não conta no ⏱) e ✔ Finalizado, e o histórico vai se montando:
 // Relatório de caldeiraria, de usinagem, de solda, de pintura, Rastreabilidade,
 // Montando book e Fim de book. Rastreabilidade / Montando book / Fim de book
 // continuam mexendo no ST.BOOK como antes (app/databook_etapas.py) — nada do
@@ -16,6 +17,7 @@ import {
   historicoDatabook,
   historicoEtapasDatabook,
   urlImagemFollowUp,
+  type AcaoEtapaDatabook,
   type ApontamentoEtapaDatabook,
 } from "@/lib/api";
 import { quando } from "@/components/ApontamentoComum";
@@ -48,19 +50,37 @@ const SUGESTOES = [
 
 const MAX_CARTOES = 60;
 type Filtro = "ativos" | "andamento" | "encerrados" | "todos";
-type Situacao = "nada" | "andamento" | "feito";
+type Situacao = "nada" | "andamento" | "pausado" | "feito";
 
 function situacao(e: EtapaDatabook | undefined): Situacao {
   if (!e) return "nada";
   if (e.fim_em) return "feito";
+  if (e.pausado_em) return "pausado";
   return e.inicio_em ? "andamento" : "nada";
 }
 
 const COR_SITUACAO: Record<Situacao, string> = {
   nada: "bg-stone-200 text-stone-500 dark:bg-slate-800 dark:text-slate-500",
   andamento: "bg-amber-400 text-stone-900",
+  pausado: "bg-sky-500 text-white",
   feito: "bg-green-600 text-white",
 };
+
+const ROTULO_SITUACAO: Record<Situacao, string> = {
+  nada: "NÃO INICIADO",
+  andamento: "EM ANDAMENTO",
+  pausado: "PAUSADO",
+  feito: "FINALIZADO",
+};
+
+const TEXTO_ACAO: Record<AcaoEtapaDatabook, string> = { inicio: "▶ início", pausa: "⏸ pausa", fim: "✔ finalizado" };
+
+// ⏱ da etapa (horário de trabalho) sem o tempo pausado — pedido do usuário (21/10/2026).
+function tempoEtapa(e: EtapaDatabook): number {
+  const fim = e.fim_em ?? new Date();
+  const parado = (e.pausas ?? []).reduce((s, [p, r]) => s + minutosUteis(p, r ?? fim), 0);
+  return Math.max(0, minutosUteis(e.inicio_em!, fim) - parado);
+}
 
 function textoBusca(i: ItemDatabook): string {
   return normalizarBusca([i.po, i.mac, i.desenho, i.descricao, i.cliente, i.nf, i.st_book].filter(Boolean).join(" "));
@@ -86,7 +106,7 @@ export function FaixaEtapas({ item, grande = false }: { item: ItemDatabook; gran
         return (
           <span
             key={e.chave}
-            title={`${e.nome}: ${s === "feito" ? "finalizado" : s === "andamento" ? "em andamento" : "não iniciado"}`}
+            title={`${e.nome}: ${ROTULO_SITUACAO[s].toLowerCase()}`}
             className={`rounded px-1 font-mono font-bold ${grande ? "text-xs" : "text-[10px]"} ${COR_SITUACAO[s]}`}
           >
             {e.curto}
@@ -193,7 +213,7 @@ export default function DataBookApontar({
     setEditando(null);
   }
 
-  async function apontar(etapa: string, acao: "inicio" | "fim") {
+  async function apontar(etapa: string, acao: AcaoEtapaDatabook) {
     if (!aberto) return;
     const chave = `${etapa}:${acao}`;
     // Fim de book = ST.BOOK PRONTO: pede um segundo toque pra confirmar.
@@ -209,7 +229,11 @@ export default function DataBookApontar({
       setObs("");
       setVersaoHist((v) => v + 1);
       const nome = NOME_ETAPA.get(etapa)?.nome ?? etapa;
-      setAviso({ ok: true, texto: `✔ ${nome}: ${acao === "inicio" ? "início" : "finalizado"} salvo` });
+      const retomou = acao === "inicio" && !!aberto.etapas?.[etapa]?.pausado_em;
+      setAviso({
+        ok: true,
+        texto: `✔ ${nome}: ${retomou ? "retomado" : acao === "inicio" ? "início" : acao === "pausa" ? "pausado" : "finalizado"}`,
+      });
     } catch (e) {
       setAviso({ ok: false, texto: (e as Error).message });
     } finally {
@@ -511,16 +535,20 @@ export default function DataBookApontar({
                     <div
                       key={et.chave}
                       className={`flex flex-col gap-2 rounded-2xl border-2 bg-white p-3 dark:bg-slate-900 ${
-                        s === "feito" ? "border-green-500" : s === "andamento" ? "border-amber-400" : "border-stone-200 dark:border-slate-700"
+                        s === "feito"
+                          ? "border-green-500"
+                          : s === "andamento"
+                            ? "border-amber-400"
+                            : s === "pausado"
+                              ? "border-sky-500"
+                              : "border-stone-200 dark:border-slate-700"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-lg font-extrabold leading-tight text-stone-900 dark:text-white">
                           {et.icone} {et.nome}
                         </p>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${COR_SITUACAO[s]}`}>
-                          {s === "feito" ? "FINALIZADO" : s === "andamento" ? "EM ANDAMENTO" : "NÃO INICIADO"}
-                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${COR_SITUACAO[s]}`}>{ROTULO_SITUACAO[s]}</span>
                       </div>
                       <p className="min-h-[2.5rem] text-xs leading-snug text-stone-600 dark:text-slate-400">
                         {e?.inicio_em && (
@@ -529,6 +557,14 @@ export default function DataBookApontar({
                             {e.inicio_por && ` · ${e.inicio_por}`}
                             {acoes(e.inicio_id, e.inicio_por, e.inicio_em, e.obs)}
                             {editor(e.inicio_id)}
+                          </span>
+                        )}
+                        {e?.pausado_em && (
+                          <span className="block py-0.5 font-semibold text-sky-700 dark:text-sky-300">
+                            ⏸ Pausado {quando(e.pausado_em)}
+                            {e.pausado_por && ` · ${e.pausado_por}`}
+                            {acoes(e.pausado_id ?? null, e.pausado_por ?? null, e.pausado_em, e.obs)}
+                            {editor(e.pausado_id ?? null)}
                           </span>
                         )}
                         {e?.fim_em && (
@@ -541,31 +577,52 @@ export default function DataBookApontar({
                         )}
                         {e?.inicio_em && (
                           <span className="block font-semibold text-stone-800 dark:text-slate-200">
-                            ⏱ {duracao(minutosUteis(e.inicio_em, e.fim_em ?? new Date()))}
-                            {!e.fim_em && " até agora"}
+                            ⏱ {duracao(tempoEtapa(e))}
+                            {!e.fim_em && (e.pausado_em ? " (pausado)" : " até agora")}
+                            {(e.pausas?.length ?? 0) > 0 && (
+                              <span className="font-normal text-stone-500 dark:text-slate-400"> · {e.pausas!.length} pausa(s) descontada(s)</span>
+                            )}
                           </span>
                         )}
                         {e?.obs && <span className="block italic">“{e.obs}”</span>}
                         {!e && "Ainda não apontado."}
                       </p>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <button
                           type="button"
                           onClick={() => apontar(et.chave, "inicio")}
                           disabled={salvando !== null || s === "andamento"}
-                          className={`flex min-h-14 items-center justify-center gap-1 rounded-xl border-4 px-2 text-base font-extrabold active:scale-[0.97] disabled:opacity-60 ${
+                          className={`flex min-h-14 items-center justify-center gap-1 rounded-xl border-4 px-1 text-sm font-extrabold active:scale-[0.97] disabled:opacity-60 sm:text-base ${
                             s === "andamento"
                               ? "border-amber-500 bg-amber-400 text-stone-900"
                               : "border-amber-400 bg-white text-amber-700 dark:bg-slate-900 dark:text-amber-300"
                           }`}
                         >
-                          {salvando === `${et.chave}:inicio` ? "Salvando…" : s === "feito" ? "↻ RECOMEÇAR" : "▶ INÍCIO"}
+                          {salvando === `${et.chave}:inicio`
+                            ? "Salvando…"
+                            : s === "feito"
+                              ? "↻ RECOMEÇAR"
+                              : s === "pausado"
+                                ? "▶ RETOMAR"
+                                : "▶ INÍCIO"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => apontar(et.chave, "pausa")}
+                          disabled={salvando !== null || s !== "andamento"}
+                          className={`flex min-h-14 items-center justify-center gap-1 rounded-xl border-4 px-1 text-sm font-extrabold active:scale-[0.97] disabled:opacity-40 sm:text-base ${
+                            s === "pausado"
+                              ? "border-sky-600 bg-sky-500 text-white"
+                              : "border-sky-500 bg-white text-sky-700 dark:bg-slate-900 dark:text-sky-300"
+                          }`}
+                        >
+                          {salvando === `${et.chave}:pausa` ? "Salvando…" : s === "pausado" ? "⏸ PAUSADO" : "⏸ PAUSAR"}
                         </button>
                         <button
                           type="button"
                           onClick={() => apontar(et.chave, "fim")}
                           disabled={salvando !== null || s === "feito"}
-                          className={`flex min-h-14 items-center justify-center gap-1 rounded-xl border-4 px-2 text-base font-extrabold active:scale-[0.97] disabled:opacity-60 ${
+                          className={`flex min-h-14 items-center justify-center gap-1 rounded-xl border-4 px-1 text-sm font-extrabold active:scale-[0.97] disabled:opacity-60 sm:text-base ${
                             fimConfirmar
                               ? "border-red-700 bg-red-600 text-white"
                               : s === "feito"
@@ -595,7 +652,7 @@ export default function DataBookApontar({
                           <span className="w-24 shrink-0 text-xs text-stone-500 dark:text-slate-400">{quando(h.em)}</span>
                           <span className="min-w-0 flex-1 text-stone-800 dark:text-slate-200">
                             {NOME_ETAPA.get(h.a.etapa)?.icone} <strong>{NOME_ETAPA.get(h.a.etapa)?.nome ?? h.a.etapa}</strong>:{" "}
-                            {h.a.acao === "inicio" ? "▶ início" : "✔ finalizado"}
+                            {TEXTO_ACAO[h.a.acao]}
                             {h.a.por && <span className="text-stone-500"> · {h.a.por}</span>}
                             {h.a.observacao && <span className="block text-xs italic text-stone-500">“{h.a.observacao}”</span>}
                           </span>

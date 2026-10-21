@@ -79,12 +79,12 @@ export default function DataBookHistorico({
     };
   }, [dias, versao]);
 
-  // Agora: etapas com início e sem fim, por quem iniciou.
+  // Agora: etapas com início e sem fim (e não pausadas), por quem iniciou.
   const fazendo = useMemo(() => {
     const m = new Map<string, { item: ItemDatabook; etapa: string; desde: string }[]>();
     for (const i of itens)
       for (const [chave, e] of Object.entries(i.etapas ?? {}))
-        if (e.inicio_em && !e.fim_em) {
+        if (e.inicio_em && !e.fim_em && !e.pausado_em) {
           const p = nome(e.inicio_por);
           m.set(p, [...(m.get(p) ?? []), { item: i, etapa: chave, desde: e.inicio_em }]);
         }
@@ -197,8 +197,16 @@ export default function DataBookHistorico({
                           {e.tipo === "etapa" ? (
                             <>
                               {et?.icone} {et?.nome ?? e.etapa}:{" "}
-                              <span className={e.acao === "fim" ? "font-bold text-green-700 dark:text-green-400" : "font-bold text-amber-700 dark:text-amber-300"}>
-                                {e.acao === "inicio" ? "▶ início" : "✔ finalizado"}
+                              <span
+                                className={
+                                  e.acao === "fim"
+                                    ? "font-bold text-green-700 dark:text-green-400"
+                                    : e.acao === "pausa"
+                                      ? "font-bold text-sky-700 dark:text-sky-300"
+                                      : "font-bold text-amber-700 dark:text-amber-300"
+                                }
+                              >
+                                {e.acao === "inicio" ? "▶ início" : e.acao === "pausa" ? "⏸ pausa" : "✔ finalizado"}
                               </span>
                             </>
                           ) : (

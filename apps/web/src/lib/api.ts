@@ -1419,11 +1419,12 @@ async function erroDe(resposta: Response, padrao: string): Promise<Error> {
   return new Error(detalhe || `${padrao} (${resposta.status}).`);
 }
 
-// Apontamento por etapa do Data book (Início / Finalizado) — app/databook_etapas.py.
+// Apontamento por etapa do Data book (Início / Pausa / Finalizado) — app/databook_etapas.py.
+export type AcaoEtapaDatabook = "inicio" | "pausa" | "fim";
 export async function apontarEtapaDatabook(
   itemId: string,
   etapa: string,
-  acao: "inicio" | "fim",
+  acao: AcaoEtapaDatabook,
   observacao: string | null,
   por: string | null,
 ): Promise<ItemDatabook> {
@@ -1439,7 +1440,7 @@ export async function apontarEtapaDatabook(
 export interface ApontamentoEtapaDatabook {
   id: number;
   etapa: string;
-  acao: "inicio" | "fim";
+  acao: AcaoEtapaDatabook;
   observacao: string | null;
   por: string | null;
   em: string;
@@ -1454,7 +1455,7 @@ export async function historicoEtapasDatabook(itemId: string): Promise<Apontamen
 
 // 🕘 Histórico pra todos: etapas + trocas de ST.BOOK/falta/obs. no período.
 export type EventoHistoricoDatabook = { id: number; item_id: string; por: string | null; em: string; desfeito: boolean } & (
-  | { tipo: "etapa"; etapa: string; acao: "inicio" | "fim"; observacao: string | null }
+  | { tipo: "etapa"; etapa: string; acao: AcaoEtapaDatabook; observacao: string | null }
   | { tipo: "campo"; campo: string; de: string | null; para: string | null }
 );
 
