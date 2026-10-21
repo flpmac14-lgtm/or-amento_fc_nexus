@@ -135,6 +135,19 @@ export default function FollowUpRelatorioColeta({ itens, onFechar }: { itens: It
           </button>
           <button
             type="button"
+            onClick={() => {
+              const qs = new URLSearchParams();
+              if (cliente) qs.set("cliente", cliente);
+              window.open(`/follow-up/falta-material${qs.size ? `?${qs}` : ""}`, "_blank");
+              onFechar();
+            }}
+            title="Pedidos com o tique F.Material (sem o M.Chegou), agrupados por obra"
+            className="rounded-lg px-2 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-800 dark:hover:text-red-300"
+          >
+            Falta de material
+          </button>
+          <button
+            type="button"
             onClick={onFechar}
             className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300"
           >
