@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
-import { ETAPAS, ROTULO_PRAZO, itensDaObra, metaDoItem, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
+import { ETAPAS, ROTULO_PRAZO, faltaMaterial, itensDaObra, metaDoItem, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
 function v(valor: string | number | null | undefined): string {
@@ -79,7 +79,7 @@ function alertas(i: ItemFollowUp): string[] {
   if (pronto(i)) return [];
   const local = localFabricacao(i);
   const lista: string[] = [];
-  if (i.falta_material) {
+  if (faltaMaterial(i)) {
     lista.push(
       local === MACFAB
         ? "Falta material pra fabricar"
@@ -108,7 +108,7 @@ function CardItem({ i }: { i: ItemFollowUp }) {
   return (
     <article
       className={`flex break-inside-avoid gap-2 rounded border p-1.5 ${
-        i.falta_material && !pronto(i) ? "border-red-500 bg-red-50" : "border-stone-300"
+        faltaMaterial(i) && !pronto(i) ? "border-red-500 bg-red-50" : "border-stone-300"
       }`}
     >
       <div className="flex h-[24mm] w-[30mm] shrink-0 items-center justify-center rounded border border-stone-200 bg-white">
@@ -250,8 +250,8 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
   const comAviso = itens.map((i) => ({ i, avisos: alertas(i) })).filter((x) => x.avisos.length || x.i.obs_felipe_marcelo);
   if (!comAviso.length) return null;
   const abertos = itens.filter((i) => !pronto(i));
-  const levar = abertos.filter((i) => i.falta_material && localFabricacao(i) !== MACFAB).length;
-  const material = abertos.filter((i) => i.falta_material && localFabricacao(i) === MACFAB).length;
+  const levar = abertos.filter((i) => faltaMaterial(i) && localFabricacao(i) !== MACFAB).length;
+  const material = abertos.filter((i) => faltaMaterial(i) && localFabricacao(i) === MACFAB).length;
   const cortar = abertos.filter((i) => i.cor !== 100).length;
   const obs = itens.filter((i) => i.obs_felipe_marcelo).length;
   return (

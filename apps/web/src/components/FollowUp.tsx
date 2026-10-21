@@ -20,6 +20,7 @@ import {
   ROTULO_PRAZO,
   compararValores,
   corGrupoPintura,
+  faltaMaterial,
   montarContextoRegras,
   normalizarBusca,
   situacaoEtapa,
@@ -72,6 +73,8 @@ const COLUNAS: Coluna[] = [
   { campo: "coleta", rotulo: "Coleta", tipo: "coleta", principal: true, maxW: "max-w-[6rem]" },
   // Tique F.Material — pedido do usuário (08/10): esperando material pra fabricar; marcado = linha vermelha.
   { campo: "falta_material", rotulo: "F.Material", tipo: "material", principal: true, centro: true },
+  // Tique M.Chegou — pedido do usuário (21/10): o material chegou do fornecedor; a linha deixa de ficar vermelha.
+  { campo: "material_chegou", rotulo: "M.Chegou", tipo: "material", principal: true, centro: true },
   // Pedido do usuário: Obs. Felipe/Marcelo logo depois da Coleta, sempre visível.
   { campo: "obs_felipe_marcelo", rotulo: "Obs. Felipe / Marcelo", tipo: "texto", principal: true, maxW: "max-w-[12rem]" },
   // Pedido do usuário (17/10): OBS da Controle de obras (antes "Obs. Alisson") vira Obs. Diretoria, ao lado da Obs. Felipe.
@@ -397,7 +400,7 @@ export default function FollowUp({
         } else if (col.tipo === "foto") {
           if ((termo === "com") !== i.imagens.length > 0) return false;
         } else if (col.tipo === "material") {
-          if ((termo === "sim") !== !!i.falta_material) return false;
+          if ((termo === "sim") !== !!i[col.campo as "falta_material" | "material_chegou"]) return false;
         } else if (col.tipo === "edicao") {
           if (!contem(`${i.editado_por ?? ""} ${formatarDataHora(i.editado_em)}`, termo)) return false;
         } else if (col.tipo === "prazo") {
@@ -509,23 +512,33 @@ export default function FollowUp({
 
   function renderCelula(item: ItemFollowUp, col: Coluna) {
     if (col.tipo === "material") {
+      const campo = col.campo as "falta_material" | "material_chegou";
+      const chegou = campo === "material_chegou";
       return (
         <input
           type="checkbox"
-          checked={!!item.falta_material}
+          checked={!!item[campo]}
           onChange={(e) => {
             const marcado = e.target.checked;
-            aplicarItem({ ...item, falta_material: marcado }); // pinta na hora
-            salvarCampo(item, "falta_material", marcado ? "true" : "false").catch((err: Error) => {
+            aplicarItem({ ...item, [campo]: marcado }); // pinta na hora
+            salvarCampo(item, campo, marcado ? "true" : "false").catch((err: Error) => {
               aplicarItem(item);
               setErro(err.message);
             });
           }}
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          title={item.falta_material ? "Falta material pra fabricar — clique pra tirar" : "Marcar: falta material pra fabricar (linha fica vermelha)"}
-          aria-label={`Falta material — PO ${item.po}`}
-          className="h-3.5 w-3.5 cursor-pointer accent-red-600"
+          title={
+            chegou
+              ? item.material_chegou
+                ? "Material chegou do fornecedor — clique pra tirar"
+                : "Marcar: o material chegou do fornecedor (a linha deixa de ficar vermelha)"
+              : item.falta_material
+                ? "Falta material pra fabricar — clique pra tirar"
+                : "Marcar: falta material pra fabricar (linha fica vermelha)"
+          }
+          aria-label={`${chegou ? "Material chegou" : "Falta material"} — PO ${item.po}`}
+          className={`h-3.5 w-3.5 cursor-pointer ${chegou ? "accent-green-600" : "accent-red-600"}`}
         />
       );
     }
@@ -1030,10 +1043,10 @@ Plano: ${e.plano_pintura ?? "—"}`}
                     </select>
                   ) : col.tipo === "material" ? (
                     <select
-                      value={filtrosColuna.falta_material ?? ""}
-                      onChange={(e) => setFiltroColuna("falta_material", e.target.value)}
+                      value={filtrosColuna[col.campo] ?? ""}
+                      onChange={(e) => setFiltroColuna(col.campo, e.target.value)}
                       className={`${classeFiltroColuna} !min-w-0 !px-0.5`}
-                      aria-label="Filtrar falta de material"
+                      aria-label={col.campo === "material_chegou" ? "Filtrar material chegou" : "Filtrar falta de material"}
                     >
                       <option value="">Todas</option>
                       <option value="sim">Marcadas</option>
@@ -1073,7 +1086,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
                   onDoubleClick={() => setItemAberto(item)}
                   title="Dois cliques para abrir o card do item"
                   className={`cursor-pointer ${
-                    item.falta_material
+                    faltaMaterial(item)
                       ? "bg-red-100 text-red-900 hover:bg-red-200 dark:bg-red-950/60 dark:text-red-100 dark:hover:bg-red-900/60 [&>td]:!bg-red-100 dark:[&>td]:!bg-red-950"
                       : "text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30"
                   } ${item.presente_na_ultima_importacao ? "" : "opacity-50"}`}

@@ -57,6 +57,8 @@ CAMPOS_EDITAVEIS: dict[str, str] = {
     "preco_previsto": "numero",
     # Tique F.Material (migration 0033): esperando material pra fabricar.
     "falta_material": "booleano",
+    # Tique M.Chegou (migration 0056): o material chegou do fornecedor.
+    "material_chegou": "booleano",
 }
 
 _NOMES_ETAPAS = {"eng": "Engenharia", "cor": "Corte", "mon": "Montagem", "sol": "Solda",

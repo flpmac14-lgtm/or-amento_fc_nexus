@@ -559,6 +559,8 @@ export interface ItemFollowUp {
   meta: string | null; // META da Controle de obras como está na planilha (data dd/mm/aaaa ou texto)
   // Tique F.Material (migration 0033): esperando material pra fabricar — linha vermelha.
   falta_material: boolean;
+  // Tique M.Chegou (migration 0056): material chegou do fornecedor — linha deixa de ficar vermelha.
+  material_chegou?: boolean;
   obs_alisson: string | null;
   st: string | null;
   nf: string | null;

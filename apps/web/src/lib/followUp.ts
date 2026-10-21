@@ -28,7 +28,13 @@ export const CAMPOS_EDITAVEIS: Record<string, TipoEdicao> = {
   obs_felipe_marcelo: "texto",
   preco_previsto: "numero",
   falta_material: "booleano",
+  material_chegou: "booleano",
 };
+
+/** Ainda esperando material: F.Material marcado e M.Chegou não (pedido do usuário, 21/10/2026). */
+export function faltaMaterial(i: ItemFollowUp): boolean {
+  return !!i.falta_material && !i.material_chegou;
+}
 
 // Campos que vêm da Controle de obras (a "mãe", por PROCV pelo PO) —
 // travados no app. Espelha CAMPOS_MAE de app/follow_up_mae.py.

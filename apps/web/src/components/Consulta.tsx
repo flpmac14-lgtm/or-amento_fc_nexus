@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listarFollowUp, listarProgramasCorte, urlImagemFollowUp } from "@/lib/api";
 import { rotuloCliente } from "@/lib/clientes";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
-import { ETAPAS, normalizarBusca, situacaoEtapa } from "@/lib/followUp";
+import { ETAPAS, faltaMaterial, normalizarBusca, situacaoEtapa } from "@/lib/followUp";
 import { MAQUINAS } from "@/lib/maquinaCorte";
 import type { ItemFollowUp, ProgramaCorte } from "@/lib/types";
 import { BarraEtapa, SeloPrazo } from "@/components/FollowUpDetalhe";
@@ -392,7 +392,7 @@ function CartaoPedido({ i }: { i: ItemFollowUp }) {
             {i.status}
           </span>
         )}
-        {i.falta_material && <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white">Falta material</span>}
+        {faltaMaterial(i) && <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white">Falta material</span>}
         {(i.coleta_data || i.coleta) && (
           <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
             🚚 Coleta {i.coleta_data ? formatarDataBr(i.coleta_data) : i.coleta}

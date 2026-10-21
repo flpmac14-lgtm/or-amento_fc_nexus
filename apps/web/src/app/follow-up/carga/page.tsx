@@ -18,7 +18,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { listarFollowUp } from "@/lib/api";
 import { nomeClienteRelatorio } from "@/lib/clientes";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
-import { ETAPAS } from "@/lib/followUp";
+import { ETAPAS, faltaMaterial } from "@/lib/followUp";
 import type { EtapaFollowUp, ItemFollowUp } from "@/lib/types";
 
 const DIA = 86400000;
@@ -540,7 +540,7 @@ function Relatorio() {
                             </span>
                             {i.po}
                             {i.mac?.trim() && <span className="text-stone-500"> ({i.mac.trim()})</span>}
-                            {i.falta_material && <span className="ml-1 rounded bg-red-600 px-1 text-[8px] font-bold text-white">F.MAT</span>}
+                            {faltaMaterial(i) && <span className="ml-1 rounded bg-red-600 px-1 text-[8px] font-bold text-white">F.MAT</span>}
                           </td>
                           <td className={`${td} max-w-[14rem] truncate text-[11px]`} title={i.descricao ?? undefined}>
                             {i.descricao}
