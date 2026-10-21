@@ -232,6 +232,9 @@ def _sincronizar(cur, item_id: str, etapa: str, removido: tuple[str, datetime] |
 # Pedido do usuário (17/10/2026): cada um só edita/exclui o que ELE apontou;
 # o admin (flpmac14) mexe em qualquer um.
 ADMIN = "flpmac14@gmail.com"
+# 21/10/2026: o lailto (responsável da Qualidade) também corrige / anula o que
+# qualquer um apontou errado — pedido do usuário.
+SUPERVISORES = {ADMIN, "lailto"}
 
 
 class SemPermissao(Exception):
@@ -242,8 +245,8 @@ def _conferir_dono(dono: str | None, por: str | None) -> None:
     quem = (por or "").strip().lower()
     if not quem:
         raise SemPermissao("Faça login de novo para editar ou excluir.")
-    if quem != ADMIN and quem != (dono or "").strip().lower():
-        raise SemPermissao(f"Só quem apontou ({dono or '—'}) ou o administrador pode editar/excluir este apontamento.")
+    if quem not in SUPERVISORES and quem != (dono or "").strip().lower():
+        raise SemPermissao(f"Só quem apontou ({dono or '—'}), o Lailto ou o administrador pode editar/excluir este apontamento.")
 
 
 def editar(apontamento_id: int, em: str | None, observacao: str | None, por: str | None) -> dict:

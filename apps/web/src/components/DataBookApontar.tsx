@@ -156,8 +156,9 @@ export default function DataBookApontar({
   const [tela, setTela] = useState<"pedidos" | "historico">("pedidos");
 
   // Pedido do usuário (17/10/2026): cada um só edita/exclui o que ELE apontou;
-  // o admin (flpmac14) mexe em qualquer um. O servidor confere de novo.
-  const ehAdmin = (usuario ?? "").toLowerCase() === EMAIL_FINANCEIRO;
+  // o admin (flpmac14) mexe em qualquer um. 21/10/2026: o lailto também
+  // (responsável da Qualidade — anula o que alguém apontou errado). O servidor confere de novo.
+  const ehAdmin = [EMAIL_FINANCEIRO, "lailto"].includes((usuario ?? "").toLowerCase());
   const podeMexer = (por: string | null) => !!usuario && (ehAdmin || usuario.toLowerCase() === (por ?? "").toLowerCase());
 
   const aberto = abertoId ? (itens.find((i) => i.id === abertoId) ?? null) : null;
