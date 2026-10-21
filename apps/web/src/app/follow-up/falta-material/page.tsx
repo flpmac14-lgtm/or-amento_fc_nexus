@@ -14,7 +14,7 @@ import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { faltaMaterial, normalizarBusca, obraDoItem } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
-const COLUNAS = ["Foto", "PO", "MAC", "Desenho", "Descrição", "Qtd", "Peso (kg)", "Prazo", "Coleta", "Fabricação", "Obs. Felipe / Marcelo"];
+const COLUNAS = ["Foto", "PO", "MAC", "Desenho", "Descrição", "Qtd", "Peso (kg)", "Coleta", "Fabricação", "Obs. Felipe / Marcelo", "Obs. Diretoria"];
 
 // Mesma regra do Relatório por obra: Fornecedor / Terceirizado vazio (ou "macfab") = Macfab.
 function localFabricacao(i: ItemFollowUp): string {
@@ -92,7 +92,6 @@ function Relatorio() {
   const itens = obras.flatMap((o) => o.itens);
   const peso = obras.reduce((s, o) => s + o.peso, 0);
   const terceirizados = itens.filter((i) => localFabricacao(i) !== "Macfab").length;
-  const hoje = new Date().toISOString().slice(0, 10);
   const classeCampo = "rounded-lg border border-stone-400 bg-white px-2 py-1.5 text-sm text-stone-800";
 
   return (
@@ -179,7 +178,6 @@ function Relatorio() {
                 </tr>
                 {o.itens.map((i) => {
                   const local = localFabricacao(i);
-                  const vencido = !!i.prazo_contratual && i.prazo_contratual < hoje;
                   return (
                     <tr key={i.id} className="break-inside-avoid text-center">
                       <td className="w-[22mm] border border-stone-400 p-0.5">
@@ -196,10 +194,10 @@ function Relatorio() {
                       <td className={`border border-stone-400 px-1 ${(i.peso_total ?? 0) > 100 ? "font-bold text-red-700" : ""}`}>
                         {i.peso_total !== null ? formatarNumero(i.peso_total, 2) : ""}
                       </td>
-                      <td className={`border border-stone-400 px-1 ${vencido ? "font-bold text-red-700" : ""}`}>{formatarDataBr(i.prazo_contratual)}</td>
                       <td className="border border-stone-400 px-1">{i.coleta_data ? formatarDataBr(i.coleta_data) : (i.coleta ?? "")}</td>
                       <td className={`border border-stone-400 px-1 ${local === "Macfab" ? "" : "font-semibold text-amber-800"}`}>{local}</td>
                       <td className="border border-stone-400 px-1 text-left text-[9px]">{i.obs_felipe_marcelo}</td>
+                      <td className="border border-stone-400 px-1 text-left text-[9px]">{i.obs_alisson}</td>
                     </tr>
                   );
                 })}
@@ -208,7 +206,7 @@ function Relatorio() {
           </table>
         )}
         <p className="text-[9px] text-stone-500">
-          Prazo vencido e peso acima de 100 kg em vermelho. Fabricação diferente de Macfab = falta levar o material pro terceirizado. Quando o
+          Peso acima de 100 kg em vermelho. Fabricação diferente de Macfab = falta levar o material pro terceirizado. Quando o
           material chegar, marque o tique M.Chegou no Follow up e o pedido sai deste relatório.
         </p>
       </main>
