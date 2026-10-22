@@ -435,8 +435,6 @@ function Relatorio() {
     booksAnt: soma(anterior, (d) => d.porEtapa.fim_book ?? 0),
     iniciadas: soma(semana, (d) => d.iniciadas),
     iniciadasAnt: soma(anterior, (d) => d.iniciadas),
-    minutos: soma(semana, (d) => d.minutos),
-    minutosAnt: soma(anterior, (d) => d.minutos),
   };
   const maxFinalizadas = Math.max(1, ...[...semana.values()].map((d) => d.finalizadas.length));
 
@@ -451,6 +449,9 @@ function Relatorio() {
     }
   }
 
+  const totalAndamento = [...andamento.values()].reduce((s, l) => s + l.length, 0);
+  const totalPausadas = [...andamento.values()].reduce((s, l) => s + l.filter((a) => a.pausado).length, 0);
+
   // O que cada um fez: ciclos que a pessoa iniciou ou finalizou na semana.
   const atividades = (p: string) =>
     ciclos
@@ -463,6 +464,7 @@ function Relatorio() {
   const pendencias = itens
     .filter((i) => i.falta?.trim() && !BOOK_PRONTO.has((i.st_book ?? "").trim().toUpperCase()))
     .sort((a, b) => (a.cliente ?? "").localeCompare(b.cliente ?? "") || a.po.localeCompare(b.po, "pt-BR", { numeric: true }));
+  const diasAteHoje = Math.max(1, Math.min(DIAS_SEMANA.length, Math.floor((agora - ini) / DIA) + 1));
   const historicoCurto = agora - inicioGrafico > MAX_DIAS_HISTORICO * DIA;
   const th = "border-b-2 border-[#1e3a5f] bg-stone-50 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#1e3a5f]";
   const td = "border-b border-stone-200 px-2 py-1 text-center text-xs";
@@ -517,7 +519,6 @@ function Relatorio() {
               { rotulo: "Relatórios finalizados", valor: String(totais.finalizadas), a: totais.finalizadas, b: totais.finalizadasAnt, cor: "text-[#1e3a5f]" },
               { rotulo: "Books entregues", valor: String(totais.books), a: totais.books, b: totais.booksAnt, cor: "text-green-700" },
               { rotulo: "Etapas iniciadas", valor: String(totais.iniciadas), a: totais.iniciadas, b: totais.iniciadasAnt, cor: "text-stone-800" },
-              { rotulo: "Horas apontadas", valor: duracao(totais.minutos), a: Math.round(totais.minutos / 60), b: Math.round(totais.minutosAnt / 60), cor: "text-violet-700" },
             ].map((k) => (
               <div key={k.rotulo} className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">{k.rotulo}</p>
@@ -525,6 +526,11 @@ function Relatorio() {
                 <Variacao atual={k.a} anterior={k.b} />
               </div>
             ))}
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">Em andamento agora</p>
+              <p className="font-mono text-2xl font-extrabold leading-tight text-blue-700">{totalAndamento}</p>
+              <span className="text-[10px] font-semibold text-amber-700">{totalPausadas} pausada(s)</span>
+            </div>
           </div>
         </section>
 
@@ -543,8 +549,7 @@ function Relatorio() {
                     <th className={th}>Final.</th>
                     <th className={th}>Iniciad.</th>
                     <th className={th}>Books</th>
-                    <th className={th} title="Soma do tempo dos relatórios finalizados (jornada, sem pausas)">Horas</th>
-                    <th className={th} title="Tempo médio por relatório finalizado (jornada, sem pausas)">Média</th>
+                    <th className={th} title="Tempo médio de cada relatório, do início ao fim (só a jornada, sem as pausas) — só os que têm início apontado">Tempo médio</th>
                     <th className={th} title="Agora: etapas iniciadas e ainda não finalizadas">Em andam.</th>
                   </tr>
                 </thead>
@@ -572,7 +577,6 @@ function Relatorio() {
                         </td>
                         <td className={td}>{d.iniciadas}</td>
                         <td className={`${td} font-bold text-green-700`}>{d.porEtapa.fim_book ?? 0}</td>
-                        <td className={td}>{duracao(d.minutos)}</td>
                         <td className={td}>{d.comTempo ? duracao(Math.round(d.minutos / d.comTempo)) : "—"}</td>
                         <td className={td}>{andamento.get(p)?.length ?? 0}</td>
                       </tr>
@@ -637,27 +641,70 @@ function Relatorio() {
           </section>
         )}
 
-        {/* 04 Crescimento */}
+        {/* 04 Crescimento — dia a dia na semana (acumulado) + as últimas 8 semanas em tabela */}
+        {pessoasSemana.length > 0 && (
+          <section className="break-inside-avoid">
+            {tituloSecao(4, "Crescimento na semana", "relatórios finalizados acumulados, dia a dia")}
+            <GraficoLinhas
+              // Semana atual: só até hoje (os dias que ainda não chegaram não entram).
+              categorias={DIAS_SEMANA.slice(0, diasAteHoje).map((d, k) => `${d} ${dm(new Date(ini + k * DIA + DIA / 2))}`)}
+              series={pessoasSemana.map((p) => {
+                let acc = 0;
+                return { nome: nomeBonito(p), cor: corDe(p), valores: semana.get(p)!.porDia.slice(0, diasAteHoje).map((v) => (acc += v)) };
+              })}
+              altura={180}
+            />
+          </section>
+        )}
         <section className="break-inside-avoid">
-          {tituloSecao(4, "Crescimento de cada um", `relatórios finalizados por semana — últimas ${SEMANAS_GRAFICO} semanas`)}
+          {tituloSecao(pessoasSemana.length > 0 ? 5 : 4, "Comparativo das últimas semanas", `relatórios finalizados por semana — ${SEMANAS_GRAFICO} semanas`)}
           {evolucao.pessoas.length === 0 ? (
             <p className="text-sm text-stone-500">Nenhum relatório finalizado no período.</p>
           ) : (
-            <GraficoLinhas
-              categorias={evolucao.categorias}
-              series={evolucao.pessoas.map((p) => ({ nome: nomeBonito(p), cor: corDe(p), valores: evolucao.valores(p) }))}
-            />
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={`${th} text-left`}>Pessoa</th>
+                  {evolucao.categorias.map((c, k) => (
+                    <th key={c} className={`${th} ${k === evolucao.categorias.length - 1 ? "!bg-[#1e3a5f] !text-white" : ""}`}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {evolucao.pessoas.map((p) => {
+                  const v = evolucao.valores(p);
+                  const max = Math.max(1, ...v);
+                  return (
+                    <tr key={p}>
+                      <td className={`${td} text-left font-semibold`}>
+                        <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ backgroundColor: corDe(p) }} />
+                        {nomeBonito(p)}
+                      </td>
+                      {v.map((n, k) => (
+                        <td key={k} className={`${td} font-mono ${k === v.length - 1 ? "font-extrabold" : ""}`}>
+                          <span className="flex flex-col items-center gap-0.5">
+                            {n || <span className="text-stone-300">·</span>}
+                            <span className="h-1 rounded-full" style={{ width: `${(n / max) * 100}%`, minWidth: n ? 3 : 0, backgroundColor: corDe(p) }} />
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
-          {historicoCurto && (
-            <p className="mt-1 text-[10px] text-amber-700">
-              O servidor guarda o histórico detalhado dos últimos {MAX_DIAS_HISTORICO} dias — semanas mais antigas mostram só o que ficou no Data book.
-            </p>
-          )}
+          <p className="mt-1 text-[10px] text-stone-500">
+            Até 17/10/2026 os números vêm do Data book antigo (datas da planilha, muitas lançadas de uma vez); depois, do apontamento por etapa.
+            {historicoCurto && ` O servidor guarda o histórico detalhado dos últimos ${MAX_DIAS_HISTORICO} dias.`}
+          </p>
         </section>
 
-        {/* 05 O que cada um fez */}
+        {/* 06 O que cada um fez */}
         <section>
-          {tituloSecao(5, "O que cada um fez", "cada relatório: início, finalização, pausas e tempo")}
+          {tituloSecao(6, "O que cada um fez", "cada relatório: início, finalização, pausas e tempo")}
           {pessoasSemana.length === 0 && <p className="text-sm text-stone-500">Nada apontado nesta semana.</p>}
           <div className="flex flex-col gap-4">
             {pessoasSemana.map((p) => {
@@ -673,8 +720,8 @@ function Relatorio() {
                       <span className="text-sm font-extrabold">{nomeBonito(p)}</span>
                     </span>
                     <span className="text-xs text-stone-600">
-                      <strong className="text-[#1e3a5f]">{d.finalizadas.length}</strong> finalizados · <strong>{d.iniciadas}</strong> iniciados ·{" "}
-                      <strong>{duracao(d.minutos)}</strong> apontadas
+                      <strong className="text-[#1e3a5f]">{d.finalizadas.length}</strong> finalizados · <strong>{d.iniciadas}</strong> iniciados · tempo médio{" "}
+                      <strong>{d.comTempo ? duracao(Math.round(d.minutos / d.comTempo)) : "—"}</strong>
                     </span>
                     <span className="ml-auto">
                       <Variacao atual={d.finalizadas.length} anterior={anterior.get(p)?.finalizadas.length ?? 0} />
@@ -748,7 +795,7 @@ function Relatorio() {
         {/* 06 Em andamento agora */}
         {andamento.size > 0 && (
           <section className="break-inside-avoid">
-            {tituloSecao(6, "Em andamento agora", "etapas iniciadas e ainda não finalizadas (hoje)")}
+            {tituloSecao(7, "Em andamento agora", "etapas iniciadas e ainda não finalizadas (hoje)")}
             <div className="grid grid-cols-2 gap-2">
               {[...andamento.entries()]
                 .sort((a, b) => b[1].length - a[1].length)
@@ -780,7 +827,7 @@ function Relatorio() {
 
         {/* 07 Observações */}
         <section className="break-inside-avoid">
-          {tituloSecao(7, "Observações")}
+          {tituloSecao(8, "Observações")}
           <div className="flex flex-col gap-2">
             {[...pessoasSemana, "geral"].map((p) => (
               <label key={p} className="flex flex-col gap-0.5 text-xs font-semibold text-stone-600">
@@ -799,7 +846,7 @@ function Relatorio() {
 
         {/* 08 Pendências — mesma regra do Data book: somem quando o book fica PRONTO / Pronto Aguardando Coleta. */}
         <section>
-          {tituloSecao(8, "Pendências anotadas", `Falta p/ finalizar — ${pendencias.length}`)}
+          {tituloSecao(9, "Pendências anotadas", `Falta p/ finalizar — ${pendencias.length}`)}
           {pendencias.length === 0 ? (
             <p className="text-sm text-stone-500">Nenhuma pendência anotada.</p>
           ) : (
