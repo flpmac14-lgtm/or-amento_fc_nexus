@@ -232,7 +232,7 @@ function GraficoLinhas({
   altura?: number;
 }) {
   const largura = 700;
-  const margem = { esq: 30, dir: 14, topo: 14, base: 24 };
+  const margem = { esq: 30, dir: 34, topo: 14, base: 24 };
   const max = Math.max(1, ...series.flatMap((s) => s.valores));
   const passo = Math.max(1, Math.ceil(max / 4));
   const topo = passo * Math.ceil(max / passo);
