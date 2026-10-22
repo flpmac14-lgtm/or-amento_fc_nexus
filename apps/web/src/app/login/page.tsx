@@ -29,7 +29,9 @@ function FormularioLogin() {
       return;
     }
 
-    const proximo = searchParams.get("proximo") || "/";
+    // Sem destino → Visão Geral (o proxy manda cada conta pra sua tela; vendas "/" ficou secundário).
+    const pedido = searchParams.get("proximo");
+    const proximo = pedido && pedido !== "/" ? pedido : "/visao-geral";
     router.replace(proximo);
     router.refresh();
   }

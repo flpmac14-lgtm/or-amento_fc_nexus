@@ -157,8 +157,6 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
-  // Vendas/Orçamentos: só o flpmac14 (pedido do usuário, 17/10/2026; bloqueio de verdade no proxy.ts).
-  if (!restrita && podeVerFinanceiro(user.email)) operacao.push({ href: "/", rotulo: "Orçamentos", icone: "orcamento" });
   operacao.push({
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
@@ -173,6 +171,10 @@ function montarMenu(real: User): Conta {
   // Registro: também o marcelo (PCP, só consulta — pedido do usuário, 19/10/2026).
   if (podeVerRegistro(user) || podeVerFinanceiro(real.email)) admin.push({ href: "/registro", rotulo: "Registro", icone: "painel" });
   if (admin.length) secoes.push({ secao: "Administração", itens: admin });
+  // Vendas/Orçamentos: só o flpmac14 (pedido do usuário, 17/10/2026; bloqueio de verdade no proxy.ts).
+  // Secundário, no fim do menu — pedido do usuário (22/10/2026): não estão usando por enquanto.
+  if (!restrita && podeVerFinanceiro(user.email))
+    secoes.push({ secao: "Outros", itens: [{ href: "/", rotulo: "Orçamentos (vendas)", icone: "orcamento" }] });
   return { login: emailParaLogin(user.email ?? ""), perfil, itens: secoes };
 }
 

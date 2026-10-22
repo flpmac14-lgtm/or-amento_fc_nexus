@@ -34,7 +34,8 @@ export async function proxy(request: NextRequest) {
   // não, inclusive conta restrita (o celular busca o manifesto já logado).
   if (user && request.nextUrl.pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = soFinanceiro ? ROTA_FINANCEIRO : soFollowUp || semVendas ? ROTA_FOLLOW_UP : "/";
+    // Tela inicial do flpmac14 = Visão Geral (vendas ficou secundário — pedido do usuário, 22/10/2026).
+    url.pathname = soFinanceiro ? ROTA_FINANCEIRO : soFollowUp || semVendas ? ROTA_FOLLOW_UP : ROTA_VISAO_GERAL;
     url.search = "";
     return NextResponse.redirect(url);
   }
@@ -67,7 +68,7 @@ export async function proxy(request: NextRequest) {
   // usuário (os dados também são conferidos em app/api/financeiro/route.ts).
   if (user && request.nextUrl.pathname.startsWith(ROTA_FINANCEIRO) && !podeAbrirFinanceiro(user)) {
     const url = request.nextUrl.clone();
-    url.pathname = soFollowUp || semVendas ? ROTA_FOLLOW_UP : "/";
+    url.pathname = soFollowUp || semVendas ? ROTA_FOLLOW_UP : ROTA_VISAO_GERAL;
     url.search = "";
     return NextResponse.redirect(url);
   }
