@@ -13,6 +13,7 @@ import { compararValores, normalizarBusca, situacaoPrazo } from "@/lib/followUp"
 import type { ColunaControleObras, RespostaControleObras, ValorControleObras } from "@/lib/types";
 import { SeloPrazo } from "@/components/FollowUpDetalhe";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 // Tarefa roda a cada 15 min; sem verificação há mais de 45 min = parada.
@@ -144,10 +145,10 @@ export default function ControleObras({
     }
     buscar();
     // Os dados mudam a cada 15 min no servidor — recarrega sozinho enquanto a tela está aberta.
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, [config]);
 

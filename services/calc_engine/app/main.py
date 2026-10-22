@@ -81,6 +81,7 @@ backend do app principal (Next.js/Supabase), não aqui.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from datetime import date
@@ -174,6 +175,31 @@ app = FastAPI(
 # sempre liberado pro dev local; ALLOWED_ORIGINS (separadas por vírgula) adiciona
 # o domínio real do frontend hospedado (ex.: https://fc-nexus.vercel.app).
 _ORIGENS_EXTRA = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
+
+# ETag nas leituras em JSON: as telas recarregam a cada 2–5 min, mas os dados
+# só mudam no sync de 15 min ou num apontamento. Com ETag + "no-cache" o
+# navegador pergunta "mudou?" e, se não mudou, recebe 304 sem corpo em vez de
+# ~550 KB de novo — a cota de 5 GB/mês do Render estourou em 10/2026 por isso.
+# Registrado antes do GZip pra ficar por dentro dele (hash do JSON puro).
+@app.middleware("http")
+async def etag_json(request, call_next):
+    resposta = await call_next(request)
+    if request.method != "GET" or resposta.status_code != 200:
+        return resposta
+    if not resposta.headers.get("content-type", "").startswith("application/json"):
+        return resposta
+    corpo = b"".join([parte async for parte in resposta.body_iterator])
+    etag = f'W/"{hashlib.blake2b(corpo, digest_size=16).hexdigest()}"'
+    cabecalhos = {k: v for k, v in resposta.headers.items() if k.lower() != "content-length"}
+    cabecalhos["ETag"] = etag
+    cabecalhos["Cache-Control"] = "no-cache"
+    pedidos = [e.strip() for e in request.headers.get("if-none-match", "").split(",")]
+    if etag in pedidos:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+    return Response(content=corpo, status_code=200, headers=cabecalhos)
+
+
 # Compressão das respostas grandes (ex.: /controle-obras, ~13 mil linhas ≈
 # 2,5 MB em JSON → ~0,4 MB compactado).
 app.add_middleware(GZipMiddleware, minimum_size=2048)

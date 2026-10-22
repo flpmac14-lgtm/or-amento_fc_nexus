@@ -18,6 +18,7 @@ import { ETAPAS, faltaMaterial, normalizarBusca, situacaoEtapa } from "@/lib/fol
 import { MAQUINAS } from "@/lib/maquinaCorte";
 import type { ItemFollowUp, ProgramaCorte } from "@/lib/types";
 import { BarraEtapa, SeloPrazo } from "@/components/FollowUpDetalhe";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_CORTE_MS = 2 * 60 * 1000;
 const LIMITE_RESULTADOS = 60;
@@ -192,10 +193,10 @@ function TelaCorte() {
         .catch((e: Error) => ativo && setErro(e.message));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_CORTE_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_CORTE_MS);
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, [recarga]);
 

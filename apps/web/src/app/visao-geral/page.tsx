@@ -18,6 +18,7 @@ import VisaoGeralRegistros from "@/components/VisaoGeralRegistros";
 import VisaoGeralUsinagem from "@/components/VisaoGeralUsinagem";
 import { podeVerFinanceiro } from "@/lib/financeiro";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 import {
   FILTROS_PAINEL_VAZIOS,
   horaMinuto,
@@ -46,8 +47,8 @@ export default function PaginaVisaoGeral() {
     setAtualizadoEm(new Date());
   }, []);
   useEffect(() => {
-    const id = setInterval(atualizar, ATUALIZAR_A_CADA_MS);
-    return () => clearInterval(id);
+    const pararRecarga = repetirComAbaVisivel(atualizar, ATUALIZAR_A_CADA_MS);
+    return () => pararRecarga();
   }, [atualizar]);
 
   const params = useMemo(

@@ -47,6 +47,7 @@ import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import type { ItemFollowUp } from "@/lib/types";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 3 * 60 * 1000;
 const MAX_CARTOES = 60; // sem busca, mostra os primeiros (a busca acha o resto)
@@ -173,13 +174,13 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         .finally(() => ativo && setCarregando(false));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(({ data }) => ativo && data.user?.email && setUsuario(emailParaLogin(data.user.email)));
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, [config.setor]);
 

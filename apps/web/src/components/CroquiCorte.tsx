@@ -33,6 +33,7 @@ import { CelulaEditavel, IconeCadeado } from "@/components/FollowUpEdicao";
 import FollowUpSino from "@/components/FollowUpSino";
 import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
@@ -248,7 +249,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         .finally(() => ativo && setCarregando(false));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(({ data }) => {
@@ -260,7 +261,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
     const tique = setInterval(() => setTique((t) => t + 1), 60 * 1000);
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
       clearInterval(tique);
     };
   }, []);

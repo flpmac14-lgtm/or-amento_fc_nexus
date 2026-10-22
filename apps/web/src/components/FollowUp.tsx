@@ -39,6 +39,7 @@ import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
 import FollowUpSino from "@/components/FollowUpSino";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -277,13 +278,13 @@ export default function FollowUp({
         .finally(() => ativo && setCarregando(false));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(({ data }) => ativo && data.user?.email && setEditadoPor(emailParaLogin(data.user.email)));
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, []);
 

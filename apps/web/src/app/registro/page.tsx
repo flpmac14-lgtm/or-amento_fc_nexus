@@ -9,6 +9,7 @@ import AppShell from "@/components/AppShell";
 import { buscarRegistro, urlImagemFollowUp, type EventoRegistro, type RespostaRegistro } from "@/lib/api";
 import { podeVerRegistro } from "@/lib/acesso";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
 
@@ -66,10 +67,10 @@ export default function PaginaRegistro() {
         .catch((e: Error) => ativo && setErro(e.message));
     }
     carregar();
-    const id = setInterval(carregar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(carregar, RECARREGAR_A_CADA_MS);
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, [admin, dias, recarga]);
 

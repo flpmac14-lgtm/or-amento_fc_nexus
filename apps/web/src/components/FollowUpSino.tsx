@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { listarNotificacoesFollowUp } from "@/lib/api";
 import type { NotificacaoFollowUp } from "@/lib/types";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 const CHAVE_VISTO_PADRAO = "fcnexus.followup.notificacoes.vistoAte";
@@ -69,10 +70,10 @@ export default function FollowUpSino({
         .catch(() => {}); // sininho não atrapalha a tela se falhar
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, [carregar, chaveVisto]);
 

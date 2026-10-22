@@ -27,6 +27,7 @@ import type { MaquinaCorte, MarcaCorte, ProgramaCorte } from "@/lib/types";
 import CorteHistorico from "@/components/CorteHistorico";
 import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 const RECARREGAR_A_CADA_MS = 2 * 60 * 1000;
 // "Recentes" = liberados pelo projetista nos últimos dias e ainda não finalizados.
@@ -201,7 +202,7 @@ export default function Corte({
         .finally(() => ativo && setCarregando(false));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(
@@ -212,7 +213,7 @@ export default function Corte({
       );
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, []);
 

@@ -24,6 +24,7 @@ import DataBookApontar, { FaixaEtapas } from "@/components/DataBookApontar";
 import CorteHistorico from "@/components/CorteHistorico";
 import { ProvedorPdfsCorte } from "@/components/PdfPrograma";
 import { IconeCadeado } from "@/components/FollowUpEdicao";
+import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type ModoDatabook = "apontar" | "planilha" | "corte";
 
@@ -287,7 +288,7 @@ export default function DataBook({ somenteLeitura = false }: { somenteLeitura?: 
         .catch((e: Error) => ativo && setErro(e.message));
     }
     buscar();
-    const id = setInterval(buscar, RECARREGAR_A_CADA_MS);
+    const pararRecarga = repetirComAbaVisivel(buscar, RECARREGAR_A_CADA_MS);
     criarClienteSupabaseNavegador()
       .auth.getUser()
       .then(({ data }) => {
@@ -297,7 +298,7 @@ export default function DataBook({ somenteLeitura = false }: { somenteLeitura?: 
       });
     return () => {
       ativo = false;
-      clearInterval(id);
+      pararRecarga();
     };
   }, []);
 
