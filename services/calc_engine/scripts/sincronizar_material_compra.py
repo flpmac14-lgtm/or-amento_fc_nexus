@@ -47,7 +47,7 @@ def main() -> int:
         p = propagar_croqui(forcar="--forcar" in sys.argv)
         if p.get("atualizados") or p.get("novos"):
             print(f"{agora} Croqui de corte - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
-        # Nº do programa pra Compras puxar por PROCV na coluna O do MACLM (app/programas_corte_excel.py).
+        # Planilha de consulta de Compras com o Nº do programa (app/programas_corte_excel.py) — sem vínculo com o MACLM.
         try:
             e = exportar_programas(CAMINHO_PROGRAMAS)
             if e["alterado"]:
