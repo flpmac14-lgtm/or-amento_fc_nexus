@@ -164,7 +164,7 @@ export default function ModuloFollowUp({
       className={
         telaCheia
           ? "fixed inset-0 z-[55] flex flex-col gap-2 overflow-auto bg-stone-50 dark:bg-slate-950 p-2"
-          : "flex flex-col gap-4"
+          : "flex flex-col gap-3"
       }
     >
       <div className="flex items-center gap-2 border-b border-stone-200 dark:border-slate-800">

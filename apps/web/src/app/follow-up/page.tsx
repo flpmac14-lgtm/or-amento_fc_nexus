@@ -35,7 +35,7 @@ export default function PaginaFollowUp() {
 
   return (
     <AppShell titulo="Follow up / Produção" subtitulo={conta ? `Conectado como ${conta.login}` : undefined}>
-      <main className="mx-auto flex w-full max-w-[100rem] flex-col gap-4 px-3 py-3 sm:px-6 sm:py-5">
+      <main className="mx-auto flex w-full max-w-[120rem] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-3">
         {/* Só monta depois de saber quem é: projetista não pode nem carregar o Follow up. */}
         {conta && <ModuloFollowUp
             key={`${conta.login}|${conta.perfil}`}

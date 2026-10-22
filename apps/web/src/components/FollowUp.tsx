@@ -33,6 +33,7 @@ import FollowUpDetalhe, { BarraEtapa, GaleriaImagens, SeloPrazo, SeloStatus } fr
 import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpCarteiraWeir from "@/components/FollowUpCarteiraWeir";
+import FollowUpCelular from "@/components/FollowUpCelular";
 import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
@@ -142,8 +143,12 @@ const FILTROS_PADRAO: Filtros = {
 const ORDEM_PADRAO: { campo: Coluna["campo"]; desc: boolean } = { campo: "prazo_contratual", desc: false };
 const FILTROS_VAZIOS: Filtros = { ...FILTROS_PADRAO, st: "" };
 
+// Compactos — pedido do usuário (22/10/2026): filtros e botões menores no PC.
 const classeCampo =
-  "w-full rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500";
+  "w-full rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-stone-900 dark:text-slate-100 outline-none focus:border-green-600 dark:focus:border-cyan-500";
+const classeBotao =
+  "inline-flex items-center gap-1 rounded-md border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50 disabled:opacity-40";
+const CHAVE_VER_FILTROS = "fcnexus-followup-ver-filtros";
 const classeFiltroColuna =
   "w-full min-w-[4rem] rounded border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs font-normal normal-case tracking-normal text-stone-800 dark:text-slate-200 outline-none focus:border-green-600 dark:focus:border-cyan-500";
 
@@ -212,6 +217,25 @@ export default function FollowUp({
   const [todasColunas, setTodasColunas] = useState(false);
   const [verPintura, setVerPintura] = useState(false); // grupos de pintura igual recolhidos
   const [mostrarAusentes, setMostrarAusentes] = useState(false);
+  // Filtros (cliente, status, prazo…) recolhidos por padrão no PC; lembra a escolha.
+  // (o módulo só monta no navegador, depois do login — dá pra ler o localStorage direto)
+  const [verFiltros, setVerFiltros] = useState(() => {
+    try {
+      return localStorage.getItem(CHAVE_VER_FILTROS) === "1";
+    } catch {
+      return false; // sem localStorage: começa recolhido
+    }
+  });
+  function alternarVerFiltros() {
+    setVerFiltros((v) => {
+      try {
+        localStorage.setItem(CHAVE_VER_FILTROS, v ? "0" : "1");
+      } catch {
+        // sem persistência
+      }
+      return !v;
+    });
+  }
   const [pagina, setPagina] = useState(0);
   const [porPagina, setPorPagina] = useState(50);
   const [itemAberto, setItemAberto] = useState<ItemFollowUp | null>(null);
@@ -527,6 +551,10 @@ export default function FollowUp({
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
   const paginaAtual = Math.min(pagina, totalPaginas - 1);
   const visiveis = filtrados.slice(paginaAtual * porPagina, (paginaAtual + 1) * porPagina);
+  // Quantos filtros do painel recolhível estão em uso (a busca fica sempre à vista).
+  const filtrosRapidosAtivos = (Object.keys(FILTROS_VAZIOS) as (keyof Filtros)[]).filter(
+    (k) => k !== "busca" && filtros[k] !== FILTROS_VAZIOS[k],
+  ).length;
   const filtrosAlterados =
     JSON.stringify(filtros) !== JSON.stringify(FILTROS_VAZIOS) || Object.values(filtrosColuna).some((v) => v);
 
@@ -718,27 +746,7 @@ export default function FollowUp({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Cabeçalho da aba: de onde vêm os dados + o que é editável */}
-      <div className={`${telaCheia ? "hidden" : "flex"} flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4`}>
-        <div>
-          <h2 className="text-lg font-bold text-stone-900 dark:text-white">Follow up de obras</h2>
-          <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
-            Pedidos novos com ST = A da <strong>Controle de obras</strong> entram sozinhos (a cada 15 min), junto com os
-            campos que vêm por PROCV <IconeCadeado /> — esses não são editáveis. Etapas, coleta, fornecedor, orçamentos,
-            obs. Felipe/Marcelo e preço previsto: clique na célula para editar; salva sozinho. Dois cliques na linha abrem o card do item.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={carregar}
-          disabled={carregando}
-          className="rounded-lg border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-stone-700 dark:text-slate-300 hover:border-green-600/50 dark:hover:border-cyan-500/50 disabled:opacity-50"
-        >
-          Recarregar
-        </button>
-      </div>
-
+    <div className="flex flex-col gap-3">
       {erro && (
         <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
           {erro}
@@ -798,121 +806,173 @@ export default function FollowUp({
           alvoCards,
         )}
 
-      {/* Indicadores — recalculados sobre os registros filtrados */}
-      <div className={`${telaCheia ? "hidden" : "grid"} grid-cols-2 gap-3 lg:grid-cols-5`}>
-        <div className="col-span-2 rounded-lg border border-green-600/30 dark:border-cyan-500/30 bg-white dark:bg-slate-900/40 p-3 lg:col-span-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">Peso total</p>
-          <p className="font-mono text-2xl font-bold text-green-700 dark:text-cyan-300">
-            {formatarNumero(indicadores.peso, 2)} <span className="text-sm font-normal">kg</span>
-          </p>
-          <p className="text-[11px] text-stone-500 dark:text-slate-500">dos registros filtrados</p>
-        </div>
+      {/* Celular — pedido do usuário (22/10/2026): cartões pra pesquisar e ver o status, e os relatórios. */}
+      <div className="md:hidden">
+        <FollowUpCelular
+          itens={filtrados}
+          total={itens.length}
+          carregando={carregando}
+          busca={filtros.busca}
+          cliente={filtros.cliente}
+          status={filtros.status}
+          prazo={filtros.prazo}
+          opcoesCliente={opcoes.cliente}
+          opcoesStatus={opcoes.status}
+          indicadores={indicadores}
+          ctx={ctx}
+          corBarra={corBarra}
+          maxBarra={maxBarra}
+          filtrosAlterados={filtrosAlterados}
+          onBusca={(v) => setFiltro("busca", v)}
+          onCliente={(v) => setFiltro("cliente", v)}
+          onStatus={(v) => setFiltro("status", v)}
+          onPrazo={(v) => setFiltro("prazo", v)}
+          onLimpar={limparFiltros}
+          onAbrir={setItemAberto}
+          onRelatorioColeta={() => setRelatorioColeta(true)}
+          onRelatorioObra={() => setRelatorioObra({ item: null })}
+          onRelatorioAlivio={() => setRelatorioAlivio(true)}
+        />
+      </div>
+
+      {/* PC — pedido do usuário (22/10/2026): topo enxuto pra sobrar tela pro Follow up. */}
+      <div className="hidden flex-col gap-2 md:flex">
+      {/* Indicadores numa faixa fina — recalculados sobre os registros filtrados */}
+      <div className={`${telaCheia ? "hidden" : "flex"} flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 px-3 py-1.5 text-xs`}>
         {[
-          { rotulo: "Registros", valor: filtrados.length, detalhe: `de ${base.length}` },
-          { rotulo: "Prontos", valor: indicadores.prontos, detalhe: "Status = Pronto" },
-          { rotulo: "Atrasados", valor: indicadores.atrasados, detalhe: "prazo vencido e não pronto", cor: "text-red-600 dark:text-red-400" },
-          {
-            rotulo: "Vencendo",
-            valor: indicadores.vencendo,
-            detalhe: "hoje ou em até 7 dias, não pronto",
-            cor: "text-amber-600 dark:text-amber-400",
-          },
+          { rotulo: "Peso total", valor: `${formatarNumero(indicadores.peso, 2)} kg`, dica: "dos registros filtrados", cor: "text-green-700 dark:text-cyan-300" },
+          { rotulo: "Registros", valor: `${filtrados.length} de ${base.length}`, dica: "filtrados / total" },
+          { rotulo: "Prontos", valor: String(indicadores.prontos), dica: "Status = Pronto" },
+          { rotulo: "Atrasados", valor: String(indicadores.atrasados), dica: "prazo vencido e não pronto", cor: "text-red-600 dark:text-red-400" },
+          { rotulo: "Vencendo", valor: String(indicadores.vencendo), dica: "hoje ou em até 7 dias, não pronto", cor: "text-amber-600 dark:text-amber-400" },
         ].map((k) => (
-          <div key={k.rotulo} className="rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">{k.rotulo}</p>
-            <p className={`font-mono text-2xl font-bold ${k.cor ?? "text-stone-900 dark:text-white"}`}>{k.valor}</p>
-            <p className="text-[11px] text-stone-500 dark:text-slate-500">{k.detalhe}</p>
-          </div>
+          <span key={k.rotulo} className="inline-flex items-baseline gap-1.5" title={k.dica}>
+            <span className="font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">{k.rotulo}</span>
+            <span className={`font-mono text-sm font-bold ${k.cor ?? "text-stone-900 dark:text-white"}`}>{k.valor}</span>
+          </span>
         ))}
+        <span
+          className="ml-auto cursor-help text-stone-400 dark:text-slate-500"
+          title="Pedidos novos com ST = A da Controle de obras entram sozinhos (a cada 15 min), junto com os campos que vêm por PROCV (cadeado) — esses não são editáveis. Etapas, coleta, fornecedor, orçamentos, obs. Felipe/Marcelo e preço previsto: clique na célula para editar; salva sozinho. Dois cliques na linha abrem o card do item."
+        >
+          ⓘ Como funciona
+        </span>
+        <button type="button" onClick={carregar} disabled={carregando} className={classeBotao}>
+          {carregando ? "Carregando…" : "↻ Recarregar"}
+        </button>
       </div>
 
       {/* Filtros rápidos */}
-      <div className="flex flex-col gap-3 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <input
             type="search"
             value={filtros.busca}
             onChange={(e) => setFiltro("busca", e.target.value)}
             placeholder="Pesquisar PO, MAC, desenho, descrição ou NF…"
-            className={`${classeCampo} min-w-[16rem] flex-1`}
+            className={`${classeCampo} !py-1 !text-sm min-w-[14rem] max-w-md flex-1`}
           />
+          <button
+            type="button"
+            onClick={alternarVerFiltros}
+            aria-expanded={verFiltros}
+            title="Mostrar/esconder os filtros (cliente, status, prazo, ST…)"
+            className={`${classeBotao} ${filtrosRapidosAtivos ? "!border-green-600 !text-green-700 dark:!border-cyan-400 dark:!text-cyan-300" : ""}`}
+          >
+            Filtros{filtrosRapidosAtivos ? ` (${filtrosRapidosAtivos})` : ""} {verFiltros ? "▴" : "▾"}
+          </button>
           <button
             type="button"
             onClick={limparFiltros}
             disabled={!filtrosAlterados}
             title="Limpar filtros (F4)"
-            className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-red-400 disabled:opacity-40"
+            className={`${classeBotao} hover:!border-red-400`}
           >
-            Limpar filtros <kbd className="ml-1 rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F4</kbd>
+            Limpar <kbd className="ml-1 rounded border border-stone-300 dark:border-slate-600 px-1 font-mono text-[10px] text-stone-500 dark:text-slate-400">F4</kbd>
           </button>
-          <button
-            type="button"
-            onClick={() => exportarExcel(true)}
-            disabled={exportando !== null || filtrados.length === 0}
-            title="Baixa em Excel os registros filtrados (todas as páginas e colunas), com a foto de cada pedido"
-            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
-          >
-            {exportando === "foto" ? "Gerando Excel…" : `Exportar Excel (${filtrados.length})`}
-          </button>
-          <button
-            type="button"
-            onClick={() => exportarExcel(false)}
-            disabled={exportando !== null || filtrados.length === 0}
-            title="Baixa em Excel os registros filtrados, sem a Foto e sem as etapas (ENG a PIN), em tabela neutra (sem cores, filtro no cabeçalho)"
-            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
-          >
-            {exportando === "tabela" ? "Gerando Excel…" : "Excel sem foto"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRelatorioColeta(true)}
-            disabled={itens.length === 0}
-            title="Relatório dos pedidos de um cliente com coleta numa data — A4 paisagem, agrupado por pintura"
-            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
-          >
-            Relatório de coleta
-          </button>
+          <span className="mx-1 h-5 w-px bg-stone-200 dark:bg-slate-700" />
+          <MenuSuspenso rotulo={exportando ? "Gerando Excel…" : `Excel (${filtrados.length})`} desativado={exportando !== null || filtrados.length === 0}>
+            {(fechar) => (
+              <>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    void exportarExcel(true);
+                  }}
+                  dica="Registros filtrados (todas as páginas e colunas), com a foto de cada pedido"
+                >
+                  Exportar Excel com foto
+                </ItemMenu>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    void exportarExcel(false);
+                  }}
+                  dica="Sem a Foto e sem as etapas (ENG a PIN), em tabela neutra (sem cores, filtro no cabeçalho)"
+                >
+                  Excel sem foto
+                </ItemMenu>
+              </>
+            )}
+          </MenuSuspenso>
+          <MenuSuspenso rotulo="Relatórios" desativado={itens.length === 0}>
+            {(fechar) => (
+              <>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    setRelatorioColeta(true);
+                  }}
+                  dica="Pedidos de um cliente com coleta numa data — A4 paisagem, agrupado por pintura"
+                >
+                  Relatório de coleta
+                </ItemMenu>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    setRelatorioObra({ item: null });
+                  }}
+                  dica="Resumo de uma obra (por PO ou por MAC) numa folha A4"
+                >
+                  Relatório por obra
+                </ItemMenu>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    setRelatorioAlivio(true);
+                  }}
+                  dica="Pedidos com “alívio de tensão” na Obs. Felipe/Marcelo — A4 paisagem, agrupado por MAC"
+                >
+                  Relatório de alívio de tensão
+                </ItemMenu>
+              </>
+            )}
+          </MenuSuspenso>
           <FollowUpCarteiraWeir />
-          <button
-            type="button"
-            onClick={() => setRelatorioAlivio(true)}
-            disabled={itens.length === 0}
-            title="Relatório dos pedidos com “alívio de tensão” na Obs. Felipe/Marcelo — A4 paisagem, agrupado por MAC"
-            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
-          >
-            Relatório de alívio de tensão
-          </button>
-          <button
-            type="button"
-            onClick={() => setRelatorioObra({ item: null })}
-            disabled={itens.length === 0}
-            title="Resumo de uma obra (por PO ou por MAC) numa folha A4"
-            className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
-          >
-            Relatório por obra
-          </button>
           <button
             type="button"
             onClick={salvarTudo}
             disabled={salvandoTudo}
             title="Cada campo já salva sozinho — este botão confirma tudo: termina o campo em edição, espera os envios e recarrega do servidor"
-            className="rounded-lg bg-green-600 dark:bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
+            className="rounded-md bg-green-600 dark:bg-cyan-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 dark:hover:bg-cyan-500 disabled:opacity-50"
           >
             {salvandoTudo ? "Salvando…" : "Salvar tudo"}
           </button>
           {avisoSalvo && (
             <span
-              className={`text-sm ${avisoSalvo.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}
+              className={`text-xs ${avisoSalvo.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}
             >
               {avisoSalvo.texto}
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+        {verFiltros && (
+        <>
+        <div className="grid grid-cols-4 gap-1.5 xl:grid-cols-8">
           <Seletor rotulo="Cliente" valor={filtros.cliente} opcoes={opcoes.cliente} onChange={(v) => setFiltro("cliente", v)} />
           <CampoLista rotulo="MAC" id="fu-mac" valor={filtros.mac} opcoes={opcoes.mac} onChange={(v) => setFiltro("mac", v)} />
           <CampoLista rotulo="PO" id="fu-po" valor={filtros.po} opcoes={opcoes.po} onChange={(v) => setFiltro("po", v)} />
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          <label className="flex flex-col gap-0.5 text-[11px] text-stone-500 dark:text-slate-400">
             Prazo
             <select
               value={filtros.prazo}
@@ -943,7 +1003,7 @@ export default function FollowUp({
           />
           <Seletor rotulo="Ano" valor={filtros.ano} opcoes={opcoes.ano} onChange={(v) => setFiltro("ano", v)} />
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-end gap-1.5">
           <Seletor
             rotulo="ST"
             valor={filtros.st}
@@ -951,11 +1011,11 @@ export default function FollowUp({
             onChange={(v) => setFiltro("st", v)}
             dica="Padrão A = o que a segmentação da planilha mostra"
           />
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          <label className="flex flex-col gap-0.5 text-[11px] text-stone-500 dark:text-slate-400">
             Prazo de
             <input type="date" value={filtros.prazoDe} onChange={(e) => setFiltro("prazoDe", e.target.value)} className={classeCampo} />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          <label className="flex flex-col gap-0.5 text-[11px] text-stone-500 dark:text-slate-400">
             até
             <input type="date" value={filtros.prazoAte} onChange={(e) => setFiltro("prazoAte", e.target.value)} className={classeCampo} />
           </label>
@@ -965,7 +1025,7 @@ export default function FollowUp({
               type="button"
               onClick={() => setVerPintura((v) => !v)}
               title="Mostrar/esconder os grupos de pintura igual (mesmo plano + COR2 + COR-2)"
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
+              className={`rounded-md border px-2.5 py-1 text-xs ${
                 filtros.pintura
                   ? "border-green-600 bg-green-50 text-green-800 dark:border-cyan-400 dark:bg-cyan-950/40 dark:text-cyan-200"
                   : "border-stone-300 text-stone-700 hover:border-green-600/50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-cyan-500/50"
@@ -974,7 +1034,7 @@ export default function FollowUp({
               🎨 Pintura igual ({gruposPintura.length}){filtros.pintura ? " · filtrando" : ""} {verPintura ? "▴" : "▾"}
             </button>
           )}
-          <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-stone-600 dark:text-slate-400">
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-stone-600 dark:text-slate-400">
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={todasColunas} onChange={(e) => setTodasColunas(e.target.checked)} />
               Todas as colunas
@@ -1027,10 +1087,12 @@ Plano: ${e.plano_pintura ?? "—"}`}
             </div>
           </div>
         )}
+        </>
+        )}
       </div>
 
-      {/* Tabela */}
-      <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[70vh]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>
+      {/* Tabela — no PC ocupa a tela até o rodapé (pedido do usuário: ampliar o Follow up). */}
+      <div className={`${telaCheia ? "max-h-[calc(100vh-9.5rem)]" : "max-h-[calc(100vh-12.5rem)] min-h-[20rem]"} overflow-auto rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40`}>
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
@@ -1222,7 +1284,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
       </div>
 
       {/* Paginação */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-stone-600 dark:text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 dark:text-slate-400">
         <span>
           {filtrados.length === 0
             ? "0 registros"
@@ -1263,6 +1325,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
             Próxima ›
           </button>
         </div>
+      </div>
       </div>
 
       {itemAberto && (
@@ -1330,7 +1393,7 @@ function Seletor({
   dica?: string;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400" title={dica}>
+    <label className="flex flex-col gap-0.5 text-[11px] text-stone-500 dark:text-slate-400" title={dica}>
       {rotulo}
       <select value={valor} onChange={(e) => onChange(e.target.value)} className={classeCampo}>
         <option value="">Todos</option>
@@ -1358,7 +1421,7 @@ function CampoLista({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+    <label className="flex flex-col gap-0.5 text-[11px] text-stone-500 dark:text-slate-400">
       {rotulo}
       <input list={id} value={valor} onChange={(e) => onChange(e.target.value)} placeholder="Todos" className={classeCampo} />
       <datalist id={id}>
@@ -1367,5 +1430,66 @@ function CampoLista({
         ))}
       </datalist>
     </label>
+  );
+}
+
+// Menu suspenso dos botões do topo (Excel, Relatórios) — junta vários botões
+// num só pra ocupar menos espaço (pedido do usuário, 22/10/2026).
+function MenuSuspenso({
+  rotulo,
+  desativado = false,
+  children,
+}: {
+  rotulo: string;
+  desativado?: boolean;
+  children: (fechar: () => void) => React.ReactNode;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const caixa = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    function fora(e: MouseEvent) {
+      if (!caixa.current?.contains(e.target as Node)) setAberto(false);
+    }
+    function esc(e: KeyboardEvent) {
+      if (e.key === "Escape") setAberto(false);
+    }
+    document.addEventListener("mousedown", fora);
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", fora);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [aberto]);
+  return (
+    <div ref={caixa} className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        disabled={desativado}
+        aria-expanded={aberto}
+        className="inline-flex items-center gap-1 rounded-md border border-green-600/60 dark:border-cyan-500/60 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+      >
+        {rotulo} <span className="text-[10px]">{aberto ? "▴" : "▾"}</span>
+      </button>
+      {aberto && (
+        <div className="absolute left-0 top-full z-30 mt-1 flex min-w-[15rem] flex-col rounded-lg border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-lg">
+          {children(() => setAberto(false))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemMenu({ onClick, dica, children }: { onClick: () => void; dica?: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col px-3 py-1.5 text-left text-sm text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30"
+    >
+      {children}
+      {dica && <span className="text-[11px] text-stone-500 dark:text-slate-400">{dica}</span>}
+    </button>
   );
 }

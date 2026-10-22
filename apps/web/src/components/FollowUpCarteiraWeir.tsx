@@ -44,7 +44,7 @@ export default function FollowUpCarteiraWeir() {
         onClick={() => entrada.current?.click()}
         disabled={gerando}
         title="Envie o Follow up Report da WEIR (.xlsx): volta a mesma planilha com a coluna Fornecedor Confirmação preenchida — coleta, entregue/NF, À confirmar e Não consta"
-        className="rounded-lg border border-green-600/60 dark:border-cyan-500/60 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
+        className="rounded-md border border-green-600/60 dark:border-cyan-500/60 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-cyan-300 hover:bg-green-50 dark:hover:bg-cyan-950/30 disabled:opacity-40"
       >
         {gerando ? "Preenchendo…" : "Carteira WEIR"}
       </button>
