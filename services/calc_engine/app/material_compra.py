@@ -62,6 +62,10 @@ def _limpo(v):
     return v
 
 
+# Cabeçalhos renomeados na planilha: "CL" virou "C1" em 22/10/2026 (mesma coluna E).
+ALIASES = {"CL": ["CL", "C1"]}
+
+
 def _achar_colunas(cabecalho: tuple) -> list[int]:
     """Índice (0-based) de cada coluna pedida, pelo nome e ocorrência."""
     vistos: dict[str, list[int]] = {}
@@ -69,7 +73,7 @@ def _achar_colunas(cabecalho: tuple) -> list[int]:
         vistos.setdefault(_normalizar(cab), []).append(i)
     indices, faltando = [], []
     for cab, ocorrencia, *_ in COLUNAS:
-        achados = vistos.get(_normalizar(cab), [])
+        achados = next((vistos[_normalizar(a)] for a in ALIASES.get(cab, [cab]) if _normalizar(a) in vistos), [])
         if len(achados) < ocorrencia:
             faltando.append(cab if ocorrencia == 1 else f"{cab} ({ocorrencia}ª)")
         else:

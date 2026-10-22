@@ -25,8 +25,12 @@ warnings.filterwarnings("ignore", module="openpyxl")
 
 from app.croqui_corte import propagar as propagar_croqui  # noqa: E402
 from app.material_compra import registrar_erro, sincronizar  # noqa: E402
+from app.programas_corte_excel import exportar as exportar_programas  # noqa: E402
 
 CAMINHO = os.environ.get("MATERIAL_COMPRA_PATH", r"J:\6 - PCP\PCP-CP\MACLM.xlsx")
+CAMINHO_PROGRAMAS = os.environ.get(
+    "PROGRAMAS_CORTE_PATH", str(Path(CAMINHO).with_name("Programas de corte (FC Nexus).xlsx"))
+)
 
 
 def main() -> int:
@@ -43,6 +47,13 @@ def main() -> int:
         p = propagar_croqui(forcar="--forcar" in sys.argv)
         if p.get("atualizados") or p.get("novos"):
             print(f"{agora} Croqui de corte - {p['novos']} pedido(s) novo(s), {p['atualizados']} atualizado(s) pela mãe")
+        # Nº do programa pra Compras puxar por PROCV na coluna O do MACLM (app/programas_corte_excel.py).
+        try:
+            e = exportar_programas(CAMINHO_PROGRAMAS)
+            if e["alterado"]:
+                print(f"{agora} Programas de corte - {e['linhas']} pedido(s) gravados em {CAMINHO_PROGRAMAS}")
+        except OSError as e:  # arquivo aberto no Excel: tenta de novo em 15 min
+            print(f"{agora} AVISO - Programas de corte não gravado ({e})")
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app
         print(f"{agora} ERRO - {type(e).__name__}: {e}")
