@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { moeda } from "@/components/FinanceiroPainel";
 import { normalizarBusca } from "@/lib/followUp";
 
-interface ItemComparativo {
+export interface ItemComparativo {
   po: string;
   mac: string | null;
   cliente: string | null;
@@ -198,6 +198,15 @@ export default function FinanceiroPedidoAtivo() {
             ))}
           </select>
         )}
+        {/* Relatório só dos pendentes de dar entrada — pedido do usuário (23/10/2026). */}
+        <a
+          href={`/financeiro/pendentes-entrada${cliente ? `?cliente=${encodeURIComponent(cliente)}` : ""}`}
+          target="_blank"
+          rel="noopener"
+          className="flex h-11 items-center rounded-lg bg-red-600 px-3 text-sm font-bold text-white hover:bg-red-500"
+        >
+          🖨️ Relatório pendentes de entrada ({itens.filter((i) => i.situacao === "sem_entrada" && (!cliente || (i.cliente ?? "—") === cliente)).length})
+        </a>
         <span className="text-xs text-stone-500 dark:text-slate-400">
           Referência: pedido do cliente + item · atualizado{" "}
           {geradoEm ? new Date(geradoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
