@@ -37,6 +37,7 @@ import FollowUpCelular from "@/components/FollowUpCelular";
 import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
+import FollowUpRelatorioRomaneio from "@/components/FollowUpRelatorioRomaneio";
 import FollowUpSino from "@/components/FollowUpSino";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
 import { repetirComAbaVisivel } from "@/lib/repetir";
@@ -247,6 +248,7 @@ export default function FollowUp({
   const [exportando, setExportando] = useState<"foto" | "tabela" | null>(null);
   const [relatorioColeta, setRelatorioColeta] = useState(false);
   const [relatorioAlivio, setRelatorioAlivio] = useState(false);
+  const [relatorioRomaneio, setRelatorioRomaneio] = useState(false);
   // Relatório por obra: aberto pela barra (vazio) ou pelo card (com o item).
   const [relatorioObra, setRelatorioObra] = useState<{ item: ItemFollowUp | null } | null>(null);
   // "Salvar tudo" — pedido do usuário: mesmo com cada campo salvando sozinho,
@@ -946,6 +948,15 @@ export default function FollowUp({
                 >
                   Relatório de alívio de tensão
                 </ItemMenu>
+                <ItemMenu
+                  onClick={() => {
+                    fechar();
+                    setRelatorioRomaneio(true);
+                  }}
+                  dica="Itens de pedidos ou MACs com as notas fiscais do Sectra (fracionado = 1111/1112), quantidade e peso"
+                >
+                  Romaneio
+                </ItemMenu>
               </>
             )}
           </MenuSuspenso>
@@ -1358,6 +1369,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
 
       {relatorioColeta && <FollowUpRelatorioColeta itens={itens} onFechar={() => setRelatorioColeta(false)} />}
       {relatorioAlivio && <FollowUpRelatorioAlivio itens={itens} onFechar={() => setRelatorioAlivio(false)} />}
+      {relatorioRomaneio && <FollowUpRelatorioRomaneio itens={itens} onFechar={() => setRelatorioRomaneio(false)} />}
       {relatorioObra && (
         <FollowUpRelatorioObra itens={itens} itemInicial={relatorioObra.item} onFechar={() => setRelatorioObra(null)} />
       )}

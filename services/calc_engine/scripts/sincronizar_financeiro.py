@@ -509,13 +509,16 @@ def sincronizar_pedidos(simular: bool = False) -> str | None:
 # de NF de saída guarda o pedido do cliente e o item (PEDCOMPRA +
 # PEDCOMPRAITEM: 4501690746 + 10 = 4501690746-010 do Follow up). Só número e
 # data de emissão (nada de valor) — tabela follow_up_notas_fiscais (0054).
+# Romaneio (pedido do usuário, 24/10/2026): também a quantidade do item em
+# cada NF (item fracionado em 2+ notas) — po → [[NF, emissão, qtde], …].
 ESTADO_NOTAS_PEDIDO = RAIZ / "sincronizar_financeiro_notas_pedido.estado"  # hash (fora do git)
 DIAS_NOTAS_PEDIDO = 400
 SQL_NOTAS_PEDIDO = """
-SELECT DISTINCT F.NRONOTA, F.DTEMISSAO, I.PEDCOMPRA, I.PEDCOMPRAITEM
+SELECT F.NRONOTA, F.DTEMISSAO, I.PEDCOMPRA, I.PEDCOMPRAITEM, SUM(I.QTDE)
 FROM FN_NFSITENS I
 INNER JOIN FN_NFS F ON I.NFS = F.CODIGO
 WHERE F.DTEMISSAO >= ? AND F.ENTSAIDA = 'S' AND F.STATUSNF = 'F' AND F.FILIAL = ?
+GROUP BY F.NRONOTA, F.DTEMISSAO, I.PEDCOMPRA, I.PEDCOMPRAITEM
 """
 
 
@@ -523,12 +526,12 @@ def montar_notas_pedido(hoje: date | None = None) -> dict:
     from datetime import timedelta
 
     hoje = hoje or date.today()
-    por_po: dict[str, list[list[str]]] = {}
+    por_po: dict[str, list[list]] = {}
     por_nf: dict[str, str] = {}
     with _conectar_erp() as erp:
         cur = erp.cursor()
         cur.execute(SQL_NOTAS_PEDIDO, hoje - timedelta(days=DIAS_NOTAS_PEDIDO), FILIAL)
-        for nronota, emissao, pedcompra, item in cur.fetchall():
+        for nronota, emissao, pedcompra, item, qtde in cur.fetchall():
             nf = (nronota or "").strip().lstrip("0")
             if not nf or not emissao:
                 continue
@@ -537,8 +540,8 @@ def montar_notas_pedido(hoje: date | None = None) -> dict:
             po = re.sub(r"\s+", "", (pedcompra or "").upper())
             if po and item is not None:
                 lista = por_po.setdefault(f"{po}-{int(item):03d}", [])
-                if [nf, dia] not in lista:
-                    lista.append([nf, dia])
+                q = float(qtde or 0)
+                lista.append([nf, dia, int(q) if q.is_integer() else round(q, 4)])
     for lista in por_po.values():
         lista.sort(key=lambda n: (n[1], int(n[0]) if n[0].isdigit() else 0))
     return {"po": por_po, "nf": por_nf}
