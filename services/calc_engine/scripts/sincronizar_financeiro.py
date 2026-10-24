@@ -698,8 +698,8 @@ def montar_compras(itens: list[tuple[str, str, str]], hoje: date | None = None) 
                 continue
             if obras and obra_item and obra_item not in obras:
                 continue  # o texto é de outra MAC
-            if reg not in achado.setdefault(tipo, []):
-                achado[tipo].append(reg)
+            # Cada linha do ERP entra uma vez (duas linhas iguais da mesma NF somam as peças).
+            achado.setdefault(tipo, []).append(reg)
         if achado:
             for lista in achado.values():
                 lista.sort(key=lambda r: (r.get("d") or "", str(r.get("pc") or r.get("nf"))))

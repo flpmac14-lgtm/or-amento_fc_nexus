@@ -34,7 +34,7 @@ import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/Foll
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpCarteiraWeir from "@/components/FollowUpCarteiraWeir";
 import FollowUpCelular from "@/components/FollowUpCelular";
-import { CelulaCompra, resumoCompra, useComprasFollowUp } from "@/components/FollowUpCompras";
+import { CelulaCompra, distribuirCompras, resumoCompra, useComprasFollowUp } from "@/components/FollowUpCompras";
 import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
@@ -411,6 +411,8 @@ export default function FollowUp({
   }
 
   const itens = useMemo(() => dados?.itens ?? [], [dados]);
+  // Peças de cada NF de entrada repartidas entre os POs do mesmo desenho (FollowUpCompras).
+  const comprasItens = useMemo(() => distribuirCompras(itens, compras), [itens, compras]);
   const importacao = dados?.importacao ?? null;
   const ctx = useMemo(() => montarContextoRegras(importacao, itens), [importacao, itens]);
   const corBarra = importacao?.barra_etapas?.cor ?? "#63C384";
@@ -508,7 +510,7 @@ export default function FollowUp({
             return false;
           }
         } else if (col.tipo === "compra") {
-          if (!contem(resumoCompra(compras[i.id]), termo)) return false;
+          if (!contem(resumoCompra(comprasItens[i.id]), termo)) return false;
         } else if (col.campo === "meta") {
           if (!contem(i.meta, termo)) return false; // filtra pelo texto da planilha, não pela chave de ordenação
         } else if (!contem(valorCampo(i, col.campo), termo)) {
@@ -520,7 +522,7 @@ export default function FollowUp({
     if (ordem) {
       lista.sort((a, b) => {
         const valorOrdem = (i: ItemFollowUp) =>
-          ordem.campo === "compra" ? resumoCompra(compras[i.id]) || null : valorCampo(i, ordem.campo);
+          ordem.campo === "compra" ? resumoCompra(comprasItens[i.id]) || null : valorCampo(i, ordem.campo);
         const va = valorOrdem(a);
         const vb = valorOrdem(b);
         const vazioA = va === null || va === undefined || va === "";
@@ -532,7 +534,7 @@ export default function FollowUp({
       });
     }
     return lista;
-  }, [base, filtros, filtrosColuna, ordem, compras]);
+  }, [base, filtros, filtrosColuna, ordem, comprasItens]);
 
   const indicadores = useMemo(() => {
     let peso = 0;
@@ -724,7 +726,7 @@ export default function FollowUp({
           <span className="text-xs text-stone-300 dark:text-slate-600">—</span>
         );
       case "compra":
-        return <CelulaCompra compras={compras[item.id]} />;
+        return <CelulaCompra compra={comprasItens[item.id]} />;
       case "coleta":
         return item.coleta_data ? (
           <span className="font-mono text-xs">{formatarDataBr(item.coleta_data)}</span>
@@ -1355,7 +1357,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
       {itemAberto && (
         <FollowUpDetalhe
           item={itemAberto}
-          compras={compras[itemAberto.id]}
+          compra={comprasItens[itemAberto.id]}
           ctx={ctx}
           corBarra={corBarra}
           maxBarra={maxBarra}

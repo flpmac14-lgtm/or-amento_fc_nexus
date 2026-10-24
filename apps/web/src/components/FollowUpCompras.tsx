@@ -2,13 +2,15 @@
 
 // Coluna "Compra / Retorno" do Follow up — pedido do usuário (24/10/2026): do
 // Sectra (ERP), o pedido de compra vinculado ao item (serviço terceirizado), a
-// nossa remessa e as notas de entrada (serviço / retorno) que o Financeiro já
+// nossa remessa e as notas de entrada (cobrança do serviço) que o Financeiro já
 // lançou. O vínculo é pelo nº do desenho escrito no ERP — ver
 // services/calc_engine/scripts/sincronizar_financeiro.py::montar_compras.
 // Dados em /api/follow-up/compras (migration 0058), atualizados a cada 15 min.
 
 import { useEffect, useState } from "react";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { normalizarBusca } from "@/lib/followUp";
+import type { ItemFollowUp } from "@/lib/types";
 
 export interface PedidoCompra {
   pc: number;
@@ -24,13 +26,12 @@ export interface RemessaCompra {
   q: number;
 }
 export interface EntradaCompra {
-  nf: string; // NF do fornecedor lançada na entrada
+  nf: string; // NF do fornecedor lançada na entrada (só a que cobra o serviço)
   d: string | null;
   f: string;
-  q: number;
-  t: "S" | "R"; // S = serviço, R = retorno do material (DEVOLUCAO DA NF…)
+  q: number; // peças do desenho na NF
+  t: "S" | "R";
   pc: number[];
-  rem?: string; // remessa que voltou
 }
 export interface ComprasItem {
   pc?: PedidoCompra[];
@@ -38,6 +39,21 @@ export interface ComprasItem {
   ent?: EntradaCompra[];
 }
 export type ComprasPorItem = Record<string, ComprasItem>;
+
+// NF de entrada com a parte dela que ficou pra este item (ver distribuirCompras).
+export interface NotaAlocada {
+  nf: string;
+  d: string | null;
+  f: string;
+  q: number; // peças desta NF que ficaram pra este PO
+  total: number; // peças do desenho na NF
+}
+export interface CompraDoItem {
+  c: ComprasItem;
+  notas: NotaAlocada[];
+  falta: number; // peças do PO que ainda não voltaram (0 = completo)
+  grupo: { po: string; qtd: number; notas: string[] }[]; // POs do mesmo desenho/MAC e o que coube pra cada um
+}
 
 const STATUS_PC: Record<string, { rotulo: string; classe: string }> = {
   A: { rotulo: "Aberto", classe: "text-amber-700 dark:text-amber-300" },
@@ -66,49 +82,89 @@ export function useComprasFollowUp(): ComprasPorItem {
 const unicos = (lista: string[]) => [...new Set(lista)];
 const pcsValidos = (c: ComprasItem) => (c.pc ?? []).filter((p) => p.s !== "C");
 
-// NFs de entrada agrupadas por número (a mesma NF traz a linha de serviço e a de retorno).
-function notasEntrada(c: ComprasItem): { nf: string; d: string | null; f: string; q: number; retorno: boolean }[] {
-  const m = new Map<string, { nf: string; d: string | null; f: string; q: number; retorno: boolean; qs: number }>();
+// NFs de entrada somadas por número (a mesma NF pode ter 2+ linhas do desenho), em ordem de entrada.
+function notasEntrada(c: ComprasItem): { nf: string; d: string | null; f: string; q: number }[] {
+  const m = new Map<string, { nf: string; d: string | null; f: string; q: number }>();
   for (const e of c.ent ?? []) {
-    const n = m.get(e.nf) ?? { nf: e.nf, d: e.d, f: e.f, q: 0, qs: 0, retorno: false };
-    if (e.t === "R") {
-      n.q += e.q;
-      n.retorno = true;
-    } else n.qs += e.q;
+    const n = m.get(e.nf) ?? { nf: e.nf, d: e.d, f: e.f, q: 0 };
+    n.q += e.q;
     m.set(e.nf, n);
   }
-  return [...m.values()].map((n) => ({ ...n, q: n.retorno ? n.q : n.qs }));
+  return [...m.values()].sort((a, b) => (a.d ?? "").localeCompare(b.d ?? "") || a.nf.localeCompare(b.nf, "pt-BR", { numeric: true }));
 }
 
-// Texto pra filtrar / ordenar a coluna ("PC 8688 USINA … NF 40828").
-export function resumoCompra(c: ComprasItem | undefined): string {
-  if (!c) return "";
+// Distribui as peças de cada NF entre os POs do mesmo desenho e MAC — pedido
+// do usuário (24/10/2026): a 40718 trouxe 3 peças do 11500057900 e são 4 POs
+// de 1 peça; o que não coube fica sem NF ("aguardando retorno") até a próxima
+// nota. Primeiro os marcados com M.Chegou, depois os encerrados (ST ≠ A),
+// depois em ordem de PO; as NFs em ordem de entrada.
+export function distribuirCompras(itens: ItemFollowUp[], compras: ComprasPorItem): Record<string, CompraDoItem> {
+  const grupos = new Map<string, ItemFollowUp[]>();
+  for (const i of itens) {
+    if (!compras[i.id]) continue;
+    const chave = `${normalizarBusca(i.desenho ?? "")}|${(i.mac ?? "").split(".").slice(0, 2).join(".")}`;
+    grupos.set(chave, [...(grupos.get(chave) ?? []), i]);
+  }
+  const saida: Record<string, CompraDoItem> = {};
+  for (const doGrupo of grupos.values()) {
+    doGrupo.sort(
+      (a, b) =>
+        Number(!!b.material_chegou) - Number(!!a.material_chegou) ||
+        Number(a.st === "A") - Number(b.st === "A") ||
+        a.po.localeCompare(b.po, "pt-BR", { numeric: true }),
+    );
+    // Os itens do grupo acham as mesmas NFs (mesmo desenho e MAC).
+    const estoque = notasEntrada(compras[doGrupo[0].id]).map((n) => ({ ...n, resta: n.q }));
+    for (const i of doGrupo) {
+      let precisa = i.quantidade ?? 1;
+      const notas: NotaAlocada[] = [];
+      for (const n of estoque) {
+        if (precisa <= 0) break;
+        const pega = Math.min(precisa, n.resta);
+        if (pega <= 0) continue;
+        n.resta -= pega;
+        precisa -= pega;
+        notas.push({ nf: n.nf, d: n.d, f: n.f, q: pega, total: n.q });
+      }
+      saida[i.id] = { c: compras[i.id], notas, falta: Math.max(0, precisa), grupo: [] };
+    }
+    const resumo = doGrupo.map((i) => ({ po: i.po, qtd: i.quantidade ?? 1, notas: saida[i.id].notas.map((n) => n.nf) }));
+    for (const i of doGrupo) saida[i.id].grupo = resumo;
+  }
+  return saida;
+}
+
+// Texto pra filtrar / ordenar a coluna ("PC 8688 USINA … NF 40718").
+export function resumoCompra(compra: CompraDoItem | undefined): string {
+  if (!compra) return "";
+  const c = compra.c;
   return [
     ...(c.pc ?? []).map((p) => `PC ${p.pc} ${p.f} ${STATUS_PC[p.s]?.rotulo ?? p.s}`),
     ...(c.rem ?? []).map((r) => `REM ${r.nf}`),
-    ...(c.ent ?? []).map((e) => `NF ${e.nf} ${e.f}`),
-    c.ent?.length ? "retornou" : c.pc?.length ? "aguardando" : "",
+    ...compra.notas.map((n) => `NF ${n.nf} ${n.f}`),
+    compra.notas.length && !compra.falta ? "retornou" : pcsValidos(c).length || compra.notas.length ? "aguardando" : "",
   ].join(" ");
 }
 
-function dica(c: ComprasItem): string {
+function dica(compra: CompraDoItem): string {
+  const c = compra.c;
   const linhas: string[] = [];
   for (const p of c.pc ?? [])
     linhas.push(`Pedido de compra ${p.pc} item ${p.it} — ${p.f} — ${formatarNumero(p.q, 0)} — ${formatarDataBr(p.d)} — ${STATUS_PC[p.s]?.rotulo ?? p.s}`);
   for (const r of c.rem ?? []) linhas.push(`Remessa NF ${r.nf} — ${formatarDataBr(r.d)} — ${formatarNumero(r.q, 0)} pç`);
-  for (const n of notasEntrada(c))
-    linhas.push(`Entrada NF ${n.nf} — ${n.f} — ${formatarDataBr(n.d)} — ${formatarNumero(n.q, 0)} ${n.retorno ? "pç retornadas" : "(serviço)"}`);
+  for (const n of compra.notas)
+    linhas.push(`Entrada NF ${n.nf} — ${n.f} — ${formatarDataBr(n.d)} — ${formatarNumero(n.q, 0)} pç deste PO (de ${formatarNumero(n.total, 0)} na NF)`);
+  if (compra.falta) linhas.push(`Faltam ${formatarNumero(compra.falta, 0)} pç — aguardando outra nota`);
   return linhas.join("\n");
 }
 
-// Célula da tabela: linha 1 = pedidos de compra; linha 2 = NFs de entrada (ou "aguardando").
-export function CelulaCompra({ compras }: { compras: ComprasItem | undefined }) {
-  if (!compras || (!compras.pc?.length && !compras.ent?.length))
-    return <span className="text-xs text-stone-300 dark:text-slate-600">—</span>;
-  const notas = notasEntrada(compras);
-  const pcs = compras.pc ?? [];
+// Célula da tabela: linha 1 = pedidos de compra; linha 2 = NFs que couberam pra este PO; linha 3 = o que falta.
+export function CelulaCompra({ compra }: { compra: CompraDoItem | undefined }) {
+  const c = compra?.c;
+  if (!compra || !c || (!c.pc?.length && !c.ent?.length)) return <span className="text-xs text-stone-300 dark:text-slate-600">—</span>;
+  const pcs = c.pc ?? [];
   return (
-    <span className="block whitespace-nowrap text-[11px] leading-tight" title={dica(compras)}>
+    <span className="block whitespace-nowrap text-[11px] leading-tight" title={dica(compra)}>
       {pcs.length > 0 && (
         <span className="block font-mono">
           PC{" "}
@@ -123,32 +179,35 @@ export function CelulaCompra({ compras }: { compras: ComprasItem | undefined }) 
           })}
         </span>
       )}
-      {notas.length > 0 ? (
+      {compra.notas.length > 0 && (
         <span className="block font-mono text-green-700 dark:text-green-400">
-          ↩ NF {notas.map((n) => n.nf).join("/")}{" "}
-          <span className="text-stone-500 dark:text-slate-400">{formatarDataBr(notas[notas.length - 1].d).slice(0, 5)}</span>
+          ↩ NF {compra.notas.map((n) => n.nf).join("/")}{" "}
+          <span className="text-stone-500 dark:text-slate-400">{formatarDataBr(compra.notas[compra.notas.length - 1].d).slice(0, 5)}</span>
         </span>
-      ) : (
-        pcsValidos(compras).length > 0 && <span className="block text-amber-700 dark:text-amber-300">aguardando retorno</span>
+      )}
+      {compra.falta > 0 && (compra.notas.length > 0 || pcsValidos(c).length > 0) && (
+        <span className="block text-amber-700 dark:text-amber-300">
+          {compra.notas.length ? `falta ${formatarNumero(compra.falta, 0)} pç` : "aguardando retorno"}
+        </span>
       )}
     </span>
   );
 }
 
 // Quadro no card do item (FollowUpDetalhe).
-export function QuadroCompras({ compras }: { compras: ComprasItem | undefined }) {
+export function QuadroCompras({ compra }: { compra: CompraDoItem | undefined }) {
   const th = "px-2 py-1 text-left font-semibold";
   const td = "border-t border-stone-100 px-2 py-1 dark:border-slate-800";
-  if (!compras)
+  if (!compra)
     return (
       <p className="text-xs text-stone-500 dark:text-slate-400">
         Nenhum pedido de compra nem nota de entrada no Sectra com o desenho deste item.
       </p>
     );
-  const notas = notasEntrada(compras);
+  const c = compra.c;
   return (
     <div className="flex flex-col gap-3 text-xs">
-      {!!compras.pc?.length && (
+      {!!c.pc?.length && (
         <table className="w-full">
           <thead className="text-[10px] uppercase tracking-wide text-stone-500 dark:text-slate-500">
             <tr>
@@ -160,7 +219,7 @@ export function QuadroCompras({ compras }: { compras: ComprasItem | undefined })
             </tr>
           </thead>
           <tbody>
-            {compras.pc.map((p) => (
+            {c.pc.map((p) => (
               <tr key={`${p.pc}-${p.it}`}>
                 <td className={`${td} font-mono font-semibold`}>
                   {p.pc} <span className="font-normal text-stone-400">it. {p.it}</span>
@@ -174,41 +233,58 @@ export function QuadroCompras({ compras }: { compras: ComprasItem | undefined })
           </tbody>
         </table>
       )}
-      {!!compras.rem?.length && (
+      {!!c.rem?.length && (
         <p>
           <span className="font-semibold">Remessa (nossa NF):</span>{" "}
-          {compras.rem.map((r) => `NF ${r.nf} de ${formatarDataBr(r.d)} (${formatarNumero(r.q, 0)} pç)`).join(" · ")}
+          {c.rem.map((r) => `NF ${r.nf} de ${formatarDataBr(r.d)} (${formatarNumero(r.q, 0)} pç)`).join(" · ")}
         </p>
       )}
-      {notas.length > 0 ? (
+      {compra.notas.length > 0 && (
         <table className="w-full">
           <thead className="text-[10px] uppercase tracking-wide text-stone-500 dark:text-slate-500">
             <tr>
               <th className={th}>NF de entrada</th>
               <th className={th}>Entrada</th>
               <th className={th}>Fornecedor</th>
-              <th className={th}>Qtd</th>
-              <th className={th}>Tipo</th>
+              <th className={th}>Deste PO</th>
+              <th className={th}>Na NF</th>
             </tr>
           </thead>
           <tbody>
-            {notas.map((n) => (
+            {compra.notas.map((n) => (
               <tr key={n.nf}>
                 <td className={`${td} font-mono font-semibold text-green-700 dark:text-green-400`}>{n.nf}</td>
                 <td className={td}>{formatarDataBr(n.d)}</td>
                 <td className={td}>{n.f}</td>
                 <td className={td}>{formatarNumero(n.q, 0)}</td>
-                <td className={td}>{n.retorno ? "Retorno do material" : "Serviço"}</td>
+                <td className={td}>{formatarNumero(n.total, 0)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      ) : (
-        <p className="font-semibold text-amber-700 dark:text-amber-300">Nenhuma nota de entrada ainda — aguardando retorno.</p>
+      )}
+      {compra.falta > 0 && (
+        <p className="font-semibold text-amber-700 dark:text-amber-300">
+          {compra.notas.length ? `Faltam ${formatarNumero(compra.falta, 0)} pç` : "Nenhuma nota de entrada pra este PO"} — aguardando
+          retorno em outra nota.
+        </p>
+      )}
+      {compra.grupo.length > 1 && (
+        <div>
+          <p className="mb-1 font-semibold">Mesmo desenho nesta MAC — como as peças das NFs foram repartidas:</p>
+          <ul className="flex flex-col gap-0.5 font-mono">
+            {compra.grupo.map((g) => (
+              <li key={g.po} className={g.notas.length ? "" : "text-amber-700 dark:text-amber-300"}>
+                {g.po} ({formatarNumero(g.qtd, 0)} pç) → {g.notas.length ? `NF ${g.notas.join("/")}` : "aguardando"}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <p className="text-[10px] text-stone-400 dark:text-slate-500">
-        Do Sectra, pelo nº do desenho escrito no pedido / nota (atualiza a cada 15 min). A quantidade é a do pedido de compra
-        inteiro, que pode juntar vários POs do mesmo desenho.
+        Do Sectra, pelo nº do desenho escrito no pedido / nota de serviço (atualiza a cada 15 min). As peças de cada NF vão
+        primeiro pros POs marcados com M.Chegou, depois os encerrados, depois em ordem de PO. A Qtd do pedido de compra é a do
+        pedido inteiro.
       </p>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
-import { QuadroCompras, type ComprasItem } from "@/components/FollowUpCompras";
+import { QuadroCompras, type CompraDoItem } from "@/components/FollowUpCompras";
 import { CampoEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpRegistros from "@/components/FollowUpRegistros";
 import {
@@ -304,7 +304,7 @@ function texto(v: string | null | undefined) {
 
 export default function FollowUpDetalhe({
   item,
-  compras,
+  compra,
   ctx,
   corBarra,
   maxBarra,
@@ -316,7 +316,7 @@ export default function FollowUpDetalhe({
   autor,
 }: {
   item: ItemFollowUp;
-  compras?: ComprasItem; // pedido de compra / NFs de entrada do Sectra (FollowUpCompras)
+  compra?: CompraDoItem; // pedido de compra / NFs de entrada do Sectra (FollowUpCompras)
   ctx: ContextoRegras;
   corBarra: string;
   maxBarra: number;
@@ -493,7 +493,7 @@ export default function FollowUpDetalhe({
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-green-700 dark:text-cyan-400">
               Compra / retorno (Sectra)
             </h3>
-            <QuadroCompras compras={compras} />
+            <QuadroCompras compra={compra} />
           </section>
 
           <Secao titulo="Observações">
