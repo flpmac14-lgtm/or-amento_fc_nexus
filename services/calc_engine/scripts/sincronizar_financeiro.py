@@ -568,6 +568,172 @@ def sincronizar_notas_pedido(simular: bool = False) -> str | None:
     return resumo
 
 
+# --- Compras de terceiros de cada item (coluna "Compra / Retorno") ------------
+# Pedido do usuário (24/10/2026): no Sectra (ERP) os serviços terceirizados
+# têm pedido de compra (CO_PEDIDOS/CO_PEDIDOITENS) e, conforme os itens voltam,
+# o Financeiro dá entrada nas notas (FN_NFE). Não há chave com o Follow up: o
+# nº do desenho vem escrito no texto — na OBS do item do pedido de compra, na
+# OBS do item de serviço da NF de entrada e na DETALHADA da nossa remessa
+# (FN_NFSITENS, CFOP 59xx/69xx), que a linha "DEVOLUCAO DA NF…" da entrada
+# aponta (NFSITENS). Para cada item do Follow up procura o desenho nesses
+# textos; se o texto cita uma MAC (723.26) diferente da do item, descarta.
+# Só número, data, fornecedor, quantidade e status (nada de valor) — tabela
+# follow_up_compras (0058), chave = id do item do Follow up.
+ESTADO_COMPRAS = RAIZ / "sincronizar_financeiro_compras.estado"  # hash (fora do git)
+DIAS_COMPRAS = 400
+SQL_COMPRAS_PC = """
+SELECT P.CODIGO, I.ITEM, P.DTPEDIDO, FO.FANTASIA, I.QTDEPED, I.STATUS,
+       CAST(I.DESCRICAO AS varchar(max)), CAST(I.OBS AS varchar(max))
+FROM CO_PEDIDOITENS I
+INNER JOIN CO_PEDIDOS P ON P.CODIGO = I.PEDIDO
+LEFT JOIN FN_FORNECEDORES FO ON FO.CODIGO = P.FORNECEDOR
+WHERE P.FILIAL = ? AND P.DTPEDIDO >= ?
+"""
+SQL_COMPRAS_REMESSA = """
+SELECT I.CODIGO, F.NRONOTA, F.DTEMISSAO, I.QTDE, I.OBRA,
+       CAST(I.DESCRICAO AS varchar(max)), CAST(I.DETALHADA AS varchar(max))
+FROM FN_NFSITENS I
+INNER JOIN FN_NFS F ON F.CODIGO = I.NFS
+WHERE F.FILIAL = ? AND F.DTEMISSAO >= ? AND F.ENTSAIDA = 'S' AND F.STATUSNF = 'F'
+  AND (I.CFOP LIKE '59%' OR I.CFOP LIKE '69%')
+"""
+SQL_COMPRAS_ENTRADA = """
+SELECT E.CODIGO, E.NRODOCUMENTO, E.DTENTRADA, FO.FANTASIA, I.QTDE, I.OBRA, I.CFOP, I.NFSITENS,
+       CAST(I.DESCRICAO AS varchar(max)), CAST(I.OBS AS varchar(max))
+FROM FN_NFEITENS I
+INNER JOIN FN_NFE E ON E.CODIGO = I.NFE
+LEFT JOIN FN_FORNECEDORES FO ON FO.CODIGO = E.FORNECEDOR
+WHERE E.FILIAL = ? AND E.DTENTRADA >= ?
+"""
+SQL_COMPRAS_NFE_PC = "SELECT NFE, PEDIDO FROM VW_FN_NFE_PEDIDO"
+# Retorno de remessa (industrialização / conserto) — o resto é "entrada" (serviço).
+CFOP_RETORNO = ("1902", "2902", "1903", "2903", "1916", "2916", "1925", "2925")
+RE_MAC_TEXTO = re.compile(r"(?<![\d.,])0*(\d{3,4})\.(\d{2})(?![\d,])")
+
+
+def _texto_norm(s: str | None) -> str:
+    return " " + re.sub(r"[^A-Z0-9]+", " ", (s or "").upper()).strip() + " "
+
+
+def _obra(s: str | None) -> str:
+    """'0723.26' / 'MAC.723.26.10' → '723.26' ('' se não tiver)."""
+    m = RE_MAC_TEXTO.search(s or "")
+    return f"{int(m.group(1))}.{m.group(2)}" if m else ""
+
+
+def _obras_citadas(s: str | None) -> set[str]:
+    return {f"{int(a)}.{b}" for a, b in RE_MAC_TEXTO.findall(s or "")}
+
+
+def _num(v) -> float | int:
+    q = float(v or 0)
+    return int(q) if q.is_integer() else round(q, 4)
+
+
+def _dia(v) -> str | None:
+    return v.date().isoformat() if v else None
+
+
+def _fornecedor(s: str | None) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
+
+
+def montar_compras(itens: list[tuple[str, str, str]], hoje: date | None = None) -> dict:
+    """itens = [(id, desenho, mac)] do Follow up → {id: {"pc": […], "rem": […], "ent": […]}}."""
+    from datetime import timedelta
+
+    desde = (hoje or date.today()) - timedelta(days=DIAS_COMPRAS)
+    # Textos do Sectra: (tipo, registro, texto normalizado, obras citadas / obra do item)
+    textos: list[tuple[str, dict, str, set[str]]] = []
+    with _conectar_erp() as erp:
+        cur = erp.cursor()
+        cur.execute(SQL_COMPRAS_NFE_PC)
+        pcs_da_nfe: dict[int, list[int]] = {}
+        for nfe, pedido in cur.fetchall():
+            if pedido is not None:
+                pcs_da_nfe.setdefault(int(nfe), []).append(int(pedido))
+        cur.execute(SQL_COMPRAS_PC, FILIAL, desde)
+        for pedido, item, dt, forn, qtd, status, descr, obs in cur.fetchall():
+            texto = f"{descr or ''} {obs or ''}"
+            reg = {"pc": int(pedido), "it": (item or "").strip(), "d": _dia(dt), "f": _fornecedor(forn),
+                   "q": _num(qtd), "s": (status or "").strip()}
+            textos.append(("pc", reg, _texto_norm(texto), _obras_citadas(texto)))
+        cur.execute(SQL_COMPRAS_REMESSA, FILIAL, desde)
+        remessas: dict[int, tuple[dict, str, set[str]]] = {}
+        for codigo, nota, dt, qtd, obra, descr, det in cur.fetchall():
+            texto = f"{descr or ''} {det or ''}"
+            reg = {"nf": (nota or "").strip().lstrip("0"), "d": _dia(dt), "q": _num(qtd)}
+            obras = {_obra(obra)} - {""} or _obras_citadas(texto)
+            remessas[int(codigo)] = (reg, _texto_norm(texto), obras)
+            textos.append(("rem", reg, _texto_norm(texto), obras))
+        cur.execute(SQL_COMPRAS_ENTRADA, FILIAL, desde)
+        for nfe, nota, dt, forn, qtd, obra, cfop, nfsitem, descr, obs in cur.fetchall():
+            reg = {"nf": (nota or "").strip().lstrip("0"), "d": _dia(dt), "f": _fornecedor(forn), "q": _num(qtd),
+                   "t": "R" if (cfop or "").strip()[:4] in CFOP_RETORNO else "S",
+                   "pc": sorted(set(pcs_da_nfe.get(int(nfe), [])))}
+            if nfsitem is not None and int(nfsitem) in remessas:
+                # "DEVOLUCAO DA NF…": o desenho está na nossa remessa.
+                rem, norm, obras = remessas[int(nfsitem)]
+                reg["rem"] = rem["nf"]
+                textos.append(("ent", reg, norm, obras))
+            elif obs:
+                texto = f"{descr or ''} {obs}"
+                textos.append(("ent", reg, _texto_norm(texto), ({_obra(obra)} - {""}) | _obras_citadas(texto)))
+
+    # Índice por palavra pra não testar cada desenho contra todos os textos.
+    indice: dict[str, list[int]] = {}
+    for n, (_, _, norm, _) in enumerate(textos):
+        for palavra in set(norm.split()):
+            indice.setdefault(palavra, []).append(n)
+
+    saida: dict[str, dict] = {}
+    for item_id, desenho, mac in itens:
+        alvo = _texto_norm(desenho).strip()
+        palavras = alvo.split()
+        if len(alvo.replace(" ", "")) < 6 or not palavras:
+            continue
+        obra_item = _obra(mac)
+        achado: dict[str, list[dict]] = {}
+        for n in indice.get(palavras[0], []):
+            tipo, reg, norm, obras = textos[n]
+            if f" {alvo} " not in norm:
+                continue
+            if obras and obra_item and obra_item not in obras:
+                continue  # o texto é de outra MAC
+            if reg not in achado.setdefault(tipo, []):
+                achado[tipo].append(reg)
+        if achado:
+            for lista in achado.values():
+                lista.sort(key=lambda r: (r.get("d") or "", str(r.get("pc") or r.get("nf"))))
+            saida[str(item_id)] = achado
+    return saida
+
+
+def sincronizar_compras(simular: bool = False) -> str | None:
+    """Grava pedido de compra / remessa / NF de entrada de cada item se mudou (None = nada mudou)."""
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute("select id, desenho, mac from follow_up_itens where coalesce(desenho, '') <> ''")
+        itens = [(str(i), d, m) for i, d, m in cur.fetchall()]
+    dados = montar_compras(itens)
+    texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
+    assinatura = hashlib.sha256(texto.encode()).hexdigest()
+    conta = lambda t: sum(1 for v in dados.values() if t in v)  # noqa: E731
+    resumo = f"{len(dados)} itens · {conta('pc')} com pedido de compra · {conta('ent')} com NF de entrada"
+    if simular:
+        return resumo
+    if ESTADO_COMPRAS.exists() and ESTADO_COMPRAS.read_text(encoding="utf-8").strip() == assinatura:
+        return None
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """insert into follow_up_compras (id, dados, gerado_em) values (1, %s, %s)
+               on conflict (id) do update set dados = excluded.dados, gerado_em = excluded.gerado_em""",
+            (texto, datetime.now(timezone.utc)),
+        )
+        conn.commit()
+    ESTADO_COMPRAS.write_text(assinatura, encoding="utf-8")
+    return resumo
+
+
 if __name__ == "__main__":
     print(sincronizar(simular="--simular" in sys.argv) or "sem alteração")
     print(sincronizar_pedidos(simular="--simular" in sys.argv) or "pedidos: sem alteração")

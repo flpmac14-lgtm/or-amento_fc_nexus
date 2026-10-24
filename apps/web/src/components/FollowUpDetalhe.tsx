@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
+import { QuadroCompras, type ComprasItem } from "@/components/FollowUpCompras";
 import { CampoEditavel, IconeCadeado, valorParaEdicao } from "@/components/FollowUpEdicao";
 import FollowUpRegistros from "@/components/FollowUpRegistros";
 import {
@@ -303,6 +304,7 @@ function texto(v: string | null | undefined) {
 
 export default function FollowUpDetalhe({
   item,
+  compras,
   ctx,
   corBarra,
   maxBarra,
@@ -314,6 +316,7 @@ export default function FollowUpDetalhe({
   autor,
 }: {
   item: ItemFollowUp;
+  compras?: ComprasItem; // pedido de compra / NFs de entrada do Sectra (FollowUpCompras)
   ctx: ContextoRegras;
   corBarra: string;
   maxBarra: number;
@@ -485,6 +488,13 @@ export default function FollowUpDetalhe({
             <Campo rotulo="Custo Macfab (unid, R$)">{editavel("orcamento_custo_macfab_unid")}</Campo>
             <Campo rotulo="Preço previsto (R$)">{editavel("preco_previsto")}</Campo>
           </Secao>
+
+          <section className="rounded-lg border border-stone-200 dark:border-slate-800 p-3">
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-green-700 dark:text-cyan-400">
+              Compra / retorno (Sectra)
+            </h3>
+            <QuadroCompras compras={compras} />
+          </section>
 
           <Secao titulo="Observações">
             <Campo rotulo="Obs. Felipe / Marcelo" largo>

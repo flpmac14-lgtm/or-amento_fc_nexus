@@ -34,6 +34,7 @@ import { CelulaEditavel, IconeCadeado, valorParaEdicao } from "@/components/Foll
 import FollowUpAnexarImagem from "@/components/FollowUpAnexarImagem";
 import FollowUpCarteiraWeir from "@/components/FollowUpCarteiraWeir";
 import FollowUpCelular from "@/components/FollowUpCelular";
+import { CelulaCompra, resumoCompra, useComprasFollowUp } from "@/components/FollowUpCompras";
 import FollowUpRelatorioAlivio from "@/components/FollowUpRelatorioAlivio";
 import FollowUpRelatorioColeta from "@/components/FollowUpRelatorioColeta";
 import FollowUpRelatorioObra from "@/components/FollowUpRelatorioObra";
@@ -45,10 +46,10 @@ import { repetirComAbaVisivel } from "@/lib/repetir";
 // Os pedidos novos da Controle de obras chegam a cada 15 min no servidor.
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
 
-type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material";
+type TipoColuna = "foto" | "codigo" | "texto" | "numero" | "prazo" | "etapa" | "status" | "coleta" | "moeda" | "peso" | "edicao" | "material" | "compra";
 
 interface Coluna {
-  campo: keyof ItemFollowUp | "foto";
+  campo: keyof ItemFollowUp | "foto" | "compra";
   rotulo: string;
   tipo: TipoColuna;
   principal: boolean;
@@ -87,6 +88,8 @@ const COLUNAS: Coluna[] = [
   { campo: "status", rotulo: "Status", tipo: "status", principal: true },
   // Pedido do usuário (08/10): Fornecedor / terceirizado logo depois do Status, sempre visível.
   { campo: "fornecedor", rotulo: "Fornecedor / Terceirizado", tipo: "texto", principal: true, maxW: "max-w-[10rem]" },
+  // Pedido do usuário (24/10/2026): pedido de compra e NFs de entrada (retorno) do Sectra, pelo desenho.
+  { campo: "compra", rotulo: "Compra / Retorno", tipo: "compra", principal: true },
   // Colunas de pintura sempre visíveis — pedido do usuário. Plano de pintura é
   // longo: corta e mostra inteiro ao passar o mouse.
   // Pedido do usuário (17/10): Tipagem sempre visível, logo antes da cor.
@@ -164,6 +167,7 @@ function fixa(campo: Coluna["campo"], fundo: string): string {
 
 function valorCampo(item: ItemFollowUp, campo: Coluna["campo"]): unknown {
   if (campo === "foto") return item.imagens.length;
+  if (campo === "compra") return null; // vem de fora do item (ver valorOrdem no FollowUp)
   if (campo === "coleta") return item.coleta_data ?? item.coleta;
   // Meta é texto: as datas (dd/mm/aa ou dd/mm/aaaa) ordenam como data.
   if (campo === "meta") {
@@ -241,6 +245,7 @@ export default function FollowUp({
   const [pagina, setPagina] = useState(0);
   const [porPagina, setPorPagina] = useState(50);
   const [itemAberto, setItemAberto] = useState<ItemFollowUp | null>(null);
+  const compras = useComprasFollowUp();
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
@@ -502,6 +507,8 @@ export default function FollowUp({
           } else if (termo !== valorFiltroColeta(i)) {
             return false;
           }
+        } else if (col.tipo === "compra") {
+          if (!contem(resumoCompra(compras[i.id]), termo)) return false;
         } else if (col.campo === "meta") {
           if (!contem(i.meta, termo)) return false; // filtra pelo texto da planilha, não pela chave de ordenação
         } else if (!contem(valorCampo(i, col.campo), termo)) {
@@ -512,8 +519,10 @@ export default function FollowUp({
     });
     if (ordem) {
       lista.sort((a, b) => {
-        const va = valorCampo(a, ordem.campo);
-        const vb = valorCampo(b, ordem.campo);
+        const valorOrdem = (i: ItemFollowUp) =>
+          ordem.campo === "compra" ? resumoCompra(compras[i.id]) || null : valorCampo(i, ordem.campo);
+        const va = valorOrdem(a);
+        const vb = valorOrdem(b);
         const vazioA = va === null || va === undefined || va === "";
         const vazioB = vb === null || vb === undefined || vb === "";
         const r = vazioA || vazioB ? compararValores(va, vb) // vazios sempre no fim
@@ -523,7 +532,7 @@ export default function FollowUp({
       });
     }
     return lista;
-  }, [base, filtros, filtrosColuna, ordem]);
+  }, [base, filtros, filtrosColuna, ordem, compras]);
 
   const indicadores = useMemo(() => {
     let peso = 0;
@@ -714,6 +723,8 @@ export default function FollowUp({
         ) : (
           <span className="text-xs text-stone-300 dark:text-slate-600">—</span>
         );
+      case "compra":
+        return <CelulaCompra compras={compras[item.id]} />;
       case "coleta":
         return item.coleta_data ? (
           <span className="font-mono text-xs">{formatarDataBr(item.coleta_data)}</span>
@@ -1344,6 +1355,7 @@ Plano: ${e.plano_pintura ?? "—"}`}
       {itemAberto && (
         <FollowUpDetalhe
           item={itemAberto}
+          compras={compras[itemAberto.id]}
           ctx={ctx}
           corBarra={corBarra}
           maxBarra={maxBarra}
