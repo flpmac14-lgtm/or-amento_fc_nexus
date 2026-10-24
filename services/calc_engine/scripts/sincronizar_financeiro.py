@@ -574,8 +574,7 @@ def sincronizar_notas_pedido(simular: bool = False) -> str | None:
 # o Financeiro dá entrada nas notas (FN_NFE). Não há chave com o Follow up: o
 # nº do desenho vem escrito no texto — na OBS do item do pedido de compra, na
 # OBS do item de serviço da NF de entrada e na DETALHADA da nossa remessa
-# (FN_NFSITENS, CFOP 59xx/69xx), que a linha "DEVOLUCAO DA NF…" da entrada
-# aponta (NFSITENS). Para cada item do Follow up procura o desenho nesses
+# (FN_NFSITENS, CFOP 59xx/69xx). Para cada item do Follow up procura o desenho nesses
 # textos; se o texto cita uma MAC (723.26) diferente da do item, descarta.
 # Só número, data, fornecedor, quantidade e status (nada de valor) — tabela
 # follow_up_compras (0058), chave = id do item do Follow up.
@@ -659,24 +658,23 @@ def montar_compras(itens: list[tuple[str, str, str]], hoje: date | None = None) 
                    "q": _num(qtd), "s": (status or "").strip()}
             textos.append(("pc", reg, _texto_norm(texto), _obras_citadas(texto)))
         cur.execute(SQL_COMPRAS_REMESSA, FILIAL, desde)
-        remessas: dict[int, tuple[dict, str, set[str]]] = {}
         for codigo, nota, dt, qtd, obra, descr, det in cur.fetchall():
             texto = f"{descr or ''} {det or ''}"
             reg = {"nf": (nota or "").strip().lstrip("0"), "d": _dia(dt), "q": _num(qtd)}
             obras = {_obra(obra)} - {""} or _obras_citadas(texto)
-            remessas[int(codigo)] = (reg, _texto_norm(texto), obras)
             textos.append(("rem", reg, _texto_norm(texto), obras))
         cur.execute(SQL_COMPRAS_ENTRADA, FILIAL, desde)
         for nfe, nota, dt, forn, qtd, obra, cfop, nfsitem, descr, obs in cur.fetchall():
             reg = {"nf": (nota or "").strip().lstrip("0"), "d": _dia(dt), "f": _fornecedor(forn), "q": _num(qtd),
                    "t": "R" if (cfop or "").strip()[:4] in CFOP_RETORNO else "S",
                    "pc": sorted(set(pcs_da_nfe.get(int(nfe), [])))}
-            if nfsitem is not None and int(nfsitem) in remessas:
-                # "DEVOLUCAO DA NF…": o desenho está na nossa remessa.
-                rem, norm, obras = remessas[int(nfsitem)]
-                reg["rem"] = rem["nf"]
-                textos.append(("ent", reg, norm, obras))
-            elif obs:
+            # Pedido do usuário (24/10/2026): só a NF que cobra o serviço do
+            # desenho conta como entrada — a linha "DEVOLUCAO DA NF…" (retorno
+            # do material) é desconsiderada: no Sectra ela às vezes aponta a
+            # linha errada da remessa (ex.: 40718 × 40828 da 723.26).
+            if nfsitem is not None or reg["t"] == "R":
+                continue
+            if obs:
                 texto = f"{descr or ''} {obs}"
                 textos.append(("ent", reg, _texto_norm(texto), ({_obra(obra)} - {""}) | _obras_citadas(texto)))
 
