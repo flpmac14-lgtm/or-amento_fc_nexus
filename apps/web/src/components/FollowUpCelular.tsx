@@ -49,6 +49,7 @@ export default function FollowUpCelular({
   onRelatorioColeta,
   onRelatorioObra,
   onRelatorioAlivio,
+  onRelatorioRomaneio,
 }: {
   itens: ItemFollowUp[];
   total: number;
@@ -73,6 +74,7 @@ export default function FollowUpCelular({
   onRelatorioColeta: () => void;
   onRelatorioObra: () => void;
   onRelatorioAlivio: () => void;
+  onRelatorioRomaneio: () => void;
 }) {
   const [limite, setLimite] = useState(POR_VEZ);
   const visiveis = itens.slice(0, limite);
@@ -163,6 +165,7 @@ export default function FollowUpCelular({
           { rotulo: "📋 Relatório de coleta", acao: onRelatorioColeta },
           { rotulo: "🏗️ Relatório por obra", acao: onRelatorioObra },
           { rotulo: "🔥 Alívio de tensão", acao: onRelatorioAlivio },
+          { rotulo: "🧾 Romaneio", acao: onRelatorioRomaneio },
         ].map((r) => (
           <button
             key={r.rotulo}

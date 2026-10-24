@@ -835,6 +835,7 @@ export default function FollowUp({
           onRelatorioColeta={() => setRelatorioColeta(true)}
           onRelatorioObra={() => setRelatorioObra({ item: null })}
           onRelatorioAlivio={() => setRelatorioAlivio(true)}
+          onRelatorioRomaneio={() => setRelatorioRomaneio(true)}
         />
       </div>
 
