@@ -40,6 +40,28 @@ export interface ComprasItem {
 }
 export type ComprasPorItem = Record<string, ComprasItem>;
 
+// Compra do Valdir pra MAC (solicitação de compra → pedido vinculado) — pedido
+// do usuário (24/10/2026). Material da obra, vale pra todos os itens da MAC.
+export interface CompraValdir {
+  rq: number; // solicitação de compra (CO_REQUISICAO)
+  d: string | null; // data/hora da solicitação
+  m: string; // material
+  q: number;
+  u: string;
+  pc: number; // pedido de compra vinculado
+  dp: string | null;
+  f: string;
+  s: string; // status do item do pedido (STATUS_PC)
+  nf: [string, string][]; // NFs de entrada do pedido [nº, dia]
+}
+export type ComprasPorMac = Record<string, CompraValdir[]>; // "723.26" → mais recente primeiro
+
+// "723.26.10" / "0723.26" → "723.26" (igual ao _obra do sincronismo).
+export function macBase(mac: string | null): string {
+  const m = /(\d{3,4})\.(\d{2})/.exec(mac ?? "");
+  return m ? `${Number(m[1])}.${m[2]}` : "";
+}
+
 // NF de entrada com a parte dela que ficou pra este item (ver distribuirCompras).
 export interface NotaAlocada {
   nf: string;
@@ -53,6 +75,7 @@ export interface CompraDoItem {
   notas: NotaAlocada[];
   falta: number; // peças do PO que ainda não voltaram (0 = completo)
   grupo: { po: string; qtd: number; notas: string[] }[]; // POs do mesmo desenho/MAC e o que coube pra cada um
+  valdir: CompraValdir[]; // compras do Valdir pra MAC do item, a última lançada primeiro
 }
 
 const STATUS_PC: Record<string, { rotulo: string; classe: string }> = {
@@ -64,13 +87,13 @@ const STATUS_PC: Record<string, { rotulo: string; classe: string }> = {
 };
 
 // Uma vez por tela (os dados só mudam a cada 15 min).
-export function useComprasFollowUp(): ComprasPorItem {
-  const [compras, setCompras] = useState<ComprasPorItem>({});
+export function useComprasFollowUp(): { itens: ComprasPorItem; macs: ComprasPorMac } {
+  const [compras, setCompras] = useState<{ itens: ComprasPorItem; macs: ComprasPorMac }>({ itens: {}, macs: {} });
   useEffect(() => {
     let ativo = true;
     fetch("/api/follow-up/compras", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => ativo && j?.compras && setCompras(j.compras as ComprasPorItem))
+      .then((j) => ativo && j?.compras && setCompras({ itens: j.compras as ComprasPorItem, macs: (j.macs ?? {}) as ComprasPorMac }))
       .catch(() => {}); // sem os dados a coluna só fica vazia
     return () => {
       ativo = false;
@@ -98,14 +121,23 @@ function notasEntrada(c: ComprasItem): { nf: string; d: string | null; f: string
 // de 1 peça; o que não coube fica sem NF ("aguardando retorno") até a próxima
 // nota. Primeiro os marcados com M.Chegou, depois os encerrados (ST ≠ A),
 // depois em ordem de PO; as NFs em ordem de entrada.
-export function distribuirCompras(itens: ItemFollowUp[], compras: ComprasPorItem): Record<string, CompraDoItem> {
+export function distribuirCompras(
+  itens: ItemFollowUp[],
+  compras: ComprasPorItem,
+  macs: ComprasPorMac,
+): Record<string, CompraDoItem> {
   const grupos = new Map<string, ItemFollowUp[]>();
+  const saida: Record<string, CompraDoItem> = {};
   for (const i of itens) {
-    if (!compras[i.id]) continue;
-    const chave = `${normalizarBusca(i.desenho ?? "")}|${(i.mac ?? "").split(".").slice(0, 2).join(".")}`;
+    if (!compras[i.id]) {
+      // Sem compra pelo desenho: só as do Valdir pra MAC (se tiver).
+      const valdir = macs[macBase(i.mac)];
+      if (valdir?.length) saida[i.id] = { c: {}, notas: [], falta: 0, grupo: [], valdir };
+      continue;
+    }
+    const chave = `${normalizarBusca(i.desenho ?? "")}|${macBase(i.mac)}`;
     grupos.set(chave, [...(grupos.get(chave) ?? []), i]);
   }
-  const saida: Record<string, CompraDoItem> = {};
   for (const doGrupo of grupos.values()) {
     doGrupo.sort(
       (a, b) =>
@@ -126,7 +158,7 @@ export function distribuirCompras(itens: ItemFollowUp[], compras: ComprasPorItem
         precisa -= pega;
         notas.push({ nf: n.nf, d: n.d, f: n.f, q: pega, total: n.q });
       }
-      saida[i.id] = { c: compras[i.id], notas, falta: Math.max(0, precisa), grupo: [] };
+      saida[i.id] = { c: compras[i.id], notas, falta: Math.max(0, precisa), grupo: [], valdir: macs[macBase(i.mac)] ?? [] };
     }
     const resumo = doGrupo.map((i) => ({ po: i.po, qtd: i.quantidade ?? 1, notas: saida[i.id].notas.map((n) => n.nf) }));
     for (const i of doGrupo) saida[i.id].grupo = resumo;
@@ -143,7 +175,13 @@ export function resumoCompra(compra: CompraDoItem | undefined): string {
     ...(c.rem ?? []).map((r) => `REM ${r.nf}`),
     ...compra.notas.map((n) => `NF ${n.nf} ${n.f}`),
     compra.notas.length && !compra.falta ? "retornou" : pcsValidos(c).length || compra.notas.length ? "aguardando" : "",
+    ...compra.valdir.map((v) => `VALDIR PC ${v.pc} ${v.m} ${v.f}`),
   ].join(" ");
+}
+
+// "23/10/2026 15:47" — data e hora da solicitação.
+function dataHora(iso: string | null): string {
+  return iso ? `${formatarDataBr(iso.slice(0, 10))}${iso.length > 10 ? ` ${iso.slice(11, 16)}` : ""}` : "—";
 }
 
 function dica(compra: CompraDoItem): string {
@@ -155,14 +193,23 @@ function dica(compra: CompraDoItem): string {
   for (const n of compra.notas)
     linhas.push(`Entrada NF ${n.nf} — ${n.f} — ${formatarDataBr(n.d)} — ${formatarNumero(n.q, 0)} pç deste PO (de ${formatarNumero(n.total, 0)} na NF)`);
   if (compra.falta) linhas.push(`Faltam ${formatarNumero(compra.falta, 0)} pç — aguardando outra nota`);
+  const v = compra.valdir[0];
+  if (v)
+    linhas.push(
+      `Última compra do Valdir pra MAC (${compra.valdir.length} no total): solicitação ${v.rq} de ${dataHora(v.d)} — ${v.m} — ` +
+        `${formatarNumero(v.q, 0)} ${v.u} — pedido ${v.pc} ${v.f} — ${STATUS_PC[v.s]?.rotulo ?? v.s}` +
+        (v.nf.length ? ` — NF ${v.nf.map((n) => n[0]).join("/")}` : ""),
+    );
   return linhas.join("\n");
 }
 
 // Célula da tabela: linha 1 = pedidos de compra; linha 2 = NFs que couberam pra este PO; linha 3 = o que falta.
 export function CelulaCompra({ compra }: { compra: CompraDoItem | undefined }) {
   const c = compra?.c;
-  if (!compra || !c || (!c.pc?.length && !c.ent?.length)) return <span className="text-xs text-stone-300 dark:text-slate-600">—</span>;
+  if (!compra || !c || (!c.pc?.length && !c.ent?.length && !compra.valdir.length))
+    return <span className="text-xs text-stone-300 dark:text-slate-600">—</span>;
   const pcs = c.pc ?? [];
+  const ultimaValdir = compra.valdir[0];
   return (
     <span className="block whitespace-nowrap text-[11px] leading-tight" title={dica(compra)}>
       {pcs.length > 0 && (
@@ -188,6 +235,13 @@ export function CelulaCompra({ compra }: { compra: CompraDoItem | undefined }) {
       {compra.falta > 0 && (compra.notas.length > 0 || pcsValidos(c).length > 0) && (
         <span className="block text-amber-700 dark:text-amber-300">
           {compra.notas.length ? `falta ${formatarNumero(compra.falta, 0)} pç` : "aguardando retorno"}
+        </span>
+      )}
+      {ultimaValdir && (
+        <span className="block text-violet-700 dark:text-violet-300">
+          Valdir {formatarDataBr(ultimaValdir.d?.slice(0, 10) ?? null).slice(0, 5)} · PC{" "}
+          <span className={`font-mono font-semibold ${STATUS_PC[ultimaValdir.s]?.classe ?? ""}`}>{ultimaValdir.pc}</span>
+          {compra.valdir.length > 1 && <span className="text-stone-500 dark:text-slate-400"> (+{compra.valdir.length - 1})</span>}
         </span>
       )}
     </span>
@@ -281,8 +335,53 @@ export function QuadroCompras({ compra }: { compra: CompraDoItem | undefined }) 
           </ul>
         </div>
       )}
+      {compra.valdir.length > 0 && (
+        <div>
+          <p className="mb-1 font-semibold text-violet-700 dark:text-violet-300">
+            Compras do Valdir pra esta MAC ({compra.valdir.length}) — a última lançada primeiro
+          </p>
+          <div className="max-h-64 overflow-auto">
+            <table className="w-full">
+              <thead className="text-[10px] uppercase tracking-wide text-stone-500 dark:text-slate-500">
+                <tr>
+                  <th className={th}>Solicitação</th>
+                  <th className={th}>Material</th>
+                  <th className={th}>Qtd</th>
+                  <th className={th}>Pedido</th>
+                  <th className={th}>Fornecedor</th>
+                  <th className={th}>Status</th>
+                  <th className={th}>NF entrada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compra.valdir.map((v) => (
+                  <tr key={`${v.rq}-${v.pc}`}>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <span className="font-mono font-semibold">{v.rq}</span>
+                      <span className="block text-[10px] text-stone-500 dark:text-slate-400">{dataHora(v.d)}</span>
+                    </td>
+                    <td className={td}>{v.m}</td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      {formatarNumero(v.q, 0)} {v.u}
+                    </td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <span className="font-mono font-semibold">{v.pc}</span>
+                      <span className="block text-[10px] text-stone-500 dark:text-slate-400">{formatarDataBr(v.dp)}</span>
+                    </td>
+                    <td className={td}>{v.f}</td>
+                    <td className={`${td} font-semibold ${STATUS_PC[v.s]?.classe ?? ""}`}>{STATUS_PC[v.s]?.rotulo ?? v.s}</td>
+                    <td className={`${td} whitespace-nowrap font-mono`}>
+                      {v.nf.length ? v.nf.map((n) => `${n[0]} (${formatarDataBr(n[1]).slice(0, 5)})`).join(" / ") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <p className="text-[10px] text-stone-400 dark:text-slate-500">
-        Do Sectra, pelo nº do desenho escrito no pedido / nota de serviço (atualiza a cada 15 min). As peças de cada NF vão
+        Compras do Valdir: solicitações de compra com a MAC no campo Obra do Sectra que viraram pedido lançado por ele. Do Sectra, pelo nº do desenho escrito no pedido / nota de serviço (atualiza a cada 15 min). As peças de cada NF vão
         primeiro pros POs marcados com M.Chegou, depois os encerrados, depois em ordem de PO. A Qtd do pedido de compra é a do
         pedido inteiro.
       </p>

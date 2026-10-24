@@ -5,8 +5,9 @@ import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
 // Coluna "Compra / Retorno" do Follow up — pedido do usuário (24/10/2026): de
 // cada item terceirizado, o pedido de compra, a remessa e as NFs de entrada do
-// Sectra (migration 0058, RLS sem policy). Sem valores: qualquer conta logada
-// que vê o Follow up lê (o proxy deixa /api/follow-up/ passar pras restritas).
+// Sectra, e as compras do Valdir por MAC (migration 0058, RLS sem policy). Sem
+// valores: qualquer conta logada que vê o Follow up lê (o proxy deixa
+// /api/follow-up/ passar pras restritas).
 export async function GET() {
   const supabase = await criarClienteSupabaseServidor();
   const {
@@ -20,7 +21,8 @@ export async function GET() {
   );
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
   return NextResponse.json(
-    { compras: data?.dados ?? {}, gerado_em: data?.gerado_em ?? null },
+    // dados = {itens: {id do item: …}, macs: {"723.26": compras do Valdir}}
+    { compras: data?.dados?.itens ?? {}, macs: data?.dados?.macs ?? {}, gerado_em: data?.gerado_em ?? null },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

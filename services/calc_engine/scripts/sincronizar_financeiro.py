@@ -707,16 +707,79 @@ def montar_compras(itens: list[tuple[str, str, str]], hoje: date | None = None) 
     return saida
 
 
+# Compras do Valdir por MAC — pedido do usuário (24/10/2026): as solicitações
+# de compra (CO_REQUISICAO, OBRA = "0723.26" / "MAC.723.26") que viraram
+# pedido lançado pelo comprador Valdir (CO_PEDIDOS.USERNAME1), com o pedido
+# vinculado (CO_PEDIDOITENS.CODREQ) e as NFs de entrada do pedido. É material
+# da obra (chapa, tubo, tinta…), sem desenho: vale pra todos os itens da MAC.
+COMPRADOR_VALDIR = "VALDIRB"
+SQL_COMPRAS_VALDIR = """
+SELECT R.CODIGO, R.DTREQUISICAO, R.OBRA, CAST(R.DESCRICAO AS varchar(max)), R.QTDE, R.UNDREQ,
+       P.CODIGO, P.DTPEDIDO, FO.FANTASIA, I.STATUS
+FROM CO_REQUISICAO R
+INNER JOIN CO_PEDIDOITENS I ON I.CODREQ = R.CODIGO
+INNER JOIN CO_PEDIDOS P ON P.CODIGO = I.PEDIDO
+LEFT JOIN FN_FORNECEDORES FO ON FO.CODIGO = P.FORNECEDOR
+WHERE R.FILIAL = ? AND R.DTREQUISICAO >= ? AND P.USERNAME1 = ? AND R.OBRA <> 'EMPRESA'
+"""
+SQL_NFE_DO_PEDIDO = """
+SELECT V.PEDIDO, E.NRODOCUMENTO, E.DTENTRADA
+FROM VW_FN_NFE_PEDIDO V INNER JOIN FN_NFE E ON E.CODIGO = V.NFE
+WHERE E.DTENTRADA >= ?
+"""
+
+
+def _obra_erp(obra: str | None) -> str:
+    """'MAC.723.26' / '0723.26' / 'MAC.1131.25.20' → '723.26'."""
+    return _obra(re.sub(r"^\s*MA[CS]\.", "", (obra or "").upper()))
+
+
+def montar_compras_valdir(macs: set[str], hoje: date | None = None) -> dict:
+    """{'723.26': [{"rq", "d", "m", "q", "u", "pc", "dp", "f", "s", "nf": [[nº, dia]]}, …]} — mais recente primeiro."""
+    from datetime import timedelta
+
+    desde = (hoje or date.today()) - timedelta(days=DIAS_COMPRAS)
+    saida: dict[str, list[dict]] = {}
+    with _conectar_erp() as erp:
+        cur = erp.cursor()
+        cur.execute(SQL_NFE_DO_PEDIDO, desde)
+        nfs: dict[int, list[list[str]]] = {}
+        for pedido, nota, dt in cur.fetchall():
+            if pedido is not None and dt:
+                nfs.setdefault(int(pedido), []).append([(nota or "").strip().lstrip("0"), dt.date().isoformat()])
+        cur.execute(SQL_COMPRAS_VALDIR, FILIAL, desde, COMPRADOR_VALDIR)
+        for req, dreq, obra, descr, qtd, und, pedido, dped, forn, status in cur.fetchall():
+            mac = _obra_erp(obra)
+            if mac not in macs:
+                continue
+            saida.setdefault(mac, []).append({
+                "rq": int(req), "d": dreq.isoformat(timespec="minutes") if dreq else None,
+                "m": re.sub(r"\s+", " ", (descr or "").strip()), "q": _num(qtd), "u": (und or "").strip(),
+                "pc": int(pedido), "dp": _dia(dped), "f": _fornecedor(forn), "s": (status or "").strip(),
+                "nf": sorted(nfs.get(int(pedido), []), key=lambda n: n[1]),
+            })
+    for lista in saida.values():
+        lista.sort(key=lambda r: (r["d"] or "", r["rq"]), reverse=True)  # último lançado primeiro
+    return saida
+
+
 def sincronizar_compras(simular: bool = False) -> str | None:
     """Grava pedido de compra / remessa / NF de entrada de cada item se mudou (None = nada mudou)."""
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute("select id, desenho, mac from follow_up_itens where coalesce(desenho, '') <> ''")
-        itens = [(str(i), d, m) for i, d, m in cur.fetchall()]
-    dados = montar_compras(itens)
+        cur.execute("select id, desenho, mac from follow_up_itens")
+        todos = cur.fetchall()
+    itens = [(str(i), d, m) for i, d, m in todos if (d or "").strip()]
+    dados = {
+        "itens": montar_compras(itens),
+        "macs": montar_compras_valdir({_obra(m) for _, _, m in todos} - {""}),
+    }
     texto = json.dumps(dados, ensure_ascii=False, sort_keys=True)
     assinatura = hashlib.sha256(texto.encode()).hexdigest()
-    conta = lambda t: sum(1 for v in dados.values() if t in v)  # noqa: E731
-    resumo = f"{len(dados)} itens · {conta('pc')} com pedido de compra · {conta('ent')} com NF de entrada"
+    conta = lambda t: sum(1 for v in dados["itens"].values() if t in v)  # noqa: E731
+    resumo = (
+        f"{len(dados['itens'])} itens · {conta('pc')} com pedido de compra · {conta('ent')} com NF de entrada"
+        f" · compras do Valdir em {len(dados['macs'])} MACs"
+    )
     if simular:
         return resumo
     if ESTADO_COMPRAS.exists() and ESTADO_COMPRAS.read_text(encoding="utf-8").strip() == assinatura:

@@ -245,7 +245,7 @@ export default function FollowUp({
   const [pagina, setPagina] = useState(0);
   const [porPagina, setPorPagina] = useState(50);
   const [itemAberto, setItemAberto] = useState<ItemFollowUp | null>(null);
-  const compras = useComprasFollowUp();
+  const { itens: compras, macs: comprasMac } = useComprasFollowUp();
   const [galeria, setGaleria] = useState<{ item: ItemFollowUp; indice: number } | null>(null);
   // Janela "colar imagem" (coluna Foto) — item que vai receber a imagem.
   const [anexarPara, setAnexarPara] = useState<ItemFollowUp | null>(null);
@@ -412,7 +412,7 @@ export default function FollowUp({
 
   const itens = useMemo(() => dados?.itens ?? [], [dados]);
   // Peças de cada NF de entrada repartidas entre os POs do mesmo desenho (FollowUpCompras).
-  const comprasItens = useMemo(() => distribuirCompras(itens, compras), [itens, compras]);
+  const comprasItens = useMemo(() => distribuirCompras(itens, compras, comprasMac), [itens, compras, comprasMac]);
   const importacao = dados?.importacao ?? null;
   const ctx = useMemo(() => montarContextoRegras(importacao, itens), [importacao, itens]);
   const corBarra = importacao?.barra_etapas?.cor ?? "#63C384";
