@@ -381,10 +381,64 @@ COLUNAS_PEDIDOS = ["pedido", "obra", "obra_desc", "pedido_cliente", "status", "m
                    "valor", "entrega", "ano_semana", "cliente"]
 
 
+# --- Fluxo de caixa (aba Financeiro → Fluxo de caixa) -------------------------
+# Pedido do usuário (26/10/2026): pelas coletas marcadas no Follow up, projetar
+# o recebimento semana a semana / mês a mês. O valor vem do pedido de venda no
+# Sectra e o prazo da condição de pagamento dele (VE_CONDPAGTO: "28/42/56" =
+# 3 parcelas, dias em VE_CONDPAGTOITEM). As saídas são o A pagar até 180 dias
+# (o painel continua com 60).
+DIAS_PAGAR_FLUXO = 180
+SQL_CONDICOES = """
+SELECT C.CODIGO, C.DESCRICAO, I.SEQUENCIA, I.QTDEDIAS, I.PERCENTUAL
+FROM VE_CONDPAGTO C
+LEFT JOIN VE_CONDPAGTOITEM I ON I.CONDPAGTO = C.CODIGO
+"""
+SQL_PEDIDO_CONDICAO = "SELECT CODIGO, CONDPAGTO FROM VE_PEDIDO WHERE DTPEDIDO >= '20240101'"
+SQL_PAGAR_FLUXO = """
+SELECT P.DTVENCIMENTO, P.VLRDEVIDO, P.NRODOCUMENTO, P.FILIAL,
+  COALESCE(NULLIF(LTRIM(RTRIM(F.FANTASIA)), ''), F.RAZAO, P.BENEFICIARIONOME) AS NOME
+FROM FN_PAGAR P
+LEFT JOIN FN_FORNECEDORES F ON F.CODIGO = P.CODFORNECEDOR
+WHERE P.STATUS = 'A' AND P.DTPAGAMENTO IS NULL AND P.DTVENCIMENTO <= ?
+"""
+
+
+def _condicoes(cur) -> tuple[dict, dict]:
+    """(código → {desc, dias, pct}, pedido → código). Parcela sem % = partes iguais."""
+    cond: dict[str, dict] = {}
+    cur.execute(SQL_CONDICOES)
+    for codigo, desc, seq, dias, pct in sorted(cur.fetchall(), key=lambda r: (r[0], r[2] or 0)):
+        c = cond.setdefault(str(int(codigo)), {"desc": _texto(desc), "dias": [], "pct": []})
+        if dias is not None:
+            c["dias"].append(int(dias))
+            c["pct"].append(float(pct or 0))
+    for c in cond.values():
+        n = len(c["dias"])
+        if not n:
+            c["dias"], c["pct"] = [0], [100.0]
+        elif sum(c["pct"]) < 99.9:
+            c["pct"] = [round(100 / n, 4)] * n
+    cur.execute(SQL_PEDIDO_CONDICAO)
+    pedido_cond = {str(int(p)): str(int(c)) for p, c in cur.fetchall() if p is not None and c is not None}
+    return cond, pedido_cond
+
+
+def _pagar_fluxo(cur, hoje: date) -> list[list]:
+    """[vencimento, valor, nome, documento, filial] dos títulos a pagar em aberto até 180 dias."""
+    from datetime import timedelta
+
+    cur.execute(SQL_PAGAR_FLUXO, hoje + timedelta(days=DIAS_PAGAR_FLUXO))
+    saida = [[_dia(venc), round(float(devido or 0), 2), _texto(nome), _texto(doc), int(filial or 1)]
+             for venc, devido, doc, filial, nome in cur.fetchall() if venc]
+    return sorted(saida, key=lambda t: t[0])
+
+
 def montar_pedidos() -> dict:
     linhas = []
     with _conectar_erp() as erp:
         cur = erp.cursor()
+        cond, pedido_cond = _condicoes(cur)
+        pagar = _pagar_fluxo(cur, date.today())
         cur.execute(SQL_PEDIDOS_VENDA)
         for pedido, obra, obra_desc, po, status, material, desc, qtde, valor, entrega, ano_sem, cliente in cur.fetchall():
             # "21/10/2026" → "2026-10-21"
@@ -397,7 +451,9 @@ def montar_pedidos() -> dict:
                 _texto(status), _texto(material), _texto(desc), float(qtde or 0), round(float(valor or 0), 2),
                 iso, _texto(ano_sem), _texto(cliente),
             ])
-    return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas, "comparativo": comparar_com_follow_up(linhas)}
+    return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas,
+            "comparativo": comparar_com_follow_up(linhas, cond, pedido_cond),
+            "fluxo": {"pagar": pagar}}
 
 
 # --- Pedido - ativo (comparativo) --------------------------------------------
@@ -420,7 +476,7 @@ def chave_po(po: str | None, descricao: str | None = None) -> tuple[str, int | N
 ABERTOS_ERP = {"EM ABERTO", "LIBERADO", "EM PRODUCAO"}
 
 
-def comparar_com_follow_up(linhas: list[list]) -> dict:
+def comparar_com_follow_up(linhas: list[list], cond: dict | None = None, pedido_cond: dict | None = None) -> dict:
     col = {c: i for i, c in enumerate(COLUNAS_PEDIDOS)}
     erp: dict[tuple, list[list]] = {}
     for l in linhas:
@@ -455,6 +511,8 @@ def comparar_com_follow_up(linhas: list[list]) -> dict:
             alertas.append(f"Duplicado no Sectra: {len(validas)} linhas (pedido {', '.join(sorted({l[col['pedido']] for l in validas}))})")
         if vistos[k] > 1:
             alertas.append(f"Duplicado no Follow up: {vistos[k]} linhas ativas com esse pedido/item")
+        # Condição de pagamento do pedido de venda (fluxo de caixa): a do 1º pedido válido.
+        c = next((x for x in ((cond or {}).get((pedido_cond or {}).get(l[col["pedido"]] or "")) for l in validas) if x), None)
         qtd_erp = sum(l[col["qtde"]] for l in validas)
         if validas and qtd and abs(float(qtd) - qtd_erp) > 0.001 and len(validas) == 1:
             alertas.append(f"Quantidade diferente: Follow up {float(qtd):g} × Sectra {qtd_erp:g}")
@@ -466,6 +524,7 @@ def comparar_com_follow_up(linhas: list[list]) -> dict:
             "valor": round(sum(l[col["valor"]] for l in validas), 2) if validas else None,
             "entrega": min((l[col["entrega"]] for l in validas if l[col["entrega"]]), default=None),
             "cliente_erp": next((l[col["cliente"]] for l in validas), None), "alertas": alertas,
+            "condicao": c,
         })
     # Ao contrário: em aberto no Sectra sem pedido ativo no Follow up.
     so_sectra = []

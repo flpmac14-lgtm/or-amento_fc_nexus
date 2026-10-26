@@ -89,6 +89,39 @@ export interface NotaFiscal {
   cancelada?: boolean; // vermelha na tabela, fora da soma (o faturamento já não conta)
 }
 
+/** Condição de pagamento do pedido de venda (VE_CONDPAGTO): "28/42/56" = dias de cada parcela e % dela. */
+export interface CondicaoPagamento {
+  desc: string | null;
+  dias: number[];
+  pct: number[];
+}
+
+/** Item ativo do Follow up com data de coleta, cruzado com o pedido de venda no Sectra (fluxo de caixa). */
+export interface ColetaFluxo {
+  po: string;
+  mac: string | null;
+  cliente: string | null;
+  desenho: string | null;
+  descricao: string | null;
+  qtd: number | null;
+  coleta: string; // AAAA-MM-DD
+  situacao: "sem_entrada" | "em_aberto" | "faturado" | "cancelado";
+  valor: number | null;
+  pedidos: string[];
+  cliente_erp: string | null;
+  condicao: CondicaoPagamento | null;
+}
+
+/** GET /api/financeiro/fluxo (só flpmac14). */
+export interface RespostaFluxo {
+  hoje: string | null;
+  gerado_em: string | null;
+  coletas: ColetaFluxo[];
+  receber: TituloErp[];
+  pagar: TituloErp[];
+  dias_pagar: number; // horizonte do A pagar carregado
+}
+
 export interface BudgetFinanceiro {
   faturamento: Record<string, number>; // mês → R$
   custos_pct: Record<string, Record<string, number>>; // grupo → mês → % do faturamento
