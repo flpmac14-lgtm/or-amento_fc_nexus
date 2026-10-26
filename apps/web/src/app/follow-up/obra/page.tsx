@@ -8,6 +8,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { notasFaturadasDoItem, useNotasFaturadas, type NotaFaturada, type NotasPorPo } from "@/components/FollowUpNotasFaturadas";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { ETAPAS, ROTULO_PRAZO, faltaMaterial, itensDaObra, metaDoItem, normalizarBusca, situacaoPrazo, type TipoObra } from "@/lib/followUp";
@@ -19,6 +20,23 @@ function v(valor: string | number | null | undefined): string {
 
 function pronto(i: ItemFollowUp): boolean {
   return normalizarBusca(i.status ?? "") === "pronto";
+}
+
+// Entregue = pedido encerrado (ST "E") — pedido do usuário (26/10/2026): no
+// relatório pra apresentar, cada Meta (1P, 2P…) lista os entregues com a nota
+// fiscal de saída do Sectra (/api/follow-up/notas-fiscais); sem nota lá, vale
+// a NF digitada no Follow up.
+function entregue(i: ItemFollowUp): boolean {
+  return i.st === "E";
+}
+
+function notasDoItem(i: ItemFollowUp, notas: NotasPorPo): NotaFaturada[] {
+  const doSectra = notasFaturadasDoItem(i, notas);
+  return doSectra.length || !i.nf ? doSectra : [{ nf: String(i.nf), d: "", q: null }];
+}
+
+function textoNotas(ns: NotaFaturada[]): string {
+  return ns.map((n) => `${n.nf}${n.d ? ` (${formatarDataBr(n.d)})` : ""}`).join(" · ");
 }
 
 // Onde o item está sendo fabricado — pedido do usuário (08/10): segue a coluna
@@ -101,14 +119,16 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
   );
 }
 
-function CardItem({ i }: { i: ItemFollowUp }) {
+function CardItem({ i, notas, apresentacao }: { i: ItemFollowUp; notas: NotaFaturada[]; apresentacao: boolean }) {
   const sit = situacaoPrazo(i.prazo_contratual);
-  const avisos = alertas(i);
+  const avisos = apresentacao ? [] : alertas(i);
   const local = localFabricacao(i);
+  // Mais de uma nota: só os números (cabe no cartão); a data vai no quadro dos entregues.
+  const nf = notas.length > 1 ? notas.map((n) => n.nf).join(" · ") : notas.length ? textoNotas(notas) : v(i.nf);
   return (
     <article
       className={`flex break-inside-avoid gap-2 rounded border p-1.5 ${
-        faltaMaterial(i) && !pronto(i) ? "border-red-500 bg-red-50" : "border-stone-300"
+        !apresentacao && faltaMaterial(i) && !pronto(i) ? "border-red-500 bg-red-50" : "border-stone-300"
       }`}
     >
       <div className="flex h-[24mm] w-[30mm] shrink-0 items-center justify-center rounded border border-stone-200 bg-white">
@@ -125,15 +145,18 @@ function CardItem({ i }: { i: ItemFollowUp }) {
             <span className="font-mono text-[12px] font-bold">{i.po}</span>
             <span className="ml-2 text-[10px] text-stone-700">{v(i.descricao)}</span>
           </p>
-          <span className="ml-auto shrink-0 text-[9px] text-stone-600">
-            Fabricação: <strong className={local === MACFAB ? "text-green-800" : "text-sky-800"}>{local}</strong>
-          </span>
+          {!apresentacao && (
+            <span className="ml-auto shrink-0 text-[9px] text-stone-600">
+              Fabricação: <strong className={local === MACFAB ? "text-green-800" : "text-sky-800"}>{local}</strong>
+            </span>
+          )}
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${
-              pronto(i) ? "bg-green-600 text-white" : "border border-stone-400 text-stone-800"
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${apresentacao ? "ml-auto" : ""} ${
+              entregue(i) ? "bg-blue-700 text-white" : pronto(i) ? "bg-green-600 text-white" : "border border-stone-400 text-stone-800"
             }`}
+            style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
           >
-            {v(i.status)}
+            {entregue(i) ? "Entregue" : v(i.status)}
           </span>
         </div>
         <div className="grid grid-cols-6 gap-x-2">
@@ -149,7 +172,13 @@ function CardItem({ i }: { i: ItemFollowUp }) {
             </span>
           </Dado>
           <Dado rotulo="Coleta">{i.coleta_data ? formatarDataBr(i.coleta_data) : v(i.coleta)}</Dado>
-          <Dado rotulo={i.meta ? "Meta / NF" : "NF"}>{i.meta ? `${i.meta} · ${v(i.nf)}` : v(i.nf)}</Dado>
+          {notas.length ? (
+            <Dado rotulo="Nota fiscal">
+              <span className="text-blue-800" title={nf}>{nf}</span>
+            </Dado>
+          ) : (
+            <Dado rotulo={i.meta ? "Meta / NF" : "NF"}>{i.meta ? `${i.meta} · ${nf}` : nf}</Dado>
+          )}
         </div>
         {/* Etapas: mesma barra do card, em miniatura */}
         <div className="grid grid-cols-8 gap-1">
@@ -172,7 +201,7 @@ function CardItem({ i }: { i: ItemFollowUp }) {
         <p className="truncate text-[9px] text-stone-700">
           <span className="font-semibold">Pintura:</span> {v(i.cor2)} · {v(i.cor_2)} · {v(i.plano_pintura)}
         </p>
-        {(avisos.length > 0 || i.obs_felipe_marcelo) && (
+        {(avisos.length > 0 || (!apresentacao && i.obs_felipe_marcelo)) && (
           <div className="flex flex-wrap items-center gap-1">
             {avisos.map((a) => (
               <span
@@ -184,7 +213,7 @@ function CardItem({ i }: { i: ItemFollowUp }) {
                 ⚠ {a}
               </span>
             ))}
-            {i.obs_felipe_marcelo && (
+            {!apresentacao && i.obs_felipe_marcelo && (
               <span className="min-w-0 flex-1 rounded border-l-4 border-amber-500 bg-amber-50 px-1.5 py-0.5 text-[9px] text-stone-900">
                 <strong>Obs.:</strong> {i.obs_felipe_marcelo}
               </span>
@@ -295,6 +324,71 @@ function PontosAtencao({ itens }: { itens: ItemFollowUp[] }) {
   );
 }
 
+// Entregues de uma Meta (ou da obra) com a nota fiscal de cada um.
+function EntreguesComNota({ itens, notas }: { itens: ItemFollowUp[]; notas: NotasPorPo }) {
+  const lista = itens.filter(entregue);
+  if (!lista.length) return null;
+  const comNota = lista.filter((i) => notasDoItem(i, notas).length).length;
+  return (
+    <section className="break-inside-avoid rounded border-2 border-blue-600 p-2">
+      <h3 className="text-[10px] font-bold uppercase tracking-wide text-blue-800">
+        Entregues com nota fiscal
+        <span className="ml-2 font-medium normal-case text-stone-600">
+          {lista.length} entregue(s) · {comNota} com NF
+        </span>
+      </h3>
+      <table className="mt-1 w-full text-[9px]">
+        <thead>
+          <tr className="border-b border-stone-300 text-left text-[8px] uppercase text-stone-500">
+            <th className="py-0.5 pr-2">PO</th>
+            <th className="pr-2">Descrição</th>
+            <th className="pr-2">Desenho</th>
+            <th className="pr-2 text-right">Qtd</th>
+            <th className="pr-2 text-right">Peso (kg)</th>
+            <th className="pr-2">Nota fiscal</th>
+            <th>Emissão</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lista.map((i) => {
+            const ns = notasDoItem(i, notas);
+            return (
+              <tr key={i.id} className="border-b border-stone-100 align-top">
+                <td className="whitespace-nowrap py-0.5 pr-2 font-mono font-semibold">{i.po}</td>
+                <td className="max-w-[50mm] truncate pr-2">{v(i.descricao)}</td>
+                <td className="max-w-[30mm] truncate pr-2">{v(i.desenho)}</td>
+                <td className="pr-2 text-right">{i.quantidade === null ? "—" : formatarNumero(i.quantidade, 0)}</td>
+                <td className="pr-2 text-right">{i.peso_total === null ? "—" : formatarNumero(i.peso_total, 1)}</td>
+                <td className="pr-2 font-mono font-bold text-blue-800">
+                  {ns.length ? (
+                    ns.map((n) => (
+                      <span key={`${n.nf}-${n.d}`} className="block">
+                        NF {n.nf}
+                        {ns.length > 1 && n.q !== null ? ` · ${formatarNumero(n.q, 0)} pç` : ""}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="font-sans font-semibold text-amber-700">sem NF</span>
+                  )}
+                </td>
+                <td className="font-mono">
+                  {ns.length
+                    ? ns.map((n) => (
+                        <span key={`${n.nf}-${n.d}`} className="block">
+                          {n.d ? formatarDataBr(n.d) : "—"}
+                        </span>
+                      ))
+                    : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 // Meta da obra (pedido do usuário, 15/10/2026 — obra 723: 1P, 2P, 3P…): resumo
 // de cada Meta e os cartões agrupados por ela. Desde 20/10 vem da Obs. Diretoria
 // (lib/followUp.ts::metaDoItem).
@@ -333,6 +427,7 @@ function ResumoMeta({ grupos }: { grupos: [string, ItemFollowUp[]][] }) {
             <th className="py-0.5 text-left">Meta</th>
             <th>Itens</th>
             <th>Prontos</th>
+            <th>Entregues</th>
             <th>Peças</th>
             <th>Peso (kg)</th>
             {ETAPAS.map((e) => (
@@ -344,12 +439,14 @@ function ResumoMeta({ grupos }: { grupos: [string, ItemFollowUp[]][] }) {
         <tbody>
           {grupos.map(([meta, lista]) => {
             const prontos = lista.filter(pronto).length;
+            const entregues = lista.filter(entregue).length;
             const avanco = media(lista.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)));
             return (
               <tr key={meta} className="border-b border-stone-100 text-center">
                 <td className="py-0.5 text-left font-mono text-[11px] font-extrabold text-violet-900">{meta}</td>
                 <td>{lista.length}</td>
                 <td className={prontos === lista.length ? "font-bold text-green-800" : ""}>{prontos}</td>
+                <td className={entregues ? "font-bold text-blue-800" : ""}>{entregues}</td>
                 <td>{formatarNumero(lista.reduce((s, i) => s + (i.quantidade ?? 0), 0), 0)}</td>
                 <td>{formatarNumero(lista.reduce((s, i) => s + (i.peso_total ?? 0), 0), 0)}</td>
                 {ETAPAS.map((e) => {
@@ -398,6 +495,11 @@ function Relatorio() {
   const [nomes, setNomes] = useState<string[]>([]);
   // Tique "Sem fornecedores" — fica na URL (&sem_fornecedor=1) pra mandar o link já assim.
   const [ocultar, setOcultar] = useState(params.get("sem_fornecedor") === "1");
+  // Tique "Sem pontos de atenção" (pedido do usuário, 26/10/2026): relatório pra
+  // apresentar, sem os Pontos de atenção (avisos e Obs.) e sem onde está sendo
+  // fabricado. Também fica na URL (&apresentacao=1).
+  const [apresentacao, setApresentacao] = useState(params.get("apresentacao") === "1");
+  const notas = useNotasFaturadas();
   const [erro, setErro] = useState("");
   const [geradoEm] = useState(() => new Date().toLocaleString("pt-BR"));
 
@@ -455,6 +557,7 @@ function Relatorio() {
   const pecas = itens.reduce((s, i) => s + (i.quantidade ?? 0), 0);
   const peso = itens.reduce((s, i) => s + (i.peso_total ?? 0), 0);
   const prontos = itens.filter(pronto).length;
+  const entregues = itens.filter(entregue).length;
   // Avanço = média das 8 etapas de todos os itens (etapa vazia conta 0%).
   const avanco = media(itens.flatMap((i) => ETAPAS.map((e) => i[e.campo] as number | null)));
   const prazos = itens.map((i) => i.prazo_contratual).filter((p): p is string => !!p).sort();
@@ -482,6 +585,26 @@ function Relatorio() {
             className="h-5 w-5 accent-violet-600"
           />
           Sem fornecedores (pra cliente)
+        </label>
+        <label
+          className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold ${
+            apresentacao ? "border-blue-600 bg-blue-50 text-blue-900" : "border-stone-400 bg-white text-stone-700"
+          }`}
+          title="Tira os Pontos de atenção (avisos e Obs.) e onde está sendo fabricado — pra apresentar"
+        >
+          <input
+            type="checkbox"
+            checked={apresentacao}
+            onChange={(e) => {
+              setApresentacao(e.target.checked);
+              const url = new URL(window.location.href);
+              if (e.target.checked) url.searchParams.set("apresentacao", "1");
+              else url.searchParams.delete("apresentacao");
+              window.history.replaceState(null, "", url);
+            }}
+            className="h-5 w-5 accent-blue-600"
+          />
+          Sem pontos de atenção e fabricação
         </label>
         {fila.length > 1 && (
           <div className="flex w-full flex-wrap items-center gap-1 rounded-lg border-2 border-violet-500 bg-white p-2 text-sm">
@@ -548,10 +671,11 @@ function Relatorio() {
           </p>
         </header>
 
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-6 gap-2">
           {[
             { r: "Itens", v: `${itens.length}` },
             { r: "Prontos", v: `${prontos} de ${itens.length}` },
+            { r: "Entregues", v: `${entregues} de ${itens.length}` },
             { r: "Peças / Peso", v: `${formatarNumero(pecas, 0)} · ${formatarNumero(peso, 1)} kg` },
             { r: "Avanço médio", v: avanco === null ? "—" : `${formatarNumero(avanco, 0)}%` },
             {
@@ -571,8 +695,8 @@ function Relatorio() {
         </div>
 
         {porMeta && <ResumoMeta grupos={porMeta} />}
-        {itens.length > 0 && <GraficoFabricacao itens={itens} />}
-        {itens.length > 0 && <PontosAtencao itens={itens} />}
+        {itens.length > 0 && !apresentacao && <GraficoFabricacao itens={itens} />}
+        {itens.length > 0 && !apresentacao && <PontosAtencao itens={itens} />}
 
         {itens.length === 0 ? (
           <p className="py-10 text-center text-stone-500">Nenhum item com {tipo.toUpperCase()} começando em “{valor}”{meta ? ` na Meta ${meta}` : ""}.</p>
@@ -582,16 +706,22 @@ function Relatorio() {
               <h2 className="break-after-avoid border-b-2 border-violet-500 pt-1 text-sm font-extrabold text-violet-900">
                 Meta {meta}
                 <span className="ml-2 text-[10px] font-medium text-stone-600">
-                  {lista.length} item(ns) · {lista.filter(pronto).length} pronto(s)
+                  {lista.length} item(ns) · {lista.filter(pronto).length} pronto(s) · {lista.filter(entregue).length} entregue(s)
                 </span>
               </h2>
+              <EntreguesComNota itens={lista} notas={notas} />
               {lista.map((i) => (
-                <CardItem key={i.id} i={i} />
+                <CardItem key={i.id} i={i} notas={notasDoItem(i, notas)} apresentacao={apresentacao} />
               ))}
             </section>
           ))
         ) : (
-          itens.map((i) => <CardItem key={i.id} i={i} />)
+          <>
+            <EntreguesComNota itens={itens} notas={notas} />
+            {itens.map((i) => (
+              <CardItem key={i.id} i={i} notas={notasDoItem(i, notas)} apresentacao={apresentacao} />
+            ))}
+          </>
         )}
       </main>
     </div>
