@@ -148,7 +148,7 @@ function Kpi({ rotulo, valor, detalhe, tom, onClick }: { rotulo: string; valor: 
   const miolo = (
     <>
       <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">{rotulo}</p>
-      <p className={`mt-0.5 truncate text-lg font-black sm:text-2xl ${tom}`}>{valor}</p>
+      <p className={`mt-0.5 truncate text-lg font-black sm:text-xl 2xl:text-2xl ${tom}`}>{valor}</p>
       <p className="text-[11px] text-stone-500 dark:text-slate-400">{detalhe}</p>
     </>
   );
