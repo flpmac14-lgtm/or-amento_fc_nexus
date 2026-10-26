@@ -19,6 +19,7 @@ import {
   type DiaHoraExtra,
   type SolicitacaoHoraExtra,
 } from "@/lib/horaExtra";
+import { encaminharWhatsApp } from "@/lib/horaExtraPdf";
 
 const API = "/api/follow-up/hora-extra";
 
@@ -251,13 +252,7 @@ export default function FuncionariosHoraExtra() {
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-stone-200 pt-3 dark:border-slate-700">
           <p className="text-sm text-stone-700 dark:text-slate-300">
             <strong>{escolhidos.size}</strong> funcionário(s) · <strong>{dias.length}</strong> dia(s) ·{" "}
-            <strong>{formatarHoras(minutos)}</strong> por pessoa
-            {escolhidos.size > 1 && (
-              <>
-                {" "}
-                · <strong>{formatarHoras(minutos * escolhidos.size)}</strong> no total
-              </>
-            )}
+            <strong>{formatarHoras(minutos * escolhidos.size)}</strong> no total
           </p>
           <button
             type="button"
@@ -284,7 +279,7 @@ export default function FuncionariosHoraExtra() {
                   {s.dias.map((d) => `${formatarDataBr(d.data).slice(0, 5)} ${d.inicio}–${d.fim}`).join(" · ")}
                 </span>
                 <span className="text-stone-500 dark:text-slate-400">
-                  {s.funcionarios.length} funcionário(s) · {formatarHoras(minutosDaSolicitacao(s.dias))}/pessoa · por {s.solicitante.split(" ")[0]}
+                  {s.funcionarios.length} funcionário(s) · {formatarHoras(minutosDaSolicitacao(s.dias) * s.funcionarios.length)} no total · por {s.solicitante.split(" ")[0]}
                 </span>
                 <span className="ml-auto flex gap-2">
                   <a
@@ -295,6 +290,7 @@ export default function FuncionariosHoraExtra() {
                   >
                     PDF
                   </a>
+                  <BotaoWhatsApp aoClicar={() => encaminharWhatsApp(s)} />
                   {excluir === s.numero ? (
                     <>
                       <button type="button" onClick={() => apagar(s.numero)} className="rounded-md bg-red-600 px-3 py-1 text-xs font-bold text-white">
@@ -320,5 +316,28 @@ export default function FuncionariosHoraExtra() {
         )}
       </section>
     </div>
+  );
+}
+
+// Botão verde do WhatsApp (lista da aba e folha do relatório).
+export function BotaoWhatsApp({ aoClicar, grande = false }: { aoClicar: () => Promise<void>; grande?: boolean }) {
+  const [gerando, setGerando] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={gerando}
+      onClick={async () => {
+        setGerando(true);
+        try {
+          await aoClicar();
+        } finally {
+          setGerando(false);
+        }
+      }}
+      title="Gera o PDF e abre o Compartilhar (escolha o WhatsApp)"
+      className={`rounded-md bg-[#1f8f4e] font-bold text-white hover:bg-[#25a35a] disabled:opacity-60 ${grande ? "rounded-lg px-4 py-2 text-sm" : "px-3 py-1 text-xs"}`}
+    >
+      {gerando ? "Gerando…" : "WhatsApp"}
+    </button>
   );
 }

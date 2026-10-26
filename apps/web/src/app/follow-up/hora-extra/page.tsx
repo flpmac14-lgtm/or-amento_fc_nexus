@@ -9,6 +9,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { formatarDataBr } from "@/lib/format";
 import { diaDaSemana, formatarHoras, minutosDaSolicitacao, minutosDoDia, type SolicitacaoHoraExtra } from "@/lib/horaExtra";
+import { encaminharWhatsApp } from "@/lib/horaExtraPdf";
+import { BotaoWhatsApp } from "@/components/FuncionariosHoraExtra";
 
 function Assinatura({ rotulo, nome }: { rotulo: string; nome?: string }) {
   return (
@@ -54,6 +56,7 @@ function Relatorio() {
   return (
     <div className="min-h-screen bg-stone-200 py-6 print:bg-white print:py-0">
       <div className="mx-auto mb-4 flex max-w-[210mm] justify-end gap-2 px-3 print:hidden">
+        <BotaoWhatsApp aoClicar={() => encaminharWhatsApp(s)} grande />
         <button type="button" onClick={() => window.print()} className="rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-600">
           Imprimir / Salvar PDF
         </button>
@@ -88,10 +91,8 @@ function Relatorio() {
             <p className="font-bold">{s.funcionarios.length}</p>
           </div>
           <div className="rounded border border-stone-300 p-2">
-            <p className="text-[8px] uppercase tracking-wide text-stone-500">Horas por pessoa · total</p>
-            <p className="font-bold">
-              {formatarHoras(porPessoa)} · {formatarHoras(porPessoa * s.funcionarios.length)}
-            </p>
+            <p className="text-[8px] uppercase tracking-wide text-stone-500">Total de horas</p>
+            <p className="font-bold">{formatarHoras(porPessoa * s.funcionarios.length)}</p>
           </div>
         </div>
 
@@ -135,7 +136,6 @@ function Relatorio() {
               <tr className="border-b-2 border-stone-400 text-left text-[9px] uppercase text-stone-500">
                 <th className="w-8 py-1 pr-2">#</th>
                 <th className="pr-2">Nome</th>
-                <th className="w-16 pr-2 text-right">Horas</th>
                 <th className="w-[60mm]">Assinatura do funcionário</th>
               </tr>
             </thead>
@@ -144,7 +144,6 @@ function Relatorio() {
                 <tr key={f} className="break-inside-avoid border-b border-stone-200">
                   <td className="py-2 pr-2 text-stone-500">{i + 1}</td>
                   <td className="pr-2 font-semibold">{f}</td>
-                  <td className="pr-2 text-right font-mono">{formatarHoras(porPessoa)}</td>
                   <td className="border-b border-stone-400" />
                 </tr>
               ))}
