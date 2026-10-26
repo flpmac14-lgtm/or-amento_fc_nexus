@@ -33,6 +33,9 @@ export const VISOES = [
   { valor: "coletas", rotulo: "Coletas" },
   // Programas já cortados com o NRI anotado no Corte, pro data book — pedido do usuário (14/10/2026).
   { valor: "cortados", rotulo: "Cortados (NRI)" },
+  // Funcionários + Solicitação de hora extra (PDF) — pedido do usuário (26/10/2026):
+  // só o flpmac14, o Jeferson e o Diego (lib/acesso.ts::podeSolicitarHoraExtra).
+  { valor: "funcionarios", rotulo: "Funcionários" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -54,8 +57,13 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // completas já têm na tela principal.
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
-export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false) {
-  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria");
+export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false) {
+  const lista = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade);
+  return comHoraExtra ? lista : lista.filter((v) => v.valor !== "funcionarios");
+}
+
+function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade: boolean) {
+  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria" || v.valor === "funcionarios");
   if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura");
   return VISOES.filter((v) =>
     v.valor === "coletas"

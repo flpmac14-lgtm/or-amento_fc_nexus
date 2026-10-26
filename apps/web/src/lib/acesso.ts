@@ -82,3 +82,10 @@ export function podeVerRegistro(user: Pick<User, "app_metadata" | "email"> | nul
 export function acessoProjeto(user: Pick<User, "app_metadata"> | null | undefined): boolean {
   return user?.app_metadata?.acesso === ACESSO_PROJETO;
 }
+
+// Aba Funcionários / Solicitação de hora extra — pedido do usuário (26/10/2026):
+// só ele (flpmac14), o Jeferson e o Diego (perfil "consulta"). Conferido também
+// na rota /api/follow-up/hora-extra.
+export function podeSolicitarHoraExtra(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_CONSULTA;
+}

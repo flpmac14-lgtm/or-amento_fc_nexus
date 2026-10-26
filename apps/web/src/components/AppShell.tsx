@@ -23,7 +23,7 @@ import {
   visoesDoPerfil,
   type ValorVisao,
 } from "@/lib/abasFollowUp";
-import { acessoSoFollowUp, perfilModulo, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
+import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -161,7 +161,7 @@ function montarMenu(real: User): Conta {
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
     icone: "followup",
-    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
   const admin: ItemMenu[] = [];
