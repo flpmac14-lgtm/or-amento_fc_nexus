@@ -24,6 +24,7 @@ import {
   type ValorVisao,
 } from "@/lib/abasFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
+import { ROTA_CANAL_ESCUTA } from "@/lib/canalEscuta";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -32,7 +33,7 @@ import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerCom
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -67,6 +68,12 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
         <g {...p}>
           <circle cx="9" cy="8" r="3.5" />
           <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6" />
+        </g>
+      )}
+      {nome === "escuta" && (
+        <g {...p}>
+          <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z" />
+          <path d="M8.5 10.5h7M8.5 13.5h4.5" />
         </g>
       )}
       {nome === "sair" && (
@@ -170,6 +177,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(real.email)) admin.push({ href: "/ver-como", rotulo: "Ver como usuário", icone: "usuarios" });
   // Registro: também o marcelo (PCP, só consulta — pedido do usuário, 19/10/2026).
   if (podeVerRegistro(user) || podeVerFinanceiro(real.email)) admin.push({ href: "/registro", rotulo: "Registro", icone: "painel" });
+  // Canal de Escuta (relatos anônimos dos colaboradores): só o flpmac14 — pedido do usuário (26/10/2026).
+  if (podeVerFinanceiro(real.email)) admin.push({ href: ROTA_CANAL_ESCUTA, rotulo: "Canal de Escuta", icone: "escuta" });
   if (admin.length) secoes.push({ secao: "Administração", itens: admin });
   // Vendas/Orçamentos: só o flpmac14 (pedido do usuário, 17/10/2026; bloqueio de verdade no proxy.ts).
   // Secundário, no fim do menu — pedido do usuário (22/10/2026): não estão usando por enquanto.
