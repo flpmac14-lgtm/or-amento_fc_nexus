@@ -619,6 +619,16 @@ export default function FinanceiroFluxo() {
         />
       </div>
 
+      <CartoesColetas
+        coletas={coletas.filter(
+          (c) =>
+            (c.situacao === "em_aberto" || c.situacao === "sem_entrada") &&
+            (!cliente || nomeColeta(c) === cliente) &&
+            (!termo || normalizarBusca([c.po, c.mac, c.desenho, c.descricao, c.cliente, c.cliente_erp].filter(Boolean).join(" ")).includes(termo)),
+        )}
+        hoje={hoje}
+      />
+
       {/* Aviso dos pendentes */}
       {pendentes.length > 0 && (
         <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30">
@@ -780,6 +790,114 @@ export default function FinanceiroFluxo() {
         {dados.gerado_em ? new Date(dados.gerado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}.
       </p>
     </div>
+  );
+}
+
+// Cartões das coletas — pedido do usuário (27/10/2026): um cartão por data de
+// coleta marcada no Follow up, com o valor (pedido de venda no Sectra), pra ir
+// vendo o caixa conforme as coletas são planejadas. Toque abre os itens.
+function temValor(c: ColetaFluxo): boolean {
+  return c.situacao === "em_aberto" && !!c.valor;
+}
+
+function CartoesColetas({ coletas, hoje }: { coletas: ColetaFluxo[]; hoje: string }) {
+  const [aberto, setAberto] = useState<string | null>(null);
+  const grupos = useMemo(() => {
+    const m = new Map<string, ColetaFluxo[]>();
+    for (const c of coletas) m.set(c.coleta, [...(m.get(c.coleta) ?? []), c]);
+    return [...m.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([data, itens]) => ({
+        data,
+        // Os que faltam dar entrada no Sectra primeiro (pedido do usuário).
+        itens: itens.sort((a, b) => Number(temValor(a)) - Number(temValor(b)) || (b.valor ?? 0) - (a.valor ?? 0) || a.po.localeCompare(b.po)),
+        valor: itens.reduce((s, c) => s + (c.situacao === "em_aberto" ? (c.valor ?? 0) : 0), 0),
+        semValor: itens.filter((c) => !temValor(c)).length,
+        clientes: [...new Set(itens.map((c) => c.cliente_erp ?? c.cliente ?? "—"))],
+      }));
+  }, [coletas]);
+  const total = grupos.reduce((s, g) => s + g.valor, 0);
+  const sel = grupos.find((g) => g.data === aberto) ?? null;
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-slate-300">
+          <span className={`mr-1.5 inline-block h-2.5 w-2.5 rounded-sm ${FONTES.coletas.ponto}`} />
+          Coletas planejadas no Follow up
+        </h2>
+        <p className="text-xs text-stone-500 dark:text-slate-400">
+          {grupos.length} coleta(s) · <b className={FONTES.coletas.texto}>{moeda(total)}</b> · toque pra ver os itens
+        </p>
+      </div>
+      {!grupos.length ? (
+        <p className="py-6 text-center text-sm text-stone-500 dark:text-slate-400">Nenhuma coleta em aberto marcada no Follow up.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {grupos.map((g) => {
+            const atrasada = g.data < hoje;
+            const ativo = g.data === aberto;
+            return (
+              <button
+                key={g.data}
+                type="button"
+                onClick={() => setAberto((a) => (a === g.data ? null : g.data))}
+                className={`flex flex-col rounded-xl border-2 p-3 text-left ${
+                  ativo
+                    ? "border-violet-600 bg-violet-50 dark:border-violet-400 dark:bg-violet-950/40"
+                    : "border-stone-200 hover:border-violet-400 dark:border-slate-700 dark:hover:border-violet-500"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-1 text-xs font-bold uppercase text-stone-500 dark:text-slate-400">
+                  <span>{dataDe(g.data).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>
+                  {atrasada && <span className="rounded bg-rose-600 px-1 text-[10px] text-white">atrasada</span>}
+                </span>
+                <span className={`mt-1 truncate text-lg font-black ${g.valor ? FONTES.coletas.texto : "text-stone-400 dark:text-slate-500"}`}>{moeda(g.valor)}</span>
+                <span className="truncate text-xs text-stone-600 dark:text-slate-300" title={g.clientes.join(", ")}>
+                  {g.clientes.length === 1 ? g.clientes[0] : `${g.clientes.length} clientes`}
+                </span>
+                <span className="text-[11px] text-stone-500 dark:text-slate-400">
+                  {g.itens.length} item(ns)
+                  {g.semValor > 0 && <b className="ml-1 text-amber-600 dark:text-amber-400">· ⚠ {g.semValor} sem valor</b>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {sel && (
+        <ul className="mt-3 divide-y divide-stone-100 rounded-lg border border-violet-200 dark:divide-slate-800 dark:border-violet-900">
+          {sel.semValor > 0 && (
+            <li className="bg-amber-50 px-3 py-1.5 text-xs font-bold uppercase text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              ⚠ Faltam dar entrada no Sectra: {sel.semValor} pedido(s)
+            </li>
+          )}
+          {sel.itens.map((c, n) => (
+            <li
+              key={c.po}
+              className={`flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-sm ${!temValor(c) ? "bg-amber-50/60 dark:bg-amber-950/20" : ""} ${
+                n > 0 && temValor(c) && !temValor(sel.itens[n - 1]) ? "border-t-2 border-violet-200 dark:border-violet-900" : ""
+              }`}
+            >
+              <span className="font-mono font-semibold text-stone-900 dark:text-white">{c.po}</span>
+              {c.mac && <span className="font-mono text-stone-600 dark:text-slate-300">MAC {c.mac}</span>}
+              <span className="text-stone-600 dark:text-slate-300">{c.cliente_erp ?? c.cliente ?? "—"}</span>
+              <span className="min-w-0 flex-1 truncate text-stone-500 dark:text-slate-400" title={c.descricao ?? ""}>
+                {c.desenho ? `${c.desenho} · ` : ""}
+                {c.descricao}
+                {c.qtd !== null ? ` · ${c.qtd.toLocaleString("pt-BR")} pç` : ""}
+                {c.condicao?.desc ? ` · cond. ${c.condicao.desc}` : ""}
+              </span>
+              {temValor(c) ? (
+                <span className={`font-mono font-bold ${FONTES.coletas.texto}`}>{moeda(c.valor ?? 0)}</span>
+              ) : (
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">⚠ sem entrada no Sectra</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
