@@ -6,9 +6,10 @@ import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 // /instalar, manifesto e ícones do app instalável (PWA): públicos — o celular
 // lê antes de qualquer login (ver app/manifest.ts e app/instalar/page.tsx).
-// /api/publico/: chamadas de fora sem login (formulário do Canal de Escuta no
-// site da MACFAB — app/api/publico/canal-escuta).
-const ROTAS_PUBLICAS = ["/login", "/instalar", "/manifest.webmanifest", "/icone-app", "/api/publico/"];
+// /canal-de-escuta: formulário anônimo dos colaboradores (QR code impresso,
+// public/canal-de-escuta/) — não confundir com /canal-escuta, a tela do admin.
+// /api/publico/: onde esse formulário grava, sem login (app/api/publico/canal-escuta).
+const ROTAS_PUBLICAS = ["/login", "/instalar", "/manifest.webmanifest", "/icone-app", "/canal-de-escuta", "/api/publico/"];
 
 export async function proxy(request: NextRequest) {
   const { response, user } = await atualizarSessaoSupabase(request);

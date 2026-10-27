@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canal de Escuta | MACFAB</title>
+  <!-- Página de uso interno: não indexar e não linkar no site -->
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#1B5E20" />
+  <link rel="icon" href="/canal-de-escuta/logo-macfab.webp" />
+  <style>
+    :root {
+      --verde-escuro: #1B5E20;
+      --verde: #2E7D32;
+      --verde-claro: #E8F2E9;
+      --laranja: #E07020;
+      --laranja-escuro: #C85E10;
+      --grafite: #2B2F2C;
+      --cinza: #5F6661;
+      --linha: #D9DED9;
+      --fundo: #F4F6F4;
+      --branco: #FFFFFF;
+      --erro: #B3261E;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--fundo);
+      color: var(--grafite);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 17px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Topo ── */
+    .topo {
+      background: var(--verde-escuro);
+      position: relative;
+      overflow: hidden;
+      padding: 24px 16px 70px;
+      text-align: center;
+      color: var(--branco);
+    }
+    .topo::before, .topo::after {
+      /* losangos laranja, mesma linguagem do logo */
+      content: "";
+      position: absolute;
+      left: 50%;
+      width: 140%;
+      height: 60px;
+      background: var(--laranja);
+      transform: translateX(-50%);
+      opacity: .14;
+    }
+    .topo::before { top: -22px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+    .topo::after { bottom: -22px; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+    .logo-placa {
+      display: inline-block;
+      background: var(--branco);
+      border-radius: 12px;
+      padding: 9px 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.18);
+    }
+    .logo-placa img { display: block; height: 40px; width: auto; }
+    .topo h1 {
+      margin: 16px 0 4px;
+      font-size: clamp(26px, 7vw, 40px);
+      font-weight: 900;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+    .topo p { margin: 0 auto; max-width: 30em; color: #D6E6D7; }
+    .topo p b { color: var(--branco); }
+
+    /* ── Cartão ── */
+    main {
+      max-width: 640px;
+      margin: -46px auto 40px;
+      padding: 0 16px;
+      position: relative;
+    }
+    .cartao {
+      background: var(--branco);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(27,94,32,.12);
+      padding: 22px 18px 24px;
+    }
+    @media (min-width: 560px) { .cartao { padding: 30px 32px; } }
+
+    .anonimo {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: var(--verde-claro);
+      border-left: 4px solid var(--verde);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+    .anonimo svg { flex: 0 0 22px; margin-top: 2px; color: var(--verde); }
+    .anonimo strong { color: var(--verde-escuro); }
+
+    /* ── Progresso ── */
+    .progresso { margin-bottom: 20px; }
+    .progresso-texto {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--cinza);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .progresso-texto b { color: var(--laranja-escuro); }
+    .barra { height: 8px; background: var(--linha); border-radius: 99px; overflow: hidden; }
+    .barra div { height: 100%; width: 0; background: linear-gradient(90deg, var(--verde), var(--verde-escuro)); transition: width .25s; }
+
+    /* ── Etapas ── */
+    .etapa { display: none; border: 0; margin: 0; padding: 0; min-width: 0; }
+    .etapa.ativa { display: block; }
+    .etapa legend, .etapa .pergunta {
+      display: block;
+      font-weight: 800;
+      font-size: 20px;
+      line-height: 1.25;
+      color: var(--verde-escuro);
+      margin: 0 0 4px;
+      padding: 0;
+    }
+    .dica { color: var(--cinza); font-size: 14px; margin: 0 0 14px; }
+
+    .opcoes { display: grid; gap: 8px; }
+    @media (min-width: 460px) { .opcoes.duas { grid-template-columns: 1fr 1fr; } }
+    .opcao { position: relative; display: block; }
+    .opcao input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .opcao span {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      height: 100%;
+      min-height: 50px;
+      padding: 9px 12px;
+      border: 2px solid var(--linha);
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 16px;
+      line-height: 1.25;
+      transition: border-color .15s, background .15s;
+    }
+    .opcao span::before {
+      content: "";
+      flex: 0 0 20px;
+      height: 20px;
+      border: 2px solid var(--linha);
+      background: var(--branco) center / 14px no-repeat;
+      transition: border .15s, background-color .15s;
+    }
+    .opcao input[type="radio"] + span::before { border-radius: 50%; }
+    .opcao input[type="checkbox"] + span::before { border-radius: 5px; }
+    .opcao input:checked + span { border-color: var(--verde); background: var(--verde-claro); }
+    .opcao input[type="radio"]:checked + span::before { border: 6px solid var(--verde); }
+    .opcao input[type="checkbox"]:checked + span::before {
+      border-color: var(--verde);
+      background-color: var(--verde);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+    }
+    .opcao input:focus-visible + span { outline: 3px solid var(--laranja); outline-offset: 2px; }
+
+    .outro-texto { display: none; margin-top: 10px; }
+    .outro-texto.ativo { display: block; }
+
+    input[type="text"], textarea {
+      width: 100%;
+      font: inherit;
+      color: inherit;
+      padding: 12px 14px;
+      border: 2px solid var(--linha);
+      border-radius: 10px;
+      background: var(--branco);
+    }
+    textarea { min-height: 170px; resize: vertical; }
+    textarea.curto { min-height: 120px; }
+    input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--verde); }
+    .contador { text-align: right; font-size: 13px; color: var(--cinza); margin-top: 4px; }
+
+    .isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+    .erro {
+      display: none;
+      color: var(--erro);
+      background: #FCEDEC;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 15px;
+      margin: 16px 0 0;
+    }
+    .erro.ativo { display: block; }
+
+    /* ── Botões ── */
+    .acoes { display: flex; gap: 10px; margin-top: 22px; }
+    button {
+      min-height: 54px;
+      border: 0;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: .03em;
+      cursor: pointer;
+    }
+    .principal {
+      flex: 1;
+      background: linear-gradient(90deg, var(--laranja-escuro), var(--laranja));
+      color: var(--branco);
+      text-transform: uppercase;
+      box-shadow: 0 6px 16px rgba(224,112,32,.28);
+    }
+    .voltar {
+      flex: 0 0 auto;
+      padding: 0 18px;
+      background: var(--branco);
+      color: var(--verde-escuro);
+      border: 2px solid var(--linha);
+    }
+    .voltar[hidden] { display: none; }
+    button:disabled { opacity: .6; cursor: progress; }
+    button:focus-visible { outline: 3px solid var(--verde-escuro); outline-offset: 3px; }
+
+    /* ── Confirmação ── */
+    .enviado { display: none; text-align: center; padding: 10px 0 4px; }
+    .enviado.ativo { display: block; }
+    .enviado .icone {
+      width: 72px; height: 72px; margin: 0 auto 14px;
+      border-radius: 50%;
+      background: var(--verde-claro);
+      color: var(--verde);
+      display: grid; place-items: center;
+    }
+    .enviado h2 { color: var(--verde-escuro); margin: 0 0 8px; font-size: 24px; text-transform: uppercase; }
+    .enviado p { color: var(--cinza); margin: 0 0 20px; }
+    .enviado button { width: 100%; background: var(--verde); color: var(--branco); }
+
+    footer { text-align: center; font-size: 13px; color: var(--cinza); padding: 0 16px 32px; }
+  </style>
+</head>
+<body>
+  <header class="topo">
+    <div class="logo-placa"><img src="/canal-de-escuta/logo-macfab.webp" alt="MACFAB" /></div>
+    <h1>Canal de Escuta<br>do Colaborador</h1>
+    <p>Relatos, percepções e sugestões. <b>Sua voz importa!</b></p>
+  </header>
+
+  <main>
+    <div class="cartao">
+      <form id="form" novalidate>
+        <div class="anonimo" id="aviso">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          <div><strong>Anônimo:</strong> não escreva nome, matrícula ou assinatura. Não guardamos o horário exato do envio. Tudo é analisado de forma reservada.</div>
+        </div>
+
+        <div class="progresso" aria-live="polite">
+          <div class="progresso-texto"><span>Etapa <b id="etapa-atual">1</b> de 7</span><span id="etapa-nome"></span></div>
+          <div class="barra"><div id="barra"></div></div>
+        </div>
+
+        <!-- 1. Setor -->
+        <fieldset class="etapa ativa" data-nome="Setor">
+          <legend>1. Qual é o seu setor?</legend>
+          <p class="dica">Opcional. Se preferir, pule esta etapa.</p>
+          <div class="opcoes duas">
+            <label class="opcao"><input type="radio" name="setor" value="Administrativo" /><span>Administrativo</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Qualidade" /><span>Qualidade</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Serviços Gerais" /><span>Serviços Gerais</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Usinagem" /><span>Usinagem</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Caldeiraria" /><span>Caldeiraria</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Soldagem" /><span>Soldagem</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="PCP" /><span>PCP</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Pintura Industrial" /><span>Pintura Industrial</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Logística / Expedição" /><span>Logística / Expedição</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Almoxarifado" /><span>Almoxarifado</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Outro" data-outro="setorOutro" /><span>Outro</span></label>
+            <label class="opcao"><input type="radio" name="setor" value="Prefiro não informar" /><span>Prefiro não informar</span></label>
+          </div>
+          <div class="outro-texto" id="setorOutro"><input type="text" name="setorOutro" maxlength="60" placeholder="Qual setor?" /></div>
+        </fieldset>
+
+        <!-- 2. Assunto -->
+        <fieldset class="etapa" data-nome="Assunto">
+          <legend>2. Qual é o assunto?</legend>
+          <p class="dica">Pode marcar mais de um.</p>
+          <div class="opcoes duas">
+            <label class="opcao"><input type="checkbox" name="assunto" value="Comunicação" /><span>Comunicação</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Organização do trabalho" /><span>Organização do trabalho</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Relação entre colegas" /><span>Relação entre colegas</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Tratamento inadequado" /><span>Tratamento inadequado</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Relação com liderança" /><span>Relação com liderança</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Conflitos no trabalho" /><span>Conflitos no trabalho</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Sobrecarga / distribuição" /><span>Sobrecarga / distribuição</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Conduta inadequada / assédio" /><span>Conduta inadequada / assédio</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Reconhecimento" /><span>Reconhecimento</span></label>
+            <label class="opcao"><input type="checkbox" name="assunto" value="Outro" data-outro="assuntoOutro" /><span>Outro</span></label>
+          </div>
+          <div class="outro-texto" id="assuntoOutro"><input type="text" name="assuntoOutro" maxlength="80" placeholder="Qual assunto?" /></div>
+        </fieldset>
+
+        <!-- 3. Frequência -->
+        <fieldset class="etapa" data-nome="Frequência">
+          <legend>3. Com que frequência acontece?</legend>
+          <p class="dica">Escolha uma opção.</p>
+          <div class="opcoes duas">
+            <label class="opcao"><input type="radio" name="frequencia" value="Foi pontual" /><span>Foi pontual</span></label>
+            <label class="opcao"><input type="radio" name="frequencia" value="Às vezes" /><span>Às vezes</span></label>
+            <label class="opcao"><input type="radio" name="frequencia" value="Com frequência" /><span>Com frequência</span></label>
+            <label class="opcao"><input type="radio" name="frequencia" value="Quase sempre" /><span>Quase sempre</span></label>
+          </div>
+        </fieldset>
+
+        <!-- 4. Impacto -->
+        <fieldset class="etapa" data-nome="Impacto">
+          <legend>4. Na sua percepção, isso impacta:</legend>
+          <p class="dica">Pode marcar mais de um.</p>
+          <div class="opcoes duas">
+            <label class="opcao"><input type="checkbox" name="impacto" value="Ambiente de trabalho" /><span>Ambiente de trabalho</span></label>
+            <label class="opcao"><input type="checkbox" name="impacto" value="Relação entre pessoas" /><span>Relação entre pessoas</span></label>
+            <label class="opcao"><input type="checkbox" name="impacto" value="Organização das atividades" /><span>Organização das atividades</span></label>
+            <label class="opcao"><input type="checkbox" name="impacto" value="Comunicação" /><span>Comunicação</span></label>
+            <label class="opcao"><input type="checkbox" name="impacto" value="Andamento do trabalho" /><span>Andamento do trabalho</span></label>
+            <label class="opcao"><input type="checkbox" name="impacto" value="Outro" data-outro="impactoOutro" /><span>Outro</span></label>
+          </div>
+          <div class="outro-texto" id="impactoOutro"><input type="text" name="impactoOutro" maxlength="80" placeholder="O que mais é impactado?" /></div>
+        </fieldset>
+
+        <!-- 5. Relato -->
+        <div class="etapa" data-nome="Relato">
+          <label class="pergunta" for="relato">5. O que você gostaria de relatar?</label>
+          <p class="dica">Conte com suas palavras. Evite citar dados que permitam identificar você.</p>
+          <textarea id="relato" name="relato" maxlength="3000" data-contador="c-relato" placeholder="Escreva aqui…"></textarea>
+          <div class="contador"><span id="c-relato">0</span> / 3000</div>
+        </div>
+
+        <!-- 6. Onde -->
+        <div class="etapa" data-nome="Situação">
+          <label class="pergunta" for="onde">6. Onde ou em que situação acontece?</label>
+          <p class="dica">Ex.: no setor, em reuniões, na troca de turno…</p>
+          <textarea id="onde" name="onde" class="curto" maxlength="1500" data-contador="c-onde" placeholder="Escreva aqui…"></textarea>
+          <div class="contador"><span id="c-onde">0</span> / 1500</div>
+        </div>
+
+        <!-- 7. Sugestão -->
+        <div class="etapa" data-nome="Sugestão">
+          <label class="pergunta" for="sugestao">7. Sugestão de melhoria</label>
+          <p class="dica">Opcional. O que você acha que poderia melhorar?</p>
+          <textarea id="sugestao" name="sugestao" class="curto" maxlength="1500" data-contador="c-sugestao" placeholder="Escreva aqui…"></textarea>
+          <div class="contador"><span id="c-sugestao">0</span> / 1500</div>
+        </div>
+
+        <!-- Campo-isca contra robôs: pessoas não veem -->
+        <div class="isca" aria-hidden="true"><label>Site <input type="text" name="site" tabindex="-1" autocomplete="off" /></label></div>
+
+        <p class="erro" id="erro" role="alert"></p>
+        <div class="acoes">
+          <button type="button" class="voltar" id="voltar" hidden>Voltar</button>
+          <button type="submit" class="principal" id="avancar">Avançar</button>
+        </div>
+      </form>
+
+      <div class="enviado" id="enviado" role="status">
+        <div class="icone"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <h2>Obrigado por participar!</h2>
+        <p>Seu relato chegou de forma anônima e será analisado de forma reservada.</p>
+        <button type="button" id="nova">Enviar outro relato</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>MACFAB · Canal de Escuta do Colaborador · Uso interno</footer>
+
+  <script>
+    // URL do App da Web gerado no Google Apps Script (Implantar → Nova implantação → App da Web)
+    const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbzJTabbFCXYyPeQ_2ZVP2xqSyrGq9ScuMqzuqPpwbFVTX-D5zTkrrcWeITU0A0fx32W/exec";
+    // Aba "Canal de Escuta" do FC Nexus (esta página é servida pelo próprio Nexus: fcnexus.app.br/canal-de-escuta)
+    const URL_NEXUS = "/api/publico/canal-escuta";
+
+    const form = document.getElementById("form");
+    const etapas = [...form.querySelectorAll(".etapa")];
+    const btnAvancar = document.getElementById("avancar");
+    const btnVoltar = document.getElementById("voltar");
+    const erro = document.getElementById("erro");
+    const enviado = document.getElementById("enviado");
+    let atual = 0;
+
+    // Cada etapa diz o que é obrigatório (setor e sugestão são opcionais)
+    const validar = [
+      () => (form.setor.value === "Outro" && !form.setorOutro.value.trim()) ? "Escreva qual é o seu setor." : "",
+      () => marcados("assunto").length ? (precisaOutro("assunto") ? "Escreva qual é o assunto." : "") : "Marque pelo menos um assunto.",
+      () => form.frequencia.value ? "" : "Escolha com que frequência acontece.",
+      () => marcados("impacto").length ? (precisaOutro("impacto") ? "Escreva o que mais é impactado." : "") : "Marque pelo menos uma opção.",
+      () => form.relato.value.trim().length >= 3 ? "" : "Escreva o que você gostaria de relatar.",
+      () => form.onde.value.trim().length >= 2 ? "" : "Conte onde ou em que situação acontece.",
+      () => "",
+    ];
+
+    function marcados(nome) {
+      return [...form.querySelectorAll(`input[name="${nome}"]:checked`)].map((i) => i.value);
+    }
+    function precisaOutro(nome) {
+      return marcados(nome).includes("Outro") && !form[nome + "Outro"].value.trim();
+    }
+
+    function mostrar(i) {
+      etapas[atual].classList.remove("ativa");
+      atual = i;
+      etapas[atual].classList.add("ativa");
+      document.getElementById("etapa-atual").textContent = atual + 1;
+      document.getElementById("etapa-nome").textContent = etapas[atual].dataset.nome;
+      document.getElementById("barra").style.width = ((atual + 1) / etapas.length * 100) + "%";
+      btnVoltar.hidden = atual === 0;
+      btnAvancar.textContent = atual === etapas.length - 1 ? "Enviar relato" : (atual === 0 && !form.setor.value ? "Pular / Avançar" : "Avançar");
+      erro.classList.remove("ativo");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function mostrarErro(texto) {
+      erro.textContent = texto;
+      erro.classList.add("ativo");
+    }
+
+    // "Outro" abre o campo de texto correspondente
+    form.addEventListener("change", (ev) => {
+      if (ev.target.name === "setor" && atual === 0) btnAvancar.textContent = "Avançar";
+      form.querySelectorAll("[data-outro]").forEach((inp) => {
+        const caixa = document.getElementById(inp.dataset.outro);
+        caixa.classList.toggle("ativo", inp.checked);
+        if (inp.checked && ev.target === inp) caixa.querySelector("input").focus();
+      });
+    });
+
+    form.querySelectorAll("textarea[data-contador]").forEach((ta) => {
+      ta.addEventListener("input", () => { document.getElementById(ta.dataset.contador).textContent = ta.value.length; });
+    });
+
+    btnVoltar.addEventListener("click", () => mostrar(atual - 1));
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const problema = validar[atual]();
+      if (problema) return mostrarErro(problema);
+      if (atual < etapas.length - 1) return mostrar(atual + 1);
+
+      const dados = {
+        setor: form.setor.value || "Prefiro não informar",
+        setorOutro: form.setorOutro.value.trim(),
+        assunto: marcados("assunto"),
+        assuntoOutro: form.assuntoOutro.value.trim(),
+        frequencia: form.frequencia.value,
+        impacto: marcados("impacto"),
+        impactoOutro: form.impactoOutro.value.trim(),
+        relato: form.relato.value.trim(),
+        onde: form.onde.value.trim(),
+        sugestao: form.sugestao.value.trim(),
+        site: form.site.value,
+      };
+
+      btnAvancar.disabled = btnVoltar.disabled = true;
+      btnAvancar.textContent = "Enviando…";
+      try {
+        // Envia para o Nexus e para a planilha (cópia de segurança) ao mesmo tempo;
+        // basta um dos dois aceitar. keepalive deixa o envio ao Nexus terminar
+        // mesmo se a pessoa fechar a página logo após a confirmação.
+        const enviar = (url, extra) => fetch(url, {
+          method: "POST",
+          // text/plain evita a requisição prévia (CORS) que o Apps Script não aceita
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(dados),
+          ...extra,
+        }).then((resp) => resp.json()).then((r) => {
+          if (!r.ok) throw new Error(r.erro || "falha");
+          return r;
+        });
+        await Promise.any([
+          enviar(URL_NEXUS, { keepalive: true }),
+          enviar(URL_PLANILHA),
+        ]);
+        form.reset();
+        form.querySelectorAll(".outro-texto").forEach((c) => c.classList.remove("ativo"));
+        form.querySelectorAll(".contador span").forEach((s) => { s.textContent = "0"; });
+        form.style.display = "none";
+        enviado.classList.add("ativo");
+      } catch (e) {
+        mostrarErro("Não foi possível enviar agora. Verifique a internet e tente de novo.");
+        btnAvancar.textContent = "Enviar relato";
+      } finally {
+        btnAvancar.disabled = btnVoltar.disabled = false;
+      }
+    });
+
+    document.getElementById("nova").addEventListener("click", () => {
+      enviado.classList.remove("ativo");
+      form.style.display = "";
+      mostrar(0);
+    });
+
+    mostrar(0);
+  </script>
+</body>
+</html>
