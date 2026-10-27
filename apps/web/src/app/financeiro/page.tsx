@@ -16,7 +16,8 @@ import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/Fina
 import FinanceiroPedidos from "@/components/FinanceiroPedidos";
 import FinanceiroPedidoAtivo from "@/components/FinanceiroPedidoAtivo";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
-import { buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
+import { PERFIL_FINANCEIRO, buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
+import { lerVerComo } from "@/lib/verComo";
 
 function moeda(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -63,7 +64,9 @@ export default function PaginaFinanceiro() {
 
   const buscar = useCallback(() => {
     buscarFinanceiro(false)
-      .then((j) => {
+      .then((r) => {
+        // Admin no "Ver como" a gabriele (perfil financeiro): esconde o que ela não vê (Budget, Fluxo de caixa).
+        const j = lerVerComo()?.acesso === PERFIL_FINANCEIRO ? { ...r, ver_budget: false, budget: { faturamento: {}, custos_pct: {} } } : r;
         // 1ª carga: abre na aba do endereço (as abas só aparecem com os dados).
         setDados((antes) => {
           if (!antes) {
