@@ -101,6 +101,12 @@ export function podeSolicitarHoraExtra(user: Pick<User, "app_metadata" | "email"
 // que o leandro conferiu e fotografou); marcar "Chegou" / tirar e apagar foto,
 // só o perfil "almoxarifado" (leandro) e o flpmac14. Conferido na rota
 // /api/follow-up/almoxarifado.
+// Aba Fornecedores (planilha FORNECEDOR.xlsx) — pedido do usuário (28/10/2026): pro
+// almoxarifado (leandro) e o flpmac14. Conferido na rota /api/follow-up/fornecedores.
+export function podeVerFornecedores(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  return podeEditarAlmoxarifado(user);
+}
+
 export function podeEditarAlmoxarifado(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
   return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_ALMOXARIFADO;
 }

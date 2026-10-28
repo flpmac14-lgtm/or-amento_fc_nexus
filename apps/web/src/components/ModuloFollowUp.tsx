@@ -23,6 +23,7 @@ import { classeAbaSublinhada } from "@/components/AppShell";
 import CortadosQualidade from "@/components/CortadosQualidade";
 import Qualidade from "@/components/Qualidade";
 import Almoxarifado from "@/components/Almoxarifado";
+import Fornecedores from "@/components/Fornecedores";
 import FuncionariosHoraExtra from "@/components/FuncionariosHoraExtra";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_CALDEIRARIA, CONFIG_PINTURA, CONFIG_USINAGEM } from "@/lib/apontamento";
@@ -73,7 +74,7 @@ export default function ModuloFollowUp({
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
   const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
-  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra);
+  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
 
   function abrirVisao(v: ValorVisao) {
@@ -283,6 +284,7 @@ export default function ModuloFollowUp({
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
       {visao === "funcionarios" && <FuncionariosHoraExtra />}
       {visao === "almoxarifado" && <Almoxarifado somenteLeitura={!editaAlmoxarifado} />}
+      {visao === "fornecedores" && editaAlmoxarifado && <Fornecedores />}
     </div>
   );
 }

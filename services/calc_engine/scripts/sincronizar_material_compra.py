@@ -24,10 +24,13 @@ load_dotenv(RAIZ / ".env")
 warnings.filterwarnings("ignore", module="openpyxl")
 
 from app.croqui_corte import propagar as propagar_croqui  # noqa: E402
+from app.fornecedores import sincronizar as sincronizar_fornecedores  # noqa: E402
 from app.material_compra import registrar_erro, sincronizar  # noqa: E402
 from app.programas_corte_excel import exportar as exportar_programas  # noqa: E402
 
 CAMINHO = os.environ.get("MATERIAL_COMPRA_PATH", r"J:\6 - PCP\PCP-CP\MACLM.xlsx")
+# Fornecedores pro almoxarifado (pedido do usuário, 28/10/2026) — mesmo ciclo de 15 min.
+CAMINHO_FORNECEDORES = os.environ.get("FORNECEDORES_PATH", str(Path(CAMINHO).parent.parent / "PCP-Fornecedor" / "FORNECEDOR.xlsx"))
 CAMINHO_PROGRAMAS = os.environ.get(
     "PROGRAMAS_CORTE_PATH", str(Path(CAMINHO).with_name("Programas de corte (FC Nexus).xlsx"))
 )
@@ -54,6 +57,16 @@ def main() -> int:
                 print(f"{agora} Programas de corte - {e['linhas']} pedido(s) gravados em {CAMINHO_PROGRAMAS}")
         except OSError as e:  # arquivo aberto no Excel: tenta de novo em 15 min
             print(f"{agora} AVISO - Programas de corte não gravado ({e})")
+        # Fornecedores (app/fornecedores.py): falha aqui não derruba o resto do ciclo.
+        try:
+            cf = Path(CAMINHO_FORNECEDORES)
+            fr = sincronizar_fornecedores(
+                cf.read_bytes(), str(cf), datetime.fromtimestamp(cf.stat().st_mtime, tz=timezone.utc), forcar="--forcar" in sys.argv
+            )
+            if fr["alterado"]:
+                print(f"{agora} Fornecedores - {fr['fornecedores']} gravados")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} AVISO - Fornecedores não sincronizados ({type(e).__name__}: {e})")
         return 0
     except Exception as e:  # noqa: BLE001 — registra qualquer falha pra aparecer no app
         print(f"{agora} ERRO - {type(e).__name__}: {e}")

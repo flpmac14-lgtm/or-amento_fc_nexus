@@ -39,6 +39,9 @@ export const VISOES = [
   // Conferência do que chegou por MAC/pedido (lista do Compras + Sectra + fotos) —
   // pedido do usuário (28/10/2026): o leandro (perfil almoxarifado) aponta; os outros perfis só olham.
   { valor: "almoxarifado", rotulo: "Almoxarifado" },
+  // Planilha FORNECEDOR.xlsx por grupos (telefone, e-mail, endereço) — pedido do usuário (28/10/2026):
+  // leandro e flpmac14 (lib/acesso.ts::podeVerFornecedores).
+  { valor: "fornecedores", rotulo: "Fornecedores" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -61,9 +64,10 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // completas já têm na tela principal.
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
-export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false) {
-  const lista = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade);
-  return comHoraExtra ? lista : lista.filter((v) => v.valor !== "funcionarios");
+export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false, comFornecedores = false) {
+  const lista = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade).filter((v) => v.valor !== "fornecedores");
+  const comFn = comFornecedores ? [...lista, VISOES.find((v) => v.valor === "fornecedores")!] : lista;
+  return comHoraExtra ? comFn : comFn.filter((v) => v.valor !== "funcionarios");
 }
 
 function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade: boolean) {
