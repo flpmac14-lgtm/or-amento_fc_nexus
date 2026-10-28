@@ -161,6 +161,8 @@ function montarMenu(real: User): Conta {
   const restrita = acessoSoFollowUp(user);
   const secoes: Conta["itens"] = [];
   const principal: ItemMenu[] = [];
+  // Estrutura do sistema (diagrama pra baixar em PDF) — no topo, só o flpmac14 (pedido do usuário, 28/10/2026).
+  if (podeVerFinanceiro(real.email)) principal.push({ href: "/estrutura", rotulo: "Estrutura do sistema", icone: "painel" });
   if (!restrita || perfil === "follow_up") principal.push({ href: "/visao-geral", rotulo: "Visão Geral", icone: "painel" });
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
