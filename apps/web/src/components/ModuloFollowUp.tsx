@@ -175,7 +175,7 @@ export default function ModuloFollowUp({
           : "flex flex-col gap-3"
       }
     >
-      <div className="flex items-center gap-2 border-b border-stone-200 dark:border-slate-800">
+      <div className="flex items-center gap-2 border-b border-stone-200 dark:border-slate-800 print:hidden">
         {telaCheia && (
           <button
             type="button"

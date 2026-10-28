@@ -443,7 +443,7 @@ export default function AppShell({
         </header>
 
         {verComo && (
-          <div className="flex flex-wrap items-center gap-2 border-b-2 border-violet-500 bg-violet-100 px-4 py-2 text-sm text-violet-900 dark:bg-violet-950/60 dark:text-violet-100">
+          <div className="flex flex-wrap items-center gap-2 border-b-2 border-violet-500 bg-violet-100 px-4 py-2 text-sm text-violet-900 dark:bg-violet-950/60 dark:text-violet-100 print:hidden">
             <span>
               👁 Vendo como <strong>{verComo.login}</strong> ({ROTULO_PERFIL[verComo.acesso ?? "total"] ?? verComo.acesso}) — só a
               tela; o que você salvar fica no seu nome (flpmac14).

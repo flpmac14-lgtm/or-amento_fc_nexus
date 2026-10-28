@@ -2,9 +2,10 @@
 
 // Aba Almoxarifado (leandro) — pedido do usuário (28/10/2026): digitar a MAC ou
 // o pedido e ver, organizado, tudo o que o Compras pensou pra obra:
-//   1. Pedidos de compra do Sectra (o que o comprador comprou, com a NF de entrada);
-//   2. Lista do projeto (lista mãe = Material de compra/MACLM), por conjunto e
-//      por PO, com a imagem e o pedido de compra/NF do Sectra de cada peça do Follow up;
+//   1. Lista do projeto (lista mãe = Material de compra/MACLM), por conjunto e
+//      por PO, com a imagem e o pedido de compra/NF do Sectra de cada peça do Follow up
+//      — é o relatório que o usuário imprime;
+//   2. Pedidos de compra do Sectra (o que o comprador comprou, com a NF de entrada);
 //   3. Fotos do que chegou.
 // Em cada linha: "✔ Chegou" (quem e quando fica gravado) e "📷 Foto" (como na
 // Pintura). Feito pra celular: botões grandes e passo a passo no topo.
@@ -642,14 +643,14 @@ function DetalheMacTela(p: {
             {datas.coletas.length > 1 && (
               <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">Coletas marcadas: {datas.coletas.map((c) => formatarDataBr(c)).join(" · ")}</p>
             )}
-            <p className="hidden text-xs text-stone-500 print:block">Relatório de conferência do almoxarifado · {new Date().toLocaleString("pt-BR")}</p>
+            <p className="hidden text-xs text-stone-500 print:block">Lista do projeto — o que o Compras pensou · conferência do almoxarifado · {new Date().toLocaleString("pt-BR")}</p>
           </div>
           <div className="flex gap-2 print:hidden">
             <button type="button" onClick={p.recarregar} disabled={p.carregando} className="h-10 rounded-lg border-2 border-stone-300 px-3 text-sm font-semibold text-stone-700 dark:border-slate-600 dark:text-slate-200">
               {p.carregando ? "…" : "↻ Atualizar"}
             </button>
             <button type="button" onClick={p.imprimir} className="h-10 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white hover:bg-teal-600">
-              🖨 Relatório
+              🖨 Imprimir lista do projeto
             </button>
           </div>
         </div>
@@ -695,65 +696,8 @@ function DetalheMacTela(p: {
         )}
       </section>
 
-      {/* 1. Pedidos de compra do Sectra */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4 print:break-inside-auto">
-        <Titulo
-          icone="🛒"
-          texto="Pedidos de compra (Sectra)"
-          sub={`O que o comprador comprou pra esta MAC (chapa, tubo, parafuso, tinta…). “NF de entrada” = o Sectra já deu entrada na nota.${
-            d.compras_em ? ` Atualizado ${dataHora(d.compras_em)}.` : ""
-          }`}
-        />
-        {!pedidos.length ? (
-          <p className="py-4 text-center text-sm text-stone-500 dark:text-slate-400">Nenhum pedido de compra do Sectra pra esta MAC.</p>
-        ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-            {pedidos
-              .filter((x) => passa(x.chave) && casa(x.pc, ...x.itens.flatMap((i) => [i.m, i.f, i.rq, ...i.nf.map((n) => n[0])])))
-              .map(({ pc, itens, chave }) => {
-                const c0 = itens[0];
-                const nfs = [...new Map(itens.flatMap((i) => i.nf).map((n) => [n[0], n])).values()];
-                const st = STATUS_PC[c0.s];
-                const ok = conf.get(chave);
-                return (
-                  <article key={pc} className={`break-inside-avoid rounded-xl border-2 p-3 ${ok ? "border-green-600 bg-green-50/60 dark:bg-green-950/20" : "border-stone-200 dark:border-slate-700"}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-mono text-lg font-black text-stone-900 dark:text-white">PC {pc}</p>
-                        <p className="truncate text-sm font-semibold text-stone-700 dark:text-slate-200">{c0.f || "—"}</p>
-                        <p className="text-xs text-stone-500 dark:text-slate-400">
-                          Pedido em {formatarDataBr(c0.dp)} · <span className={`font-semibold ${st?.classe ?? ""}`}>{st?.rotulo ?? c0.s}</span>
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <BotaoChegou somenteLeitura={p.somenteLeitura} conf={ok} mudar={(v) => p.conferir(chave, v)} />
-                        {!p.somenteLeitura && <BotaoFoto quantas={p.fotosDe(chave).length} enviar={(f) => p.enviarFoto(chave, `PC ${pc} · ${c0.f}`, f)} />}
-                      </div>
-                    </div>
-                    <ul className="mt-2 space-y-1 border-t border-stone-100 pt-2 text-sm dark:border-slate-800">
-                      {itens.map((i) => (
-                        <li key={i.rq} className="flex justify-between gap-2">
-                          <span className="min-w-0 text-stone-800 dark:text-slate-200">{i.m}</span>
-                          <span className="shrink-0 font-mono font-bold text-stone-900 dark:text-white">
-                            {formatarNumero(i.q, 0)} {i.u}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className={`mt-2 rounded-lg px-2 py-1 text-xs font-semibold ${nfs.length ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300" : "bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"}`}>
-                      {nfs.length ? `🧾 NF de entrada: ${nfs.map((n) => `${n[0]} (${formatarDataBr(n[1])})`).join(", ")}` : "⏳ Sem NF de entrada no Sectra ainda"}
-                    </p>
-                    <QuemConferiu conf={ok} />
-                    <Miniaturas fotos={p.fotosDe(chave)} abrir={p.abrirFoto} />
-                  </article>
-                );
-              })}
-          </div>
-        )}
-      </section>
-
-      {/* 2. Lista do projeto por conjunto → PO */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+      {/* 1. Lista do projeto por conjunto → PO — é o relatório impresso (pedido do usuário, 28/10/2026) */}
+      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4 print:border-0 print:p-0">
         <Titulo
           icone="📋"
           texto="Lista do projeto (o que o Compras pensou)"
@@ -819,8 +763,65 @@ function DetalheMacTela(p: {
         </div>
       </section>
 
-      {/* 3. Fotos */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+      {/* 2. Pedidos de compra do Sectra (fora do relatório impresso) */}
+      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4 print:hidden">
+        <Titulo
+          icone="🛒"
+          texto="Pedidos de compra (Sectra)"
+          sub={`O que o comprador comprou pra esta MAC (chapa, tubo, parafuso, tinta…). “NF de entrada” = o Sectra já deu entrada na nota.${
+            d.compras_em ? ` Atualizado ${dataHora(d.compras_em)}.` : ""
+          }`}
+        />
+        {!pedidos.length ? (
+          <p className="py-4 text-center text-sm text-stone-500 dark:text-slate-400">Nenhum pedido de compra do Sectra pra esta MAC.</p>
+        ) : (
+          <div className="grid gap-2 md:grid-cols-2">
+            {pedidos
+              .filter((x) => passa(x.chave) && casa(x.pc, ...x.itens.flatMap((i) => [i.m, i.f, i.rq, ...i.nf.map((n) => n[0])])))
+              .map(({ pc, itens, chave }) => {
+                const c0 = itens[0];
+                const nfs = [...new Map(itens.flatMap((i) => i.nf).map((n) => [n[0], n])).values()];
+                const st = STATUS_PC[c0.s];
+                const ok = conf.get(chave);
+                return (
+                  <article key={pc} className={`break-inside-avoid rounded-xl border-2 p-3 ${ok ? "border-green-600 bg-green-50/60 dark:bg-green-950/20" : "border-stone-200 dark:border-slate-700"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-lg font-black text-stone-900 dark:text-white">PC {pc}</p>
+                        <p className="truncate text-sm font-semibold text-stone-700 dark:text-slate-200">{c0.f || "—"}</p>
+                        <p className="text-xs text-stone-500 dark:text-slate-400">
+                          Pedido em {formatarDataBr(c0.dp)} · <span className={`font-semibold ${st?.classe ?? ""}`}>{st?.rotulo ?? c0.s}</span>
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <BotaoChegou somenteLeitura={p.somenteLeitura} conf={ok} mudar={(v) => p.conferir(chave, v)} />
+                        {!p.somenteLeitura && <BotaoFoto quantas={p.fotosDe(chave).length} enviar={(f) => p.enviarFoto(chave, `PC ${pc} · ${c0.f}`, f)} />}
+                      </div>
+                    </div>
+                    <ul className="mt-2 space-y-1 border-t border-stone-100 pt-2 text-sm dark:border-slate-800">
+                      {itens.map((i) => (
+                        <li key={i.rq} className="flex justify-between gap-2">
+                          <span className="min-w-0 text-stone-800 dark:text-slate-200">{i.m}</span>
+                          <span className="shrink-0 font-mono font-bold text-stone-900 dark:text-white">
+                            {formatarNumero(i.q, 0)} {i.u}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className={`mt-2 rounded-lg px-2 py-1 text-xs font-semibold ${nfs.length ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300" : "bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"}`}>
+                      {nfs.length ? `🧾 NF de entrada: ${nfs.map((n) => `${n[0]} (${formatarDataBr(n[1])})`).join(", ")}` : "⏳ Sem NF de entrada no Sectra ainda"}
+                    </p>
+                    <QuemConferiu conf={ok} />
+                    <Miniaturas fotos={p.fotosDe(chave)} abrir={p.abrirFoto} />
+                  </article>
+                );
+              })}
+          </div>
+        )}
+      </section>
+
+      {/* 3. Fotos (fora do relatório impresso) */}
+      <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4 print:hidden">
         <div className="flex items-start justify-between gap-2">
           <Titulo icone="📷" texto={`Fotos do que chegou (${d.fotos.length})`} sub="Todas as fotos desta MAC. “Foto geral” = sem pedido (ex.: a carga inteira)." />
           {!p.somenteLeitura && <BotaoFoto quantas={fotosGerais.length} enviar={(f) => p.enviarFoto(null, `MAC ${d.mac} · foto geral`, f)} />}
