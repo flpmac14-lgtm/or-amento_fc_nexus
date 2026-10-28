@@ -42,6 +42,7 @@ import {
   type StatusApontamento,
 } from "@/lib/api";
 import { emAndamento, type ConfigSetor, type OpcaoApontamento } from "@/lib/apontamento";
+import { macBase } from "@/lib/almoxarifado";
 import { normalizarBusca } from "@/lib/busca";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { emailParaLogin } from "@/lib/loginInterno";
@@ -144,6 +145,11 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
   const [rotuloLote, setRotuloLote] = useState<string | null>(null);
   const [lotes, setLotes] = useState<Record<string, LoteSetor>>({});
   const [lote, setLote] = useState<[string, string, string]>(["", "", ""]);
+  // Mesmo lote em outros pedidos (qualquer desenho) — pedido do usuário (28/10/2026):
+  // um botão abre a lista pra ticar os pedidos que foram pintados no mesmo lote.
+  const [outrosLote, setOutrosLote] = useState<Set<string>>(new Set());
+  const [escolhendoLote, setEscolhendoLote] = useState(false);
+  const [buscaLote, setBuscaLote] = useState("");
   // Correção de apontamento errado (✏️ no histórico): id em edição.
   const [editando, setEditando] = useState<number | null>(null);
   const [corrigindo, setCorrigindo] = useState(false);
@@ -264,6 +270,35 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
       .sort((a, b) => (a.prazo_contratual ?? "9999").localeCompare(b.prazo_contratual ?? "9999"));
   }, [aberto, itens]);
 
+  // Candidatos pro mesmo lote: todos os outros pedidos da tela, a mesma MAC primeiro.
+  const macAberto = macBase(aberto?.mac ?? null);
+  const candidatosLote = useMemo(() => {
+    if (!aberto || !escolhendoLote) return [];
+    const termosLote = normalizarBusca(buscaLote.trim()).split(/\s+/).filter(Boolean);
+    return itens
+      .filter((i) => i.id !== aberto.id && !outros.has(i.id))
+      .filter((i) => {
+        if (!termosLote.length) return true;
+        const t = normalizarBusca([i.po, i.desenho, i.descricao, i.mac, i.cliente].filter(Boolean).join(" "));
+        return termosLote.every((x) => t.includes(x));
+      })
+      .sort((a, b) => {
+        const ma = macBase(a.mac) === macAberto ? 0 : 1;
+        const mb = macBase(b.mac) === macAberto ? 0 : 1;
+        return ma - mb || (a.po ?? "").localeCompare(b.po ?? "", "pt-BR", { numeric: true });
+      });
+  }, [aberto, escolhendoLote, buscaLote, itens, outros, macAberto]);
+  const mesmaMac = candidatosLote.filter((i) => !!macAberto && macBase(i.mac) === macAberto);
+
+  function alternarOutroLote(id: string) {
+    setOutrosLote((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
   const totalPecas =
     (aberto?.quantidade ?? 0) + mesmoDesenho.filter((i) => outros.has(i.id)).reduce((s, i) => s + (i.quantidade ?? 0), 0);
 
@@ -294,6 +329,9 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     setHistorico(null);
     setEditando(null);
     setOutros(new Set());
+    setOutrosLote(new Set());
+    setEscolhendoLote(false);
+    setBuscaLote("");
     setPausarOutros(true);
     setNovaDescricao("");
     setNovaQtd("");
@@ -323,8 +361,11 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     !!rotuloLote &&
     [loteSalvo?.lote, loteSalvo?.lote2, loteSalvo?.lote3].some((v, n) => (v ?? "") !== loteNovo[n]);
   const textoLoteNovo = loteNovo.filter(Boolean).join(" / ") || "apagado";
+  // Lote igual ao gravado, mas ticado em outros pedidos: grava neles também.
+  const loteParaOutros = !!aberto && !!rotuloLote && outrosLote.size > 0 && loteNovo.some(Boolean);
+  const gravarLote = loteMudou || loteParaOutros;
   // Só o lote mudou: dá pra salvar sem marcar status (como o NRI no Corte).
-  const falta = !escolha && loteMudou
+  const falta = !escolha && gravarLote
     ? ""
     : !escolha
     ? "Escolha uma opção acima"
@@ -340,8 +381,8 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
     if (!alvo || falta) return;
     setSalvando(true);
     setErro("");
-    const juntosLote = mesmoDesenho.filter((i) => outros.has(i.id)).map((i) => i.id);
-    if (loteMudou && alvo.tipo === "pedido") {
+    const juntosLote = [...new Set([...mesmoDesenho.filter((i) => outros.has(i.id)).map((i) => i.id), ...outrosLote])];
+    if (gravarLote && alvo.tipo === "pedido") {
       try {
         const novos = await salvarLoteSetor(config.setor, alvo.id, loteNovo, usuario, juntosLote);
         setLotes((m) => {
@@ -355,7 +396,10 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
         return;
       }
       if (!escolha) {
-        setSalvo(`✔ ${rotuloLote}: ${textoLoteNovo} — ${aberto?.desenho ?? aberto?.po ?? ""}`);
+        setSalvo(
+          `✔ ${rotuloLote}: ${textoLoteNovo} — ${aberto?.desenho ?? aberto?.po ?? ""}` +
+            (juntosLote.length ? ` + ${juntosLote.length} pedido(s)` : ""),
+        );
         setTimeout(() => setSalvo(""), 5000);
         setSalvando(false);
         fechar();
@@ -399,7 +443,7 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
       setSalvo(
         `✔ Salvo: ${opcao.get(escolha)?.rotulo} (${operador}) — ${nome}` +
           (pausados ? ` · ${pausados} pausado(s)` : "") +
-          (loteMudou ? ` · ${rotuloLote}: ${textoLoteNovo}` : ""),
+          (gravarLote ? ` · ${rotuloLote}: ${textoLoteNovo}` : ""),
       );
       setTimeout(() => setSalvo(""), 5000);
       fechar();
@@ -898,8 +942,95 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                         </label>
                       ))}
                     </div>
-                    {outros.size > 0 && loteMudou && (
+                    {outros.size > 0 && gravarLote && (
                       <span className="text-xs text-stone-500 dark:text-slate-400">Vale também pros {outros.size} pedido(s) marcados acima.</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEscolhendoLote((v) => !v)}
+                      aria-expanded={escolhendoLote}
+                      className={`mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 text-base font-bold active:scale-[0.98] ${
+                        outrosLote.size
+                          ? "border-green-600 bg-green-50 text-green-800 dark:border-cyan-500 dark:bg-cyan-950/40 dark:text-cyan-200"
+                          : "border-stone-300 text-stone-700 dark:border-slate-600 dark:text-slate-200"
+                      }`}
+                    >
+                      🏷️ Mesmo lote em outros pedidos
+                      {outrosLote.size ? ` (${outrosLote.size} marcado${outrosLote.size > 1 ? "s" : ""})` : ""}
+                      <span className="text-sm">{escolhendoLote ? "▲" : "▼"}</span>
+                    </button>
+                    {escolhendoLote && (
+                      <div className="flex flex-col gap-2 rounded-xl border-2 border-stone-300 bg-stone-50 p-2 dark:border-slate-600 dark:bg-slate-900">
+                        <p className="text-xs text-stone-600 dark:text-slate-300">
+                          Tique os pedidos que foram no mesmo lote. Ao salvar, todos ficam com {textoLoteNovo === "apagado" ? "o lote digitado" : `o lote ${textoLoteNovo}`}.
+                        </p>
+                        <input
+                          value={buscaLote}
+                          onChange={(e) => setBuscaLote(e.target.value)}
+                          type="search"
+                          placeholder="🔍 PO, desenho, descrição ou MAC…"
+                          className="h-11 w-full rounded-xl border-2 border-stone-300 bg-white px-3 text-base text-stone-900 outline-none focus:border-green-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {mesmaMac.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setOutrosLote((s) => new Set([...s, ...mesmaMac.map((i) => i.id)]))}
+                              className="rounded-lg border-2 border-green-600 px-2 py-1 text-xs font-bold text-green-800 dark:border-cyan-500 dark:text-cyan-200"
+                            >
+                              ☑ Marcar todos da MAC {macAberto} ({mesmaMac.length})
+                            </button>
+                          )}
+                          {outrosLote.size > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setOutrosLote(new Set())}
+                              className="rounded-lg border-2 border-stone-400 px-2 py-1 text-xs font-bold text-stone-700 dark:text-slate-300"
+                            >
+                              Limpar marcados
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex max-h-80 flex-col gap-1.5 overflow-y-auto">
+                          {candidatosLote.slice(0, 80).map((i) => {
+                            const marcado = outrosLote.has(i.id);
+                            const jaTem = lotes[i.id] ? lotesPreenchidos(lotes[i.id]).join(" / ") : "";
+                            return (
+                              <button
+                                key={i.id}
+                                type="button"
+                                onClick={() => alternarOutroLote(i.id)}
+                                aria-pressed={marcado}
+                                className={`flex items-center gap-2 rounded-xl border-2 p-2 text-left active:scale-[0.98] ${
+                                  marcado
+                                    ? "border-green-600 bg-green-50 dark:border-cyan-500 dark:bg-cyan-950/40"
+                                    : "border-stone-300 bg-white dark:border-slate-600 dark:bg-slate-950"
+                                }`}
+                              >
+                                <span className="text-2xl">{marcado ? "☑" : "☐"}</span>
+                                <span className="flex min-w-0 flex-1 flex-col">
+                                  <span className="text-sm font-bold text-stone-900 dark:text-white">
+                                    PO {i.po} · {i.desenho ?? "—"} · {formatarNumero(i.quantidade ?? 0, 0)} pç
+                                  </span>
+                                  <span className="truncate text-xs text-stone-500 dark:text-slate-400">
+                                    {i.mac ?? "—"} · {i.descricao ?? ""}
+                                  </span>
+                                  {jaTem && <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">já tem lote {jaTem} (vai trocar)</span>}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {candidatosLote.length > 80 && (
+                            <p className="text-center text-xs text-stone-500 dark:text-slate-400">
+                              Mostrando 80 de {candidatosLote.length} — pesquise pra achar o pedido.
+                            </p>
+                          )}
+                          {!candidatosLote.length && <p className="py-3 text-center text-sm text-stone-500 dark:text-slate-400">Nenhum pedido com isso.</p>}
+                        </div>
+                        {outrosLote.size >= 50 && (
+                          <p className="text-xs font-semibold text-red-700 dark:text-red-300">No máximo 50 pedidos de uma vez.</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -951,8 +1082,8 @@ export default function ApontamentoSetor({ config, somenteLeitura = false }: { c
                   {salvando
                     ? "Salvando…"
                     : falta ||
-                      (!escolha && loteMudou
-                        ? `💾 Salvar ${rotuloLote?.toLowerCase()}`
+                      (!escolha && gravarLote
+                        ? `💾 Salvar ${rotuloLote?.toLowerCase()}${outrosLote.size ? ` (${outrosLote.size + 1} pedidos)` : ""}`
                         : outros.size
                           ? `💾 Salvar (${outros.size + 1} pedidos)`
                           : "💾 Salvar")}
