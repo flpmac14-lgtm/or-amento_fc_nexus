@@ -143,6 +143,7 @@ const ROTULO_PERFIL: Record<string, string> = {
   consulta: "CONSULTA",
   pintura: "PINTURA",
   financeiro: "FINANCEIRO",
+  almoxarifado: "ALMOXARIFADO",
 };
 
 // real = a conta logada; o menu é montado "como" a conta escolhida no Ver como (só o admin).

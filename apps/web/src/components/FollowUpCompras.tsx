@@ -78,7 +78,7 @@ export interface CompraDoItem {
   valdir: CompraValdir[]; // compras do Valdir pra MAC do item, a última lançada primeiro
 }
 
-const STATUS_PC: Record<string, { rotulo: string; classe: string }> = {
+export const STATUS_PC: Record<string, { rotulo: string; classe: string }> = {
   A: { rotulo: "Aberto", classe: "text-amber-700 dark:text-amber-300" },
   V: { rotulo: "Confirmado", classe: "text-blue-700 dark:text-sky-300" },
   "?": { rotulo: "Entrega parcial", classe: "text-orange-700 dark:text-orange-300" },

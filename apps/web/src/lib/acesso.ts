@@ -4,6 +4,7 @@
 // gravado com a service_role (servidor), então o próprio usuário não
 // consegue se "promover". Contas sem essa marca têm acesso total.
 import type { User } from "@supabase/supabase-js";
+import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { EMAIL_FINANCEIRO } from "@/lib/financeiro";
 
 export const ACESSO_SO_FOLLOW_UP = "follow_up";
@@ -30,6 +31,10 @@ export const ACESSO_PINTURA = "pintura";
 // /financeiro (sem Budget), pelo celular. Não é "só Follow up": o proxy prende
 // essa conta em /financeiro (ver perfilFinanceiro em lib/financeiro.ts).
 export const ACESSO_FINANCEIRO = "financeiro";
+// Almoxarifado (leandro) — pedido do usuário (28/10/2026): aba Almoxarifado
+// (digita a MAC/pedido, vê a lista do Compras, confere o que chegou e tira foto)
+// + a Consulta dos pedidos, pelo celular.
+export const ACESSO_ALMOXARIFADO = "almoxarifado";
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Visão Geral — pedido explícito do usuário: só ele (e-mail em ADMIN_EMAILS,
 // conferido no proxy) e o marcelo (acesso "follow_up") abrem.
@@ -45,15 +50,17 @@ export function acessoSoFollowUp(user: Pick<User, "app_metadata"> | null | undef
     acesso === ACESSO_USINAGEM ||
     acesso === ACESSO_QUALIDADE ||
     acesso === ACESSO_CONSULTA ||
-    acesso === ACESSO_PINTURA
+    acesso === ACESSO_PINTURA ||
+    acesso === ACESSO_ALMOXARIFADO
   );
 }
 
 // Perfil dentro do módulo Follow up (quais abas aparecem).
 export function perfilModulo(
   user: Pick<User, "app_metadata"> | null | undefined,
-): "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura" {
+): PerfilModulo {
   const acesso = user?.app_metadata?.acesso;
+  if (acesso === ACESSO_ALMOXARIFADO) return "almoxarifado";
   if (acesso === ACESSO_PINTURA) return "pintura";
   if (acesso === ACESSO_CONSULTA) return "consulta";
   if (acesso === ACESSO_QUALIDADE) return "qualidade";
@@ -88,4 +95,10 @@ export function acessoProjeto(user: Pick<User, "app_metadata"> | null | undefine
 // na rota /api/follow-up/hora-extra.
 export function podeSolicitarHoraExtra(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
   return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_CONSULTA;
+}
+
+// Aba Almoxarifado e /api/follow-up/almoxarifado: o flpmac14 e o perfil
+// "almoxarifado" (leandro) — pedido do usuário (28/10/2026).
+export function podeVerAlmoxarifado(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_ALMOXARIFADO;
 }

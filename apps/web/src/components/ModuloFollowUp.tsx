@@ -22,6 +22,7 @@ import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
 import CortadosQualidade from "@/components/CortadosQualidade";
 import Qualidade from "@/components/Qualidade";
+import Almoxarifado from "@/components/Almoxarifado";
 import FuncionariosHoraExtra from "@/components/FuncionariosHoraExtra";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_CALDEIRARIA, CONFIG_PINTURA, CONFIG_USINAGEM } from "@/lib/apontamento";
@@ -48,12 +49,14 @@ export default function ModuloFollowUp({
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
   comHoraExtra?: boolean; // aba Funcionários: flpmac14, jeferson e diego
 }) {
-  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura";
+  const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura" || perfil === "almoxarifado";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
   const [visaoEscolhida, setVisao] = useState<ValorVisao>(
     () =>
       abaDoEndereco() ??
-      (perfil === "consulta" || perfil === "pintura"
+      (perfil === "almoxarifado"
+        ? "almoxarifado"
+        : perfil === "consulta" || perfil === "pintura"
         ? "consulta"
         : perfil === "corte"
         ? "corte"
@@ -271,12 +274,13 @@ export default function ModuloFollowUp({
       {visao === "consulta" && (
         <Consulta
           key="consulta"
-          inicial={perfil === "usinagem" ? "coletas" : perfil === "pintura" ? "pedidos" : "corte"}
-          semCorte={perfil === "pintura"}
+          inicial={perfil === "usinagem" ? "coletas" : perfil === "pintura" || perfil === "almoxarifado" ? "pedidos" : "corte"}
+          semCorte={perfil === "pintura" || perfil === "almoxarifado"}
         />
       )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
       {visao === "funcionarios" && <FuncionariosHoraExtra />}
+      {visao === "almoxarifado" && <Almoxarifado />}
     </div>
   );
 }

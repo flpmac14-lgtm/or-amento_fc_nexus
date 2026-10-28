@@ -36,6 +36,9 @@ export const VISOES = [
   // Funcionários + Solicitação de hora extra (PDF) — pedido do usuário (26/10/2026):
   // só o flpmac14, o Jeferson e o Diego (lib/acesso.ts::podeSolicitarHoraExtra).
   { valor: "funcionarios", rotulo: "Funcionários" },
+  // Conferência do que chegou por MAC/pedido (lista do Compras + Sectra + fotos) —
+  // pedido do usuário (28/10/2026): o leandro (perfil almoxarifado) e o flpmac14.
+  { valor: "almoxarifado", rotulo: "Almoxarifado" },
 ] as const;
 
 export type ValorVisao = (typeof VISOES)[number]["valor"];
@@ -50,7 +53,8 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // "follow_up" (marcelo, PCP) — pedido do usuário (19/10/2026): tudo pra consulta
 // (Usinagem, Caldeiraria, Pintura, Data book, Recebimento, Cortados, QUALIDADE),
 // sem apontar (ver somenteLeitura em components/ModuloFollowUp.tsx); Financeiro não.
-export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura";
+// "almoxarifado" (leandro) = Almoxarifado + Consulta (pedidos).
+export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura" | "almoxarifado";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
 // a aba "Referência de preços" (histórico de compras do ERP), que as contas
@@ -63,10 +67,13 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
 }
 
 function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade: boolean) {
+  if (perfil === "almoxarifado") return VISOES.filter((v) => v.valor === "almoxarifado" || v.valor === "consulta");
   if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria" || v.valor === "funcionarios");
   if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura");
   return VISOES.filter((v) =>
-    v.valor === "coletas"
+    v.valor === "almoxarifado"
+      ? perfil === "total" && comQualidade // total + QUALIDADE = só o flpmac14
+      : v.valor === "coletas"
       ? perfil === "qualidade"
       : v.valor === "databook" || v.valor === "recebimento" || v.valor === "cortados"
         ? perfil === "qualidade" || perfil === "total" || perfil === "follow_up"
