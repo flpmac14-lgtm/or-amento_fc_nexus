@@ -37,7 +37,7 @@ export const VISOES = [
   // só o flpmac14, o Jeferson e o Diego (lib/acesso.ts::podeSolicitarHoraExtra).
   { valor: "funcionarios", rotulo: "Funcionários" },
   // Conferência do que chegou por MAC/pedido (lista do Compras + Sectra + fotos) —
-  // pedido do usuário (28/10/2026): o leandro (perfil almoxarifado) e o flpmac14.
+  // pedido do usuário (28/10/2026): o leandro (perfil almoxarifado) aponta; os outros perfis só olham.
   { valor: "almoxarifado", rotulo: "Almoxarifado" },
 ] as const;
 
@@ -69,11 +69,12 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
 function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade: boolean) {
   // + Coletas planejadas (datas que o flpmac14 e o marcelo põem no Follow up) — pedido do usuário (28/10/2026).
   if (perfil === "almoxarifado") return VISOES.filter((v) => v.valor === "almoxarifado" || v.valor === "consulta" || v.valor === "coletas");
-  if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria" || v.valor === "funcionarios");
-  if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura");
+  if (perfil === "consulta")
+    return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria" || v.valor === "funcionarios" || v.valor === "almoxarifado");
+  if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura" || v.valor === "almoxarifado");
   return VISOES.filter((v) =>
     v.valor === "almoxarifado"
-      ? perfil === "total" && comQualidade // total + QUALIDADE = só o flpmac14
+      ? true // todos os perfis (pedido do usuário, 28/10/2026) — só o leandro e o flpmac14 editam
       : v.valor === "coletas"
       ? perfil === "qualidade"
       : v.valor === "databook" || v.valor === "recebimento" || v.valor === "cortados"

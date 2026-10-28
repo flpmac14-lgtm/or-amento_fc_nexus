@@ -97,8 +97,10 @@ export function podeSolicitarHoraExtra(user: Pick<User, "app_metadata" | "email"
   return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_CONSULTA;
 }
 
-// Aba Almoxarifado e /api/follow-up/almoxarifado: o flpmac14 e o perfil
-// "almoxarifado" (leandro) — pedido do usuário (28/10/2026).
-export function podeVerAlmoxarifado(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+// Aba Almoxarifado — pedido do usuário (28/10/2026): todo mundo VÊ (só olha o
+// que o leandro conferiu e fotografou); marcar "Chegou" / tirar e apagar foto,
+// só o perfil "almoxarifado" (leandro) e o flpmac14. Conferido na rota
+// /api/follow-up/almoxarifado.
+export function podeEditarAlmoxarifado(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
   return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_ALMOXARIFADO;
 }

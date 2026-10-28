@@ -7,14 +7,14 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
-import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerQualidade } from "@/lib/acesso";
+import { acessoSoFollowUp, perfilModulo, podeEditarAlmoxarifado, podeSolicitarHoraExtra, podeVerQualidade } from "@/lib/acesso";
 import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { usuarioEfetivo } from "@/lib/verComo";
 
 export default function PaginaFollowUp() {
-  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean } | null>(null);
+  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean; almoxarifado: boolean } | null>(null);
 
   useEffect(() => {
     criarClienteSupabaseNavegador()
@@ -29,6 +29,7 @@ export default function PaginaFollowUp() {
             perfil: perfilModulo(user),
             qualidade: podeVerQualidade(user),
             horaExtra: podeSolicitarHoraExtra(user),
+            almoxarifado: podeEditarAlmoxarifado(user),
           });
         }
       });
@@ -44,6 +45,7 @@ export default function PaginaFollowUp() {
             perfil={conta.perfil}
             comQualidade={conta.qualidade}
             comHoraExtra={conta.horaExtra}
+            editaAlmoxarifado={conta.almoxarifado}
           />}
       </main>
     </AppShell>

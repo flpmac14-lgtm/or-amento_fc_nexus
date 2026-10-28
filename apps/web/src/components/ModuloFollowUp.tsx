@@ -43,11 +43,13 @@ export default function ModuloFollowUp({
   perfil = "total",
   comQualidade = false,
   comHoraExtra = false,
+  editaAlmoxarifado = false,
 }: {
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
   comHoraExtra?: boolean; // aba Funcionários: flpmac14, jeferson e diego
+  editaAlmoxarifado?: boolean; // aba Almoxarifado: só leandro e flpmac14 marcam/fotografam; os outros só olham
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura" || perfil === "almoxarifado";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
@@ -280,7 +282,7 @@ export default function ModuloFollowUp({
       )}
       {comReferenciaPrecos && visao === "referencia" && <ReferenciaPrecosMP />}
       {visao === "funcionarios" && <FuncionariosHoraExtra />}
-      {visao === "almoxarifado" && <Almoxarifado />}
+      {visao === "almoxarifado" && <Almoxarifado somenteLeitura={!editaAlmoxarifado} />}
     </div>
   );
 }

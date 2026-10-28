@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import type { ComprasItem, CompraValdir } from "@/components/FollowUpCompras";
-import { podeVerAlmoxarifado } from "@/lib/acesso";
+import { podeEditarAlmoxarifado } from "@/lib/acesso";
 import {
   chaveItem,
   chaveLista,
@@ -25,16 +25,18 @@ import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 // POST json     → {chave, mac, chegou, observacao}: marca/desmarca "Chegou";
 // POST form     → foto (file, mac, chave, rotulo, observacao, largura, altura);
 // DELETE ?foto= → apaga a foto.
-// Só o flpmac14 e o perfil "almoxarifado" (lib/acesso.ts::podeVerAlmoxarifado).
+// Ver: qualquer conta logada (pedido do usuário, 28/10/2026 — todos olham o que o
+// leandro apontou). Gravar/apagar: só o leandro e o flpmac14 (podeEditarAlmoxarifado).
 
 type Admin = ReturnType<typeof criarClienteSupabaseAdmin>;
 
-async function usuario() {
+async function usuario(editar = false) {
   const supabase = await criarClienteSupabaseServidor();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return podeVerAlmoxarifado(user) ? user : null;
+  if (!user) return null;
+  return !editar || podeEditarAlmoxarifado(user) ? user : null;
 }
 
 const CAMPOS_ITEM =
@@ -250,8 +252,8 @@ export async function GET(request: NextRequest) {
 const TIPOS_IMAGEM = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export async function POST(request: NextRequest) {
-  const user = await usuario();
-  if (!user) return NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
+  const user = await usuario(true);
+  if (!user) return NextResponse.json({ erro: "Só o almoxarifado (leandro) marca e tira foto — aqui é só pra olhar." }, { status: 403 });
   const por = emailParaLogin(user.email ?? "");
   const admin = criarClienteSupabaseAdmin();
 
@@ -306,7 +308,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await usuario())) return NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
+  if (!(await usuario(true))) return NextResponse.json({ erro: "Só o almoxarifado (leandro) apaga foto." }, { status: 403 });
   const id = request.nextUrl.searchParams.get("foto") ?? "";
   if (!/^[0-9a-f-]{36}$/.test(id)) return NextResponse.json({ erro: "Foto inválida." }, { status: 400 });
   const admin = criarClienteSupabaseAdmin();

@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { podeVerAlmoxarifado } from "@/lib/acesso";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { comRetentativa } from "@/lib/supabase/retentativa";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
@@ -12,7 +11,7 @@ export async function GET(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!podeVerAlmoxarifado(user)) return NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
+  if (!user) return NextResponse.json({ erro: "Faça login." }, { status: 401 });
   const sha = request.nextUrl.searchParams.get("sha") ?? "";
   if (!/^[0-9a-f]{64}$/.test(sha)) return NextResponse.json({ erro: "Imagem inválida." }, { status: 400 });
   const { data, error } = await comRetentativa(() =>

@@ -71,8 +71,28 @@ async function reduzir(arquivo: File): Promise<{ blob: Blob; largura: number; al
 
 // --- peças ------------------------------------------------------------------------
 
-function BotaoChegou({ conf, mudar, pequeno = false }: { conf: Conferencia | undefined; mudar: (chegou: boolean) => void; pequeno?: boolean }) {
+function BotaoChegou({
+  conf,
+  mudar,
+  pequeno = false,
+  somenteLeitura = false,
+}: {
+  conf: Conferencia | undefined;
+  mudar: (chegou: boolean) => void;
+  pequeno?: boolean;
+  somenteLeitura?: boolean;
+}) {
   const ok = !!conf;
+  if (somenteLeitura)
+    return (
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-lg px-2 font-bold ${pequeno ? "h-9 text-xs" : "h-11 text-sm"} ${
+          ok ? "bg-green-700 text-white dark:bg-green-600" : "bg-stone-100 text-stone-500 dark:bg-slate-800 dark:text-slate-400"
+        }`}
+      >
+        {ok ? "✔ Chegou" : "Aguardando"}
+      </span>
+    );
   return (
     <button
       type="button"
@@ -254,7 +274,7 @@ function Progresso({ feitos, total }: { feitos: number; total: number }) {
 
 // --- tela -------------------------------------------------------------------------
 
-export default function Almoxarifado() {
+export default function Almoxarifado({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const [texto, setTexto] = useState("");
   const [opcoes, setOpcoes] = useState<OpcaoMac[] | null>(null);
   const [macsAtivas, setMacsAtivas] = useState<OpcaoMac[]>([]);
@@ -304,6 +324,28 @@ export default function Almoxarifado() {
       .then((j: { opcoes?: OpcaoMac[] }) => setMacsAtivas(j.opcoes ?? []))
       .catch(() => {});
   }, [abrirMac]);
+
+  // Relatório sempre em fundo branco com letra escura — pedido do usuário (28/10/2026):
+  // no PC com tema escuro saía preto. Troca pro tema claro só enquanto imprime (botão ou Ctrl+P).
+  useEffect(() => {
+    const html = document.documentElement;
+    let antes: string | null = null;
+    const claro = () => {
+      antes = html.getAttribute("data-theme");
+      html.setAttribute("data-theme", "light");
+    };
+    const volta = () => {
+      if (antes !== null) html.setAttribute("data-theme", antes);
+      antes = null;
+    };
+    window.addEventListener("beforeprint", claro);
+    window.addEventListener("afterprint", volta);
+    return () => {
+      window.removeEventListener("beforeprint", claro);
+      window.removeEventListener("afterprint", volta);
+      volta();
+    };
+  }, []);
 
   useEffect(() => {
     if (!aviso) return;
@@ -394,6 +436,11 @@ export default function Almoxarifado() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
         <section className="rounded-2xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/30">
           <h2 className="text-lg font-black text-teal-900 dark:text-teal-100">📦 Conferência de material</h2>
+          {somenteLeitura && (
+            <p className="mt-1 rounded-lg bg-white/70 px-2 py-1 text-sm font-semibold text-teal-900 dark:bg-slate-900/50 dark:text-teal-100">
+              👁 Só consulta: aqui você vê o que o almoxarifado (Leandro) já conferiu e fotografou.
+            </p>
+          )}
           <ol className="mt-2 grid gap-2 text-sm text-teal-900 dark:text-teal-100 sm:grid-cols-3">
             <li className="rounded-xl bg-white/70 p-2 dark:bg-slate-900/50">
               <b className="block text-base">1. 🔍 Procure</b>Digite a MAC (ex.: 723.26), o PO do cliente ou o nº do pedido de compra.
@@ -472,6 +519,7 @@ export default function Almoxarifado() {
   return (
     <DetalheMacTela
       dados={dados}
+      somenteLeitura={somenteLeitura}
       filtro={filtro}
       setFiltro={setFiltro}
       conf={confPorChave}
@@ -525,6 +573,7 @@ function montarConjuntos(d: DetalheMac): Conjunto[] {
 
 function DetalheMacTela(p: {
   dados: DetalheMac;
+  somenteLeitura: boolean;
   filtro: Filtro;
   setFiltro: (f: Filtro) => void;
   conf: Map<string, Conferencia>;
@@ -634,6 +683,11 @@ function DetalheMacTela(p: {
             className="h-10 min-w-0 flex-1 rounded-lg border-2 border-stone-300 bg-white px-3 text-sm text-stone-900 outline-none focus:border-teal-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
           />
         </div>
+        {p.somenteLeitura && (
+          <p className="mt-2 rounded-lg bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-900 dark:bg-teal-950/30 dark:text-teal-100 print:hidden">
+            👁 Só consulta — quem marca “Chegou” e tira foto é o almoxarifado (Leandro).
+          </p>
+        )}
         {p.erro && (
           <button type="button" onClick={p.limparErro} className="mt-2 w-full rounded-lg bg-red-50 p-2 text-left text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
             {p.erro} <span className="text-xs">(toque pra fechar)</span>
@@ -672,8 +726,8 @@ function DetalheMacTela(p: {
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
-                        <BotaoChegou conf={ok} mudar={(v) => p.conferir(chave, v)} />
-                        <BotaoFoto quantas={p.fotosDe(chave).length} enviar={(f) => p.enviarFoto(chave, `PC ${pc} · ${c0.f}`, f)} />
+                        <BotaoChegou somenteLeitura={p.somenteLeitura} conf={ok} mudar={(v) => p.conferir(chave, v)} />
+                        {!p.somenteLeitura && <BotaoFoto quantas={p.fotosDe(chave).length} enviar={(f) => p.enviarFoto(chave, `PC ${pc} · ${c0.f}`, f)} />}
                       </div>
                     </div>
                     <ul className="mt-2 space-y-1 border-t border-stone-100 pt-2 text-sm dark:border-slate-800">
@@ -743,7 +797,7 @@ function DetalheMacTela(p: {
                 </button>
                 {aberto && (
                   <div className="divide-y divide-stone-100 dark:divide-slate-800">
-                    {chavesCj.some((c) => !conf.has(c)) && (
+                    {!p.somenteLeitura && chavesCj.some((c) => !conf.has(c)) && (
                       <div className="px-3 py-1.5 text-right print:hidden">
                         <button
                           type="button"
@@ -769,7 +823,7 @@ function DetalheMacTela(p: {
       <section className="rounded-2xl border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
         <div className="flex items-start justify-between gap-2">
           <Titulo icone="📷" texto={`Fotos do que chegou (${d.fotos.length})`} sub="Todas as fotos desta MAC. “Foto geral” = sem pedido (ex.: a carga inteira)." />
-          <BotaoFoto quantas={fotosGerais.length} enviar={(f) => p.enviarFoto(null, `MAC ${d.mac} · foto geral`, f)} />
+          {!p.somenteLeitura && <BotaoFoto quantas={fotosGerais.length} enviar={(f) => p.enviarFoto(null, `MAC ${d.mac} · foto geral`, f)} />}
         </div>
         {!d.fotos.length ? (
           <p className="py-4 text-center text-sm text-stone-500 dark:text-slate-400">Nenhuma foto ainda.</p>
@@ -784,7 +838,7 @@ function DetalheMacTela(p: {
                 <figcaption className="p-1.5 text-[11px] leading-tight text-stone-600 dark:text-slate-300">
                   <b className="block truncate text-stone-900 dark:text-white">{f.rotulo ?? "—"}</b>
                   {f.por ?? "—"} · {dataHora(f.em)}
-                  <ApagarFoto apagar={() => p.apagarFoto(f.id)} />
+                  {!p.somenteLeitura && <ApagarFoto apagar={() => p.apagarFoto(f.id)} />}
                 </figcaption>
               </figure>
             ))}
@@ -904,8 +958,8 @@ function GrupoPoTela({
           )}
           {i && mostraItem && (
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <BotaoChegou pequeno conf={conf.get(i.chave)} mudar={(v) => p.conferir(i.chave, v)} />
-              <BotaoFoto pequeno quantas={p.fotosDe(i.chave).length} enviar={(f) => p.enviarFoto(i.chave, `PO ${g.po} · ${i.descricao ?? ""}`, f)} />
+              <BotaoChegou somenteLeitura={p.somenteLeitura} pequeno conf={conf.get(i.chave)} mudar={(v) => p.conferir(i.chave, v)} />
+              {!p.somenteLeitura && <BotaoFoto pequeno quantas={p.fotosDe(i.chave).length} enviar={(f) => p.enviarFoto(i.chave, `PO ${g.po} · ${i.descricao ?? ""}`, f)} />}
               <QuemConferiu conf={conf.get(i.chave)} />
             </div>
           )}
@@ -939,8 +993,8 @@ function GrupoPoTela({
                   {l.qtt !== null ? formatarNumero(l.qtt, 2) : "—"} <span className="text-xs font-normal">{l.un ?? ""}</span>
                 </span>
                 <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-                  <BotaoChegou pequeno conf={ok} mudar={(v) => p.conferir(l.chave, v)} />
-                  <BotaoFoto pequeno quantas={p.fotosDe(l.chave).length} enviar={(f) => p.enviarFoto(l.chave, `${l.po_it_pos ?? ""} · ${l.mp ?? l.descricao ?? ""}`, f)} />
+                  <BotaoChegou somenteLeitura={p.somenteLeitura} pequeno conf={ok} mudar={(v) => p.conferir(l.chave, v)} />
+                  {!p.somenteLeitura && <BotaoFoto pequeno quantas={p.fotosDe(l.chave).length} enviar={(f) => p.enviarFoto(l.chave, `${l.po_it_pos ?? ""} · ${l.mp ?? l.descricao ?? ""}`, f)} />}
                 </div>
               </li>
             );
