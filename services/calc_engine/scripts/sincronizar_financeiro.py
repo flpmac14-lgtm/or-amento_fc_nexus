@@ -468,8 +468,9 @@ def chave_po(po: str | None, descricao: str | None = None) -> tuple[str, int | N
     m = re.match(r"^(.*?)-0*(\d+)$", po)
     if m:
         return m.group(1), int(m.group(2))
-    # Sectra sem o "ITEM nn" na descrição: às vezes o item vem só como "... - 10" no fim.
-    m = re.search(r"-\s*0*(\d{1,4})\s*$", descricao or "")
+    # Sectra sem o "ITEM nn" na descrição: às vezes o item vem só como "... - 10" no fim,
+    # ou "ITEM10" colado (o SQL só separa "ITEM 10" com espaço — PO 4501770564, 28/10/2026).
+    m = re.search(r"(?:-|\bITEM)\s*0*(\d{1,4})\s*$", (descricao or "").upper())
     return po, (int(m.group(1)) if m else None)
 
 
