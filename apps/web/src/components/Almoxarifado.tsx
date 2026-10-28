@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STATUS_PC, type CompraValdir } from "@/components/FollowUpCompras";
 import {
   chavePc,
+  datasDaMac,
+  hojeIso,
   macBase,
   urlImagemAlmox,
   type Conferencia,
@@ -151,6 +153,73 @@ function Miniaturas({ fotos, abrir }: { fotos: { sha: string; titulo: string }[]
         </button>
       ))}
     </div>
+  );
+}
+
+// Prazo contratual / próxima coleta / nº do pedido do cliente — pedido do usuário (28/10/2026).
+function DatasMac({
+  prazo,
+  coleta,
+  pedidos,
+  grande = false,
+}: {
+  prazo?: string | null;
+  coleta?: string | null;
+  pedidos?: string[];
+  grande?: boolean;
+}) {
+  if (!prazo && !coleta && !pedidos?.length) return null;
+  const atrasado = !!prazo && prazo < hojeIso();
+  const tam = grande ? "text-sm px-2 py-1" : "text-[11px] px-1.5 py-0.5";
+  return (
+    <span className="mt-1 flex flex-wrap gap-1 font-semibold">
+      {!!pedidos?.length && (
+        <span className={`rounded ${tam} bg-sky-100 font-mono text-sky-900 dark:bg-sky-950/50 dark:text-sky-200`} title={pedidos.join(", ")}>
+          🧾 Pedido {pedidos.length > 3 ? `${pedidos.slice(0, 3).join(", ")} +${pedidos.length - 3}` : pedidos.join(", ")}
+        </span>
+      )}
+      {prazo && (
+        <span className={`rounded ${tam} ${atrasado ? "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300" : "bg-stone-100 text-stone-700 dark:bg-slate-800 dark:text-slate-200"}`}>
+          📅 Prazo {formatarDataBr(prazo)}
+          {atrasado ? " · atrasado" : ""}
+        </span>
+      )}
+      {coleta && (
+        <span className={`rounded ${tam} bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300`}>🚚 Coleta {formatarDataBr(coleta)}</span>
+      )}
+    </span>
+  );
+}
+
+function DatasConjunto({ itens }: { itens: ItemAlmox[] }) {
+  const d = datasDaMac(itens, hojeIso());
+  return <DatasMac prazo={d.prazo} coleta={d.coleta} />;
+}
+
+// Cartão da MAC: imagem que o Follow up anexou na obra (referência), MAC, cliente,
+// nº do pedido, prazo contratual e próxima coleta — pedido do usuário (28/10/2026).
+function CartaoMac({ o, abrir }: { o: OpcaoMac; abrir: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={abrir}
+      className="flex gap-2.5 rounded-xl border-2 border-stone-200 bg-white p-2 text-left hover:border-teal-600 dark:border-slate-700 dark:bg-slate-900"
+    >
+      {o.foto ? (
+        // eslint-disable-next-line @next/next/no-img-element -- imagem da rota própria, com cache
+        <img src={urlImagemAlmox(o.foto)} alt={`Obra ${o.mac}`} loading="lazy" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-2xl text-stone-400 dark:bg-slate-800">⚙</span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block font-mono text-lg font-black leading-tight text-stone-900 dark:text-white">MAC {o.mac}</span>
+        <span className="block truncate text-xs text-stone-500 dark:text-slate-400">
+          {o.motivo ?? o.cliente ?? "—"}
+          {o.itens ? ` · ${o.itens} peça(s) ativa(s)` : ""}
+        </span>
+        <DatasMac prazo={o.prazo} coleta={o.coleta} pedidos={o.pedidos} />
+      </span>
+    </button>
   );
 }
 
@@ -364,17 +433,9 @@ export default function Almoxarifado() {
             <p className="mb-2 text-sm font-bold text-stone-700 dark:text-slate-300">
               {opcoes.length ? `Achei ${opcoes.length} MACs — toque na certa:` : "Não achei nada com isso. Confira o número e tente de novo."}
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {opcoes.map((o) => (
-                <button
-                  key={o.mac}
-                  type="button"
-                  onClick={() => abrirMac({ mac: o.mac })}
-                  className="rounded-xl border-2 border-stone-200 p-3 text-left hover:border-teal-600 dark:border-slate-700"
-                >
-                  <span className="block font-mono text-lg font-black text-stone-900 dark:text-white">MAC {o.mac}</span>
-                  <span className="block truncate text-xs text-stone-500 dark:text-slate-400">{o.motivo ?? o.cliente ?? ""}</span>
-                </button>
+                <CartaoMac key={o.mac} o={o} abrir={() => abrirMac({ mac: o.mac })} />
               ))}
             </div>
           </section>
@@ -396,19 +457,9 @@ export default function Almoxarifado() {
         {macsAtivas.length > 0 && (
           <section>
             <p className="mb-1 text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">MACs em produção (peças ativas no Follow up)</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {macsAtivas.map((o) => (
-                <button
-                  key={o.mac}
-                  type="button"
-                  onClick={() => abrirMac({ mac: o.mac })}
-                  className="rounded-xl border border-stone-200 bg-white p-2.5 text-left hover:border-teal-600 dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <span className="block font-mono font-black text-stone-900 dark:text-white">{o.mac}</span>
-                  <span className="block truncate text-[11px] text-stone-500 dark:text-slate-400">
-                    {o.cliente ?? "—"} · {o.itens} peça(s)
-                  </span>
-                </button>
+                <CartaoMac key={o.mac} o={o} abrir={() => abrirMac({ mac: o.mac })} />
               ))}
             </div>
           </section>
@@ -514,6 +565,8 @@ function DetalheMacTela(p: {
   const todasChaves = [...pedidos.map((x) => x.chave), ...d.itens.map((i) => i.chave), ...d.lista.map((l) => l.chave)];
   const feitos = todasChaves.filter((c) => conf.has(c)).length;
   const fotosGerais = p.fotosPorChave.get("") ?? [];
+  const datas = useMemo(() => datasDaMac(d.itens, hojeIso()), [d.itens]);
+  const fotoObra = d.itens.find((i) => i.fotos.length)?.fotos[0] ?? null; // referência da obra
 
   return (
     <div className="flex flex-col gap-3 print:gap-2">
@@ -524,10 +577,22 @@ function DetalheMacTela(p: {
             <button type="button" onClick={p.voltar} className="mb-1 text-sm font-semibold text-teal-700 hover:underline dark:text-teal-300 print:hidden">
               ← Outra MAC
             </button>
-            <h1 className="font-mono text-2xl font-black text-stone-900 dark:text-white">MAC {d.mac}</h1>
+            <div className="flex items-center gap-3">
+              {fotoObra && (
+                <button type="button" onClick={() => p.abrirFoto(fotoObra, `Obra ${d.mac}`)} className="shrink-0 overflow-hidden rounded-lg border border-stone-200 dark:border-slate-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- imagem da rota própria, com cache */}
+                  <img src={urlImagemAlmox(fotoObra)} alt={`Obra ${d.mac}`} className="h-16 w-16 object-cover sm:h-20 sm:w-20" />
+                </button>
+              )}
+              <h1 className="font-mono text-2xl font-black text-stone-900 dark:text-white">MAC {d.mac}</h1>
+            </div>
             <p className="text-sm text-stone-600 dark:text-slate-300">
-              {d.cliente ?? "—"} · {d.itens.length} peça(s) no Follow up · {d.lista.length} linha(s) na lista do projeto · {pedidos.length} pedido(s) de compra
+              {d.cliente ?? "—"} · {d.itens.length} peça(s) ativa(s) · {d.lista.length} linha(s) na lista do projeto · {pedidos.length} pedido(s) de compra
             </p>
+            <DatasMac grande prazo={datas.prazo} coleta={datas.coleta} pedidos={datas.pedidos} />
+            {datas.coletas.length > 1 && (
+              <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">Coletas marcadas: {datas.coletas.map((c) => formatarDataBr(c)).join(" · ")}</p>
+            )}
             <p className="hidden text-xs text-stone-500 print:block">Relatório de conferência do almoxarifado · {new Date().toLocaleString("pt-BR")}</p>
           </div>
           <div className="flex gap-2 print:hidden">
@@ -671,6 +736,7 @@ function DetalheMacTela(p: {
                   <span className="font-mono text-base font-black text-stone-900 dark:text-white">
                     {aberto ? "▾" : "▸"} Conjunto {cj.mac1}
                   </span>
+                  <DatasConjunto itens={cj.pos.flatMap((g) => (g.item ? [g.item] : []))} />
                   <span className={`text-xs font-bold ${feitosCj === chavesCj.length && chavesCj.length ? "text-green-700 dark:text-green-400" : "text-stone-500 dark:text-slate-400"}`}>
                     {feitosCj}/{chavesCj.length} chegou
                   </span>
@@ -801,6 +867,27 @@ function GrupoPoTela({
               {i.quantidade !== null ? <b> · {formatarNumero(i.quantidade, 0)} pç</b> : null}
             </p>
           )}
+          {i && (i.prazo_contratual || i.coleta_data) && (
+            <p className="mt-0.5 flex flex-wrap gap-1.5 text-xs font-semibold">
+              {i.prazo_contratual && (
+                <span
+                  className={`rounded px-1.5 py-0.5 ${
+                    i.st !== "E" && i.prazo_contratual < hojeIso()
+                      ? "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300"
+                      : "bg-stone-100 text-stone-700 dark:bg-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  📅 Prazo contratual {formatarDataBr(i.prazo_contratual)}
+                  {i.st !== "E" && i.prazo_contratual < hojeIso() ? " · atrasado" : ""}
+                </span>
+              )}
+              {i.coleta_data && (
+                <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300">
+                  🚚 Coleta {formatarDataBr(i.coleta_data)}
+                </span>
+              )}
+            </p>
+          )}
           {(pcs.length > 0 || ents.length > 0) && (
             <p className="mt-0.5 text-xs text-stone-600 dark:text-slate-300">
               {pcs.map((x) => (
@@ -843,6 +930,7 @@ function GrupoPoTela({
                     {l.po_it_pos}
                     {l.mp && l.descricao ? ` · ${l.descricao}` : ""}
                     {l.codigo && l.codigo !== l.desenho ? ` · cód. ${l.codigo}` : l.desenho ? ` · des. ${l.desenho}` : ""}
+                    {l.pzc ? ` · PZC ${formatarDataBr(l.pzc)}` : ""}
                   </p>
                   <QuemConferiu conf={ok} />
                   <Miniaturas fotos={p.fotosDe(l.chave)} abrir={p.abrirFoto} />

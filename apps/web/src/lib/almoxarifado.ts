@@ -81,6 +81,10 @@ export interface OpcaoMac {
   cliente: string | null;
   itens: number;
   motivo?: string; // por que apareceu na busca ("PO N18776-003")
+  pedidos?: string[]; // nº do pedido do cliente (PO sem o item: "N18776", "4501770564")
+  prazo?: string | null; // prazo contratual mais cedo das peças ainda não entregues
+  coleta?: string | null; // próxima coleta marcada no Follow up (de hoje em diante; senão a mais recente)
+  foto?: string | null; // sha256 da imagem de referência (Follow up) da obra
 }
 
 export type RespostaAlmox = { detalhe: DetalheMac } | { opcoes: OpcaoMac[] };
@@ -95,6 +99,36 @@ export function macBase(texto: string | null | undefined): string {
 export function macPlanilha(base: string): string {
   const [a, b] = base.split(".");
   return `${a.padStart(3, "0")}.${b}`;
+}
+
+/** Prazo contratual mais cedo (peças não entregues), a próxima coleta e os nº de pedido do cliente da MAC. */
+export function datasDaMac(
+  itens: { po?: string | null; st?: string | null; prazo_contratual?: string | null; coleta_data?: string | null }[],
+  hoje: string,
+) {
+  const prazos = itens.filter((i) => i.st !== "E" && i.prazo_contratual).map((i) => i.prazo_contratual as string).sort();
+  const coletas = [...new Set(itens.map((i) => i.coleta_data).filter((d): d is string => !!d))].sort();
+  return {
+    prazo: prazos[0] ?? null,
+    coleta: coletas.find((d) => d >= hoje) ?? coletas[coletas.length - 1] ?? null,
+    coletas,
+    pedidos: pedidosDoCliente(itens.map((i) => i.po)),
+  };
+}
+
+/** "N18776-003" → "N18776"; "4501770564-010" → "4501770564" (sem repetir, em ordem). */
+export function pedidosDoCliente(pos: (string | null | undefined)[]): string[] {
+  const s = new Set<string>();
+  for (const po of pos) {
+    const p = (po ?? "").trim().replace(/-0*\d+$/, "");
+    if (p) s.add(p);
+  }
+  return [...s].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+}
+
+export function hojeIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export const chaveLista = (po_it_pos: string | null, codigo: string | null) => `ml:${po_it_pos ?? ""}|${codigo ?? ""}`;

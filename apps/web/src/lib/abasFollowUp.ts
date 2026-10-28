@@ -53,7 +53,7 @@ export type ValorVisao = (typeof VISOES)[number]["valor"];
 // "follow_up" (marcelo, PCP) — pedido do usuário (19/10/2026): tudo pra consulta
 // (Usinagem, Caldeiraria, Pintura, Data book, Recebimento, Cortados, QUALIDADE),
 // sem apontar (ver somenteLeitura em components/ModuloFollowUp.tsx); Financeiro não.
-// "almoxarifado" (leandro) = Almoxarifado + Consulta (pedidos).
+// "almoxarifado" (leandro) = Almoxarifado + Consulta (pedidos) + Coletas.
 export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinagem" | "qualidade" | "consulta" | "pintura" | "almoxarifado";
 
 // comReferenciaPrecos: pedido do usuário — a conta restrita (marcelo) também vê
@@ -67,7 +67,8 @@ export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolea
 }
 
 function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade: boolean) {
-  if (perfil === "almoxarifado") return VISOES.filter((v) => v.valor === "almoxarifado" || v.valor === "consulta");
+  // + Coletas planejadas (datas que o flpmac14 e o marcelo põem no Follow up) — pedido do usuário (28/10/2026).
+  if (perfil === "almoxarifado") return VISOES.filter((v) => v.valor === "almoxarifado" || v.valor === "consulta" || v.valor === "coletas");
   if (perfil === "consulta") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "caldeiraria" || v.valor === "funcionarios");
   if (perfil === "pintura") return VISOES.filter((v) => v.valor === "consulta" || v.valor === "pintura");
   return VISOES.filter((v) =>

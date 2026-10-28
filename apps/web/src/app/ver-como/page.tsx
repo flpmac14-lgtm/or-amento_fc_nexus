@@ -26,7 +26,7 @@ const PERFIS: Record<string, { nome: string; ve: string; cor: string }> = {
   qualidade: { nome: "Qualidade", ve: "QUALIDADE, Backup Recebimento, Data book, Recebimento, Coletas, Cortados (NRI), Pintura (só consulta)", cor: "border-violet-500" },
   consulta: { nome: "Consulta / Caldeiraria", ve: "Consulta + Caldeiraria (celular)", cor: "border-cyan-500" },
   pintura: { nome: "Pintura", ve: "Consulta + Pintura (celular)", cor: "border-pink-500" },
-  almoxarifado: { nome: "Almoxarifado", ve: "Almoxarifado (conferir o que chegou + fotos) + Consulta dos pedidos", cor: "border-teal-500" },
+  almoxarifado: { nome: "Almoxarifado", ve: "Almoxarifado (conferir o que chegou + fotos) + Consulta dos pedidos + Coletas", cor: "border-teal-500" },
   financeiro: { nome: "Financeiro", ve: "Só o Financeiro (sem Budget e sem Fluxo de caixa)", cor: "border-emerald-500" },
 };
 

@@ -5,6 +5,7 @@ import { podeVerAlmoxarifado } from "@/lib/acesso";
 import {
   chaveItem,
   chaveLista,
+  datasDaMac,
   macBase,
   macPlanilha,
   type DetalheMac,
@@ -50,23 +51,32 @@ async function compras(admin: Admin) {
 }
 
 /** MACs com peça no Follow up (ativas primeiro), pra tela inicial e pras opções da busca. */
-function agrupar(linhas: { mac: string | null; cliente: string | null; st?: string | null }[], motivo?: (l: never) => string): OpcaoMac[] {
-  const m = new Map<string, OpcaoMac>();
+type LinhaMac = { mac: string | null; cliente: string | null; po?: string | null; st?: string | null; prazo_contratual?: string | null; coleta_data?: string | null };
+function agrupar(linhas: LinhaMac[], motivo?: (l: never) => string): OpcaoMac[] {
+  const m = new Map<string, { o: OpcaoMac; linhas: LinhaMac[] }>();
   for (const l of linhas) {
     const base = macBase(l.mac);
     if (!base) continue;
-    const o = m.get(base) ?? { mac: base, cliente: l.cliente, itens: 0, motivo: motivo?.(l as never) };
-    o.itens++;
-    m.set(base, o);
+    const g = m.get(base) ?? { o: { mac: base, cliente: l.cliente, itens: 0, motivo: motivo?.(l as never) }, linhas: [] };
+    g.o.itens++;
+    g.linhas.push(l);
+    m.set(base, g);
   }
-  return [...m.values()].sort((a, b) => b.itens - a.itens || a.mac.localeCompare(b.mac));
+  // "Hoje" de Brasília (a Vercel roda em UTC).
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  return [...m.values()]
+    .map(({ o, linhas: ls }) => {
+      const d = datasDaMac(ls, hoje);
+      return { ...o, prazo: d.prazo, coleta: d.coleta, pedidos: d.pedidos };
+    })
+    .sort((a, b) => b.itens - a.itens || a.mac.localeCompare(b.mac));
 }
 
 async function detalhe(admin: Admin, mac: string): Promise<DetalheMac> {
   const prefixo = macPlanilha(mac);
   const [itens, status, linhas, conf, fotos, comp] = await Promise.all([
     comRetentativa(() =>
-      admin.from("follow_up_itens").select(CAMPOS_ITEM).eq("presente_na_ultima_importacao", true).like("mac", `${prefixo}%`).order("po").limit(2000),
+      admin.from("follow_up_itens").select(CAMPOS_ITEM).eq("presente_na_ultima_importacao", true).eq("st", "A").like("mac", `${prefixo}%`).order("po").limit(2000),
     ),
     comRetentativa(() => admin.from("material_compra_status").select("colunas").eq("id", 1).maybeSingle()),
     comRetentativa(() =>
@@ -82,6 +92,7 @@ async function detalhe(admin: Admin, mac: string): Promise<DetalheMac> {
   if (erro) throw new Error(erro.message);
 
   const doMac = (itens.data ?? []).filter((i) => macBase(i.mac) === mac);
+  const posAtivos = new Set(doMac.map((i) => i.po as string));
   const ids = doMac.map((i) => i.id as string);
   const imagens = ids.length
     ? await comRetentativa(() => admin.from("follow_up_imagens").select("item_id, midia_sha256, ordem").in("item_id", ids).order("ordem"))
@@ -117,7 +128,8 @@ async function detalhe(admin: Admin, mac: string): Promise<DetalheMac> {
         l: txt("l"),
       };
     })
-    .filter((l) => macBase(l.mac1) === mac);
+    // Só os pedidos ativos interessam pro almoxarifado (pedido do usuário, 28/10/2026): linha de PO entregue/cancelado sai.
+    .filter((l) => macBase(l.mac1) === mac && !!l.po && posAtivos.has(l.po));
 
   return {
     mac,
@@ -150,6 +162,29 @@ async function detalhe(admin: Admin, mac: string): Promise<DetalheMac> {
   };
 }
 
+/** Imagem de referência de cada MAC — pedido do usuário (28/10/2026): a 1ª imagem
+ * que o Follow up anexou numa peça ativa da obra, pra ele reconhecer a obra. */
+async function comFoto(admin: Admin, opcoes: OpcaoMac[]): Promise<OpcaoMac[]> {
+  if (!opcoes.length) return opcoes;
+  const { data, error } = await comRetentativa(() =>
+    admin
+      .from("follow_up_imagens")
+      .select("midia_sha256, ordem, item:follow_up_itens!inner(mac, po)")
+      .eq("item.st", "A")
+      .eq("item.presente_na_ultima_importacao", true)
+      .order("ordem")
+      .limit(5000),
+  );
+  if (error) return opcoes; // sem imagem não impede a tela
+  const porMac = new Map<string, { po: string; sha: string }>();
+  for (const r of (data ?? []) as unknown as { midia_sha256: string; item: { mac: string | null; po: string } }[]) {
+    const m = macBase(r.item?.mac);
+    const atual = porMac.get(m);
+    if (m && (!atual || r.item.po.localeCompare(atual.po, "pt-BR", { numeric: true }) < 0)) porMac.set(m, { po: r.item.po, sha: r.midia_sha256 });
+  }
+  return opcoes.map((o) => ({ ...o, foto: porMac.get(o.mac)?.sha ?? null }));
+}
+
 /** O que foi digitado → MACs. MAC direto; senão PO, desenho ou nº do pedido de compra / solicitação. */
 async function buscar(admin: Admin, q: string): Promise<OpcaoMac[]> {
   const termo = q.trim();
@@ -161,8 +196,9 @@ async function buscar(admin: Admin, q: string): Promise<OpcaoMac[]> {
     comRetentativa(() =>
       admin
         .from("follow_up_itens")
-        .select("mac, cliente, po, desenho, st")
+        .select("mac, cliente, po, desenho, st, prazo_contratual, coleta_data")
         .eq("presente_na_ultima_importacao", true)
+        .eq("st", "A")
         .or(`po.ilike.%${limpo}%,desenho.ilike.%${limpo}%`)
         .limit(300),
     ),
@@ -181,7 +217,7 @@ async function buscar(admin: Admin, q: string): Promise<OpcaoMac[]> {
       .filter(([, c]) => c.pc?.some((p) => p.pc === n))
       .map(([id]) => id);
     if (ids.length) {
-      const r = await comRetentativa(() => admin.from("follow_up_itens").select("mac, cliente").in("id", ids));
+      const r = await comRetentativa(() => admin.from("follow_up_itens").select("mac, cliente, po, st, prazo_contratual, coleta_data").in("id", ids).eq("st", "A"));
       for (const o of agrupar(r.data ?? [], () => `Pedido de compra ${n}`)) if (!achados.some((a) => a.mac === o.mac)) achados.push(o);
     }
   }
@@ -199,13 +235,13 @@ export async function GET(request: NextRequest) {
     if (q) {
       const opcoes = await buscar(admin, q);
       if (opcoes.length === 1) return NextResponse.json({ detalhe: await detalhe(admin, opcoes[0].mac) }, { headers: { "Cache-Control": "no-store" } });
-      return NextResponse.json({ opcoes }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ opcoes: await comFoto(admin, opcoes) }, { headers: { "Cache-Control": "no-store" } });
     }
     const { data, error } = await comRetentativa(() =>
-      admin.from("follow_up_itens").select("mac, cliente").eq("presente_na_ultima_importacao", true).eq("st", "A"),
+      admin.from("follow_up_itens").select("mac, cliente, po, st, prazo_contratual, coleta_data").eq("presente_na_ultima_importacao", true).eq("st", "A"),
     );
     if (error) throw new Error(error.message);
-    return NextResponse.json({ opcoes: agrupar(data ?? []) }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ opcoes: await comFoto(admin, agrupar(data ?? [])) }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return NextResponse.json({ erro: (e as Error).message }, { status: 500 });
   }
