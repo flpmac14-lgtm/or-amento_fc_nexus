@@ -37,6 +37,7 @@ import httpx  # noqa: E402
 
 from app.orcamentos_salvos import _conectar  # noqa: E402
 from sincronizar_certificados import FONTES, caminho_do_pdf  # noqa: E402
+from sincronizar_financeiro import sincronizar_notas_pedido, sincronizar_pedidos  # noqa: E402
 
 BUCKET = "certificados"
 DURACAO_S = 14 * 60
@@ -113,6 +114,26 @@ def _limpar(cur, st: httpx.Client) -> None:
     cur.execute("update qualidade_pdf_pedidos set status = 'apagado' where id = any(%s)", (ids,))
 
 
+def _atualizar_pedidos(cur) -> bool:
+    """Botão Atualizar da aba Financeiro → Pedido - ativo (pedido do usuário,
+    29/10/2026, migration 0063): lê o Sectra na hora em vez de esperar o ciclo de 15 min."""
+    cur.execute(
+        """select 1 from financeiro_pedidos where id = 1
+           and pedir_atualizacao_em > coalesce(atendido_em, '-infinity')
+           and pedir_atualizacao_em > now() - interval '10 minutes'"""
+    )
+    if not cur.fetchone():
+        return False
+    try:
+        resumo = sincronizar_pedidos()
+        sincronizar_notas_pedido()
+        print(f"{datetime.now():%d/%m %H:%M:%S} Pedido - ativo atualizado: {resumo or 'nada mudou'}", flush=True)
+    except Exception as e:  # noqa: BLE001 — marca atendido mesmo assim, o site não fica esperando
+        print(f"{datetime.now():%d/%m %H:%M:%S} ERRO ao atualizar Pedido - ativo - {type(e).__name__}: {e}", flush=True)
+    cur.execute("update financeiro_pedidos set atendido_em = now() where id = 1")
+    return True
+
+
 def vigiar(uma_vez: bool = False) -> None:
     fim = time.monotonic() + DURACAO_S
     ultimo_pedido = datetime.min.replace(tzinfo=timezone.utc)
@@ -131,6 +152,8 @@ def vigiar(uma_vez: bool = False) -> None:
                 for pedido_id, fonte, arquivo in pendentes:
                     _servir(cur, st, pedido_id, fonte, arquivo, permitidos)
                 agora = datetime.now(timezone.utc)
+                if _atualizar_pedidos(cur):
+                    ultimo_pedido = agora
                 if pendentes:
                     ultimo_pedido = agora
                     print(f"{agora:%d/%m %H:%M:%S} {len(pendentes)} PDF(s) servido(s)", flush=True)

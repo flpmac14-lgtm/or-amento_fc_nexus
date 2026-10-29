@@ -76,26 +76,59 @@ export default function FinanceiroPedidoAtivo() {
   const [filtro, setFiltro] = useState<Filtro>("sem_entrada");
   const [busca, setBusca] = useState("");
   const [cliente, setCliente] = useState("");
+  // Botão Atualizar (pedido do usuário, 29/10/2026): pede a leitura do Sectra
+  // na hora e espera o vigia da máquina da Macfab responder (até 2 min).
+  const [atualizando, setAtualizando] = useState("");
 
-  useEffect(() => {
-    let ativo = true;
-    fetch("/api/financeiro/pedidos", { cache: "no-store" })
+  function carregar(): Promise<void> {
+    return fetch("/api/financeiro/pedidos", { cache: "no-store" })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.erro ?? `Falha ao carregar (${r.status}).`);
-        return j as { pedidos: { comparativo?: { itens: ItemComparativo[]; so_sectra: SoSectra[] } } | null; gerado_em: string | null };
+        return j as {
+          pedidos: { comparativo?: { itens: ItemComparativo[]; so_sectra: SoSectra[] } } | null;
+          gerado_em: string | null;
+          atendido_em: string | null;
+        };
       })
       .then((j) => {
-        if (!ativo) return;
         setItens(j.pedidos?.comparativo?.itens ?? []);
         setSoSectra(j.pedidos?.comparativo?.so_sectra ?? []);
-        setGeradoEm(j.gerado_em);
+        // Mostra a última conferência no Sectra (mesmo quando nada mudou).
+        setGeradoEm([j.gerado_em, j.atendido_em].filter((x): x is string => !!x).sort((a, b) => Date.parse(a) - Date.parse(b)).pop() ?? null);
+        setErro("");
       })
-      .catch((e: Error) => ativo && setErro(e.message));
-    return () => {
-      ativo = false;
-    };
+      .catch((e: Error) => setErro(e.message));
+  }
+
+  useEffect(() => {
+    Promise.resolve().then(carregar);
   }, []);
+
+  async function atualizarAgora() {
+    setAtualizando("Pedindo ao Sectra…");
+    try {
+      const r = await fetch("/api/financeiro/pedidos", { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.erro ?? `Falha ao pedir (${r.status}).`);
+      const pedido: string = j.pedido_em;
+      setAtualizando("Lendo o Sectra…");
+      for (let t = 0; t < 40; t++) {
+        await new Promise((ok) => setTimeout(ok, 3000));
+        const e = await fetch("/api/financeiro/pedidos?estado=1", { cache: "no-store" }).then((x) => x.json());
+        if (e.atendido_em && Date.parse(e.atendido_em) >= Date.parse(pedido)) {
+          await carregar();
+          setAtualizando("");
+          return;
+        }
+      }
+      setAtualizando("");
+      setErro("O computador da Macfab não respondeu agora — os dados atualizam sozinhos a cada 15 min.");
+    } catch (e) {
+      setAtualizando("");
+      setErro((e as Error).message);
+    }
+  }
 
   const contagem = useMemo(() => {
     const l = itens ?? [];
@@ -207,6 +240,15 @@ export default function FinanceiroPedidoAtivo() {
         >
           🖨️ Relatório pendentes de entrada ({itens.filter((i) => i.situacao === "sem_entrada" && (!cliente || (i.cliente ?? "—") === cliente)).length})
         </a>
+        <button
+          type="button"
+          onClick={atualizarAgora}
+          disabled={!!atualizando}
+          className="flex h-11 items-center rounded-lg border-2 border-green-700 px-3 text-sm font-bold text-green-800 hover:bg-green-50 disabled:opacity-60 dark:border-cyan-500 dark:text-cyan-200 dark:hover:bg-cyan-950/40"
+          title="Lê o Sectra agora (sem esperar os 15 min)"
+        >
+          {atualizando ? `⏳ ${atualizando}` : "⟳ Atualizar do Sectra"}
+        </button>
         <span className="text-xs text-stone-500 dark:text-slate-400">
           Referência: pedido do cliente + item · atualizado{" "}
           {geradoEm ? new Date(geradoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
