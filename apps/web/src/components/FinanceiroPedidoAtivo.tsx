@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { moeda } from "@/components/FinanceiroPainel";
+import { AVISO_SEM_RESPOSTA, atualizarPedidosSectra } from "@/lib/atualizarSectra";
 import { normalizarBusca } from "@/lib/followUp";
 
 export interface ItemComparativo {
@@ -30,6 +31,24 @@ export interface ItemComparativo {
   entrega: string | null;
   cliente_erp: string | null;
   alertas: string[];
+  entrou_em?: string | null; // quando entrou no Follow up (sininho)
+}
+
+// Sininho (pedido do usuário, 29/10/2026): pedidos que entraram no Follow up
+// há pouco e ainda não têm entrada no Sectra. "Visto" fica neste navegador;
+// na 1ª vez conta os dos últimos 3 dias.
+const CHAVE_VISTO = "fcnexus.pedidoAtivo.vistoEm";
+function lerVisto(): number {
+  try {
+    const v = Number(localStorage.getItem(CHAVE_VISTO));
+    if (v) return v;
+  } catch {}
+  return Date.now() - 3 * 24 * 3600 * 1000;
+}
+function gravarVisto(ms: number) {
+  try {
+    localStorage.setItem(CHAVE_VISTO, String(ms));
+  } catch {}
 }
 
 interface SoSectra {
@@ -79,6 +98,8 @@ export default function FinanceiroPedidoAtivo() {
   // Botão Atualizar (pedido do usuário, 29/10/2026): pede a leitura do Sectra
   // na hora e espera o vigia da máquina da Macfab responder (até 2 min).
   const [atualizando, setAtualizando] = useState("");
+  const [vistoEm, setVistoEm] = useState(0);
+  const [sinoAberto, setSinoAberto] = useState(false);
 
   function carregar(): Promise<void> {
     return fetch("/api/financeiro/pedidos", { cache: "no-store" })
@@ -102,31 +123,35 @@ export default function FinanceiroPedidoAtivo() {
   }
 
   useEffect(() => {
-    Promise.resolve().then(carregar);
+    Promise.resolve().then(() => {
+      setVistoEm(lerVisto());
+      return carregar();
+    });
   }, []);
 
+  const novos = useMemo(
+    () =>
+      (itens ?? [])
+        .filter((i) => i.situacao === "sem_entrada" && i.entrou_em && Date.parse(i.entrou_em) > vistoEm)
+        .sort((a, b) => (b.entrou_em ?? "").localeCompare(a.entrou_em ?? "")),
+    [itens, vistoEm],
+  );
+
+  function marcarVisto() {
+    const agora = Date.now();
+    gravarVisto(agora);
+    setVistoEm(agora);
+    setSinoAberto(false);
+  }
+
   async function atualizarAgora() {
-    setAtualizando("Pedindo ao Sectra…");
     try {
-      const r = await fetch("/api/financeiro/pedidos", { method: "POST" });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.erro ?? `Falha ao pedir (${r.status}).`);
-      const pedido: string = j.pedido_em;
-      setAtualizando("Lendo o Sectra…");
-      for (let t = 0; t < 40; t++) {
-        await new Promise((ok) => setTimeout(ok, 3000));
-        const e = await fetch("/api/financeiro/pedidos?estado=1", { cache: "no-store" }).then((x) => x.json());
-        if (e.atendido_em && Date.parse(e.atendido_em) >= Date.parse(pedido)) {
-          await carregar();
-          setAtualizando("");
-          return;
-        }
-      }
-      setAtualizando("");
-      setErro("O computador da Macfab não respondeu agora — os dados atualizam sozinhos a cada 15 min.");
+      if (await atualizarPedidosSectra(setAtualizando)) await carregar();
+      else setErro(AVISO_SEM_RESPOSTA);
     } catch (e) {
-      setAtualizando("");
       setErro((e as Error).message);
+    } finally {
+      setAtualizando("");
     }
   }
 
@@ -242,6 +267,22 @@ export default function FinanceiroPedidoAtivo() {
         </a>
         <button
           type="button"
+          onClick={() => setSinoAberto((v) => !v)}
+          aria-expanded={sinoAberto}
+          title="Pedidos que entraram no Follow up há pouco e ainda não têm entrada no Sectra"
+          className={`relative flex h-11 items-center gap-1 rounded-lg border-2 px-3 text-sm font-bold ${
+            novos.length
+              ? "border-red-600 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+              : "border-stone-300 text-stone-600 dark:border-slate-600 dark:text-slate-300"
+          }`}
+        >
+          🔔 Novos para dar entrada
+          {novos.length > 0 && (
+            <span className="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{novos.length}</span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={atualizarAgora}
           disabled={!!atualizando}
           className="flex h-11 items-center rounded-lg border-2 border-green-700 px-3 text-sm font-bold text-green-800 hover:bg-green-50 disabled:opacity-60 dark:border-cyan-500 dark:text-cyan-200 dark:hover:bg-cyan-950/40"
@@ -254,6 +295,42 @@ export default function FinanceiroPedidoAtivo() {
           {geradoEm ? new Date(geradoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
         </span>
       </div>
+
+      {sinoAberto && (
+        <div className="flex flex-col gap-2 rounded-xl border-2 border-red-300 bg-red-50/60 p-3 dark:border-red-800 dark:bg-red-950/30">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-red-800 dark:text-red-200">
+              {novos.length
+                ? `${novos.length} pedido(s) novo(s) no Follow up sem entrada no Sectra`
+                : "Nenhum pedido novo sem entrada desde a última vez que você viu."}
+            </p>
+            {novos.length > 0 && (
+              <button
+                type="button"
+                onClick={marcarVisto}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-500"
+              >
+                ✔ Marcar como visto
+              </button>
+            )}
+          </div>
+          {novos.length > 0 && (
+            <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto text-sm">
+              {novos.map((i) => (
+                <li key={i.po} className="flex flex-wrap items-baseline gap-x-2 rounded-lg bg-white px-2 py-1.5 dark:bg-slate-900">
+                  <span className="font-mono font-bold text-stone-900 dark:text-white">{i.po}</span>
+                  <span className="text-stone-600 dark:text-slate-300">{i.cliente ?? "—"} · MAC {i.mac ?? "—"}</span>
+                  <span className="truncate text-xs text-stone-500 dark:text-slate-400">{i.descricao ?? ""}</span>
+                  <span className="ml-auto text-xs text-stone-500 dark:text-slate-400">
+                    entrou {i.entrou_em ? new Date(i.entrou_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    {i.prazo ? ` · prazo ${diaBr(i.prazo)}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="max-h-[70vh] overflow-auto rounded-xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         {filtro === "so_sectra" ? (

@@ -370,7 +370,8 @@ PI.QTDE,
 PI.VLRTOTAL,
 CONVERT(VARCHAR(10), P.DTENTREGA, 103) AS [PREV ENTREGA],
 'W' + RIGHT(CAST(YEAR(P.DTENTREGA) AS VARCHAR(4)), 2) + RIGHT('0' + CAST(DATEPART(ISO_WEEK, P.DTENTREGA) AS VARCHAR(2)), 2) AS [ANO-SEM ENTREGA],
-(SELECT X.FANTASIA FROM FN_FORNECEDORES AS X WHERE X.CODIGO = P.CLIENTE) AS CLIENTE
+(SELECT X.FANTASIA FROM FN_FORNECEDORES AS X WHERE X.CODIGO = P.CLIENTE) AS CLIENTE,
+CONVERT(VARCHAR(10), P.DTPEDIDO, 23) AS [DATA PEDIDO]
 FROM VE_PEDIDOITENS AS PI
 LEFT JOIN VE_PEDIDO AS P ON P.CODIGO = PI.PEDIDO
 WHERE P.DTPEDIDO >= '20240101'
@@ -378,7 +379,8 @@ ORDER BY P.CODIGO DESC
 """
 # Colunas gravadas (cada pedido vira uma lista, nessa ordem — ocupa bem menos que dicionário).
 COLUNAS_PEDIDOS = ["pedido", "obra", "obra_desc", "pedido_cliente", "status", "material", "descricao", "qtde",
-                   "valor", "entrega", "ano_semana", "cliente"]
+                   "valor", "entrega", "ano_semana", "cliente",
+                   "data_pedido"]  # dia da entrada no Sectra (aba Entrada de pedidos, 29/10/2026)
 
 
 # --- Fluxo de caixa (aba Financeiro → Fluxo de caixa) -------------------------
@@ -440,7 +442,7 @@ def montar_pedidos() -> dict:
         cond, pedido_cond = _condicoes(cur)
         pagar = _pagar_fluxo(cur, date.today())
         cur.execute(SQL_PEDIDOS_VENDA)
-        for pedido, obra, obra_desc, po, status, material, desc, qtde, valor, entrega, ano_sem, cliente in cur.fetchall():
+        for pedido, obra, obra_desc, po, status, material, desc, qtde, valor, entrega, ano_sem, cliente, dia in cur.fetchall():
             # "21/10/2026" → "2026-10-21"
             iso = None
             if entrega and len(entrega.strip()) == 10:
@@ -449,7 +451,7 @@ def montar_pedidos() -> dict:
             linhas.append([
                 str(int(pedido)) if pedido is not None else None, _texto(obra), _texto(obra_desc), _texto(po),
                 _texto(status), _texto(material), _texto(desc), float(qtde or 0), round(float(valor or 0), 2),
-                iso, _texto(ano_sem), _texto(cliente),
+                iso, _texto(ano_sem), _texto(cliente), _texto(dia),
             ])
     return {"colunas": COLUNAS_PEDIDOS, "linhas": linhas,
             "comparativo": comparar_com_follow_up(linhas, cond, pedido_cond),
@@ -484,7 +486,7 @@ def comparar_com_follow_up(linhas: list[list], cond: dict | None = None, pedido_
         erp.setdefault(chave_po(l[col["pedido_cliente"]], l[col["descricao"]]), []).append(l)
     with _conectar() as conn, conn.cursor() as cur:
         cur.execute(
-            """select po, mac, cliente, desenho, descricao, quantidade, prazo_contratual, status
+            """select po, mac, cliente, desenho, descricao, quantidade, prazo_contratual, status, created_at
                from follow_up_itens where st = 'A' and presente_na_ultima_importacao order by po"""
         )
         ativos = cur.fetchall()
@@ -493,7 +495,7 @@ def comparar_com_follow_up(linhas: list[list], cond: dict | None = None, pedido_
         k = chave_po(a[0])
         vistos[k] = vistos.get(k, 0) + 1
     itens = []
-    for po, mac, cliente, desenho, descricao, qtd, prazo, status_fu in ativos:
+    for po, mac, cliente, desenho, descricao, qtd, prazo, status_fu, entrou_em in ativos:
         k = chave_po(po)
         ls = erp.get(k, [])
         validas = [l for l in ls if l[col["status"]] != "CANCELADO"]
@@ -526,6 +528,8 @@ def comparar_com_follow_up(linhas: list[list], cond: dict | None = None, pedido_
             "entrega": min((l[col["entrega"]] for l in validas if l[col["entrega"]]), default=None),
             "cliente_erp": next((l[col["cliente"]] for l in validas), None), "alertas": alertas,
             "condicao": c,
+            # Quando o pedido entrou no Follow up — sininho dos novos sem entrada (29/10/2026).
+            "entrou_em": entrou_em.isoformat() if entrou_em else None,
         })
     # Ao contrário: em aberto no Sectra sem pedido ativo no Follow up.
     so_sectra = []

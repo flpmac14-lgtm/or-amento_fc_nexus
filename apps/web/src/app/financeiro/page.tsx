@@ -15,6 +15,7 @@ import FinanceiroNotas from "@/components/FinanceiroNotas";
 import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/FinanceiroPainel";
 import FinanceiroPedidos from "@/components/FinanceiroPedidos";
 import FinanceiroPedidoAtivo from "@/components/FinanceiroPedidoAtivo";
+import FinanceiroEntradaPedidos from "@/components/FinanceiroEntradaPedidos";
 import Consulta from "@/components/Consulta";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
 import { PERFIL_FINANCEIRO, PERFIL_FINANCEIRO_CONSULTA, buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
@@ -46,9 +47,10 @@ function Secao({ titulo, sub, children }: { titulo: string; sub?: string; childr
   );
 }
 
-type AbaFinanceiro = AbaPainel | "pedidos" | "pedido_ativo" | "coletas" | "faturamento" | "fluxo";
+type AbaFinanceiro = AbaPainel | "pedidos" | "pedido_ativo" | "entrada" | "coletas" | "faturamento" | "fluxo";
 // Perfil "financeiro_consulta" (luana) — pedido do usuário (29/10/2026): só essas abas, só olhar.
-const ABAS_CONSULTA: AbaFinanceiro[] = ["pedido_ativo", "coletas", "faturamento"];
+// Entrada de pedidos (pedidos lançados no Sectra por dia) — só flpmac14 e luana (29/10/2026).
+const ABAS_CONSULTA: AbaFinanceiro[] = ["pedido_ativo", "entrada", "coletas", "faturamento"];
 
 export default function PaginaFinanceiro() {
   const [dados, setDados] = useState<RespostaFinanceiro | null>(null);
@@ -81,7 +83,7 @@ export default function PaginaFinanceiro() {
           if (!antes) {
             const a = new URLSearchParams(window.location.search).get("aba");
             if (j.so_consulta) setAba(ABAS_CONSULTA.includes(a as AbaFinanceiro) ? (a as AbaFinanceiro) : "pedido_ativo");
-            else if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || (a === "fluxo" && j.ver_budget !== false) || ABAS_PAINEL.some(([v]) => v === a))
+            else if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || ((a === "fluxo" || a === "entrada") && j.ver_budget !== false) || ABAS_PAINEL.some(([v]) => v === a))
               setAba(a as AbaFinanceiro);
           }
           return j;
@@ -180,8 +182,15 @@ export default function PaginaFinanceiro() {
         {resumo && (
           <nav className="sticky top-14 z-20 -mx-3 flex gap-1 overflow-x-auto border-b border-stone-200 bg-stone-50/95 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border">
             {(dados?.so_consulta
-              ? ([["pedido_ativo", "Pedido - ativo"], ["coletas", "Coletas"], ["faturamento", "Faturamento"]] as const)
-              : [...ABAS_PAINEL, ["pedidos", "Pedidos"] as const, ["pedido_ativo", "Pedido - ativo"] as const, ["faturamento", "Faturamento"] as const, ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : [])]
+              ? ([["pedido_ativo", "Pedido - ativo"], ["entrada", "Entrada de pedidos"], ["coletas", "Coletas"], ["faturamento", "Faturamento"]] as const)
+              : [
+                  ...ABAS_PAINEL,
+                  ["pedidos", "Pedidos"] as const,
+                  ["pedido_ativo", "Pedido - ativo"] as const,
+                  ...(dados?.ver_budget !== false ? [["entrada", "Entrada de pedidos"] as const] : []),
+                  ["faturamento", "Faturamento"] as const,
+                  ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : []),
+                ]
             ).map(([v, r]) => (
               <button
                 key={v}
@@ -197,9 +206,12 @@ export default function PaginaFinanceiro() {
           </nav>
         )}
 
-        {resumo && !dados?.so_consulta && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "coletas" && aba !== "fluxo" && (
+        {resumo && !dados?.so_consulta && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "entrada" && aba !== "coletas" && aba !== "fluxo" && (
           <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />
         )}
+
+        {/* Entrada de pedidos por dia — flpmac14 e luana (pedido do usuário, 29/10/2026). */}
+        {resumo && aba === "entrada" && (dados?.so_consulta || dados?.ver_budget !== false) && <FinanceiroEntradaPedidos />}
 
         {/* Coletas planejadas no Follow up, só olhar (a mesma tela da Consulta) — luana. */}
         {resumo && aba === "coletas" && dados?.so_consulta && <Consulta key="coletas" inicial="coletas" soColetas />}
