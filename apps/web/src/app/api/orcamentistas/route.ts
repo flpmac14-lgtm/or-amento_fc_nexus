@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ehEmailAdmin } from "@/lib/admin";
+import { podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin, loginParaEmail } from "@/lib/loginInterno";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
@@ -12,16 +13,26 @@ import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 // e-mail. Supabase Auth exige um e-mail por baixo — "login" vira um
 // e-mail interno fixo (ver lib/loginInterno.ts), nunca aparece na tela.
 
-async function exigirAdmin() {
+async function exigirAdmin(soFlpmac14 = false) {
   const supabase = await criarClienteSupabaseServidor();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!ehEmailAdmin(user?.email)) {
+  if (!ehEmailAdmin(user?.email) || (soFlpmac14 && !podeVerFinanceiro(user?.email))) {
     return NextResponse.json({ erro: "Acesso restrito ao administrador." }, { status: 403 });
   }
   return null;
+}
+
+// Trocar a senha de qualquer conta — pedido do usuário (29/10/2026): só ele
+// (flpmac14). Conferido aqui no servidor; a tela só mostra o botão pra ele.
+async function podeTrocarSenha(): Promise<boolean> {
+  const supabase = await criarClienteSupabaseServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return podeVerFinanceiro(user?.email);
 }
 
 export async function GET() {
@@ -45,7 +56,25 @@ export async function GET() {
     }))
     .sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1));
 
-  return NextResponse.json({ usuarios });
+  return NextResponse.json({ usuarios, pode_trocar_senha: await podeTrocarSenha() });
+}
+
+export async function PATCH(request: Request) {
+  const negado = await exigirAdmin(true);
+  if (negado) return negado;
+
+  const corpo = await request.json().catch(() => null);
+  const id = typeof corpo?.id === "string" ? corpo.id : "";
+  const senha = typeof corpo?.senha === "string" ? corpo.senha : "";
+  if (!id) return NextResponse.json({ erro: "Conta não informada." }, { status: 400 });
+  if (senha.length < 6) {
+    return NextResponse.json({ erro: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
+  }
+
+  const admin = criarClienteSupabaseAdmin();
+  const { data, error } = await admin.auth.admin.updateUserById(id, { password: senha });
+  if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
+  return NextResponse.json({ login: data.user.email ? emailParaLogin(data.user.email) : null });
 }
 
 export async function POST(request: Request) {

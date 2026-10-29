@@ -27,6 +27,11 @@ export default function PaginaOrcamentistas() {
   const [senha, setSenha] = useState("");
   const [cadastrando, setCadastrando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Trocar senha (só o flpmac14 — o servidor confere de novo).
+  const [podeTrocarSenha, setPodeTrocarSenha] = useState(false);
+  const [trocando, setTrocando] = useState<string | null>(null); // id da conta com o campo aberto
+  const [novaSenha, setNovaSenha] = useState("");
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   async function buscarUsuarios() {
     setCarregando(true);
@@ -43,6 +48,7 @@ export default function PaginaOrcamentistas() {
       }
       const dados = await resposta.json();
       setUsuarios(dados.usuarios);
+      setPodeTrocarSenha(!!dados.pode_trocar_senha);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao listar usuários.");
     } finally {
@@ -51,7 +57,7 @@ export default function PaginaOrcamentistas() {
   }
 
   useEffect(() => {
-    buscarUsuarios();
+    Promise.resolve().then(buscarUsuarios);
   }, []);
 
   async function handleCadastrar(evento: React.FormEvent) {
@@ -77,6 +83,28 @@ export default function PaginaOrcamentistas() {
       setErro(e instanceof Error ? e.message : "Erro desconhecido ao cadastrar.");
     } finally {
       setCadastrando(false);
+    }
+  }
+
+  async function trocarSenha(u: Usuario) {
+    setSalvandoSenha(true);
+    setErro(null);
+    setAviso(null);
+    try {
+      const resposta = await fetch("/api/orcamentistas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: u.id, senha: novaSenha }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados?.erro || `Falha ao trocar a senha (${resposta.status}).`);
+      setAviso(`Senha de "${u.login}" trocada — a pessoa já entra com a nova senha.`);
+      setTrocando(null);
+      setNovaSenha("");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro desconhecido ao trocar a senha.");
+    } finally {
+      setSalvandoSenha(false);
     }
   }
 
@@ -148,13 +176,59 @@ export default function PaginaOrcamentistas() {
         ) : (
           <ul className="divide-y divide-stone-200 dark:divide-slate-800 text-sm">
             {usuarios?.map((u) => (
-              <li key={u.id} className="flex items-center justify-between py-2">
-                <span className="text-stone-800 dark:text-slate-200">{u.login}</span>
-                <span className="text-xs text-stone-500 dark:text-slate-500">
-                  {u.ultimo_login_em
-                    ? `último acesso ${new Date(u.ultimo_login_em).toLocaleDateString("pt-BR")}`
-                    : "nunca entrou"}
-                </span>
+              <li key={u.id} className="flex flex-col gap-2 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-stone-800 dark:text-slate-200">{u.login}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-stone-500 dark:text-slate-500">
+                      {u.ultimo_login_em
+                        ? `último acesso ${new Date(u.ultimo_login_em).toLocaleDateString("pt-BR")}`
+                        : "nunca entrou"}
+                    </span>
+                    {podeTrocarSenha && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTrocando(trocando === u.id ? null : u.id);
+                          setNovaSenha("");
+                        }}
+                        className="rounded-lg border border-stone-300 px-2 py-1 text-xs font-semibold text-stone-700 hover:border-green-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-cyan-500"
+                      >
+                        🔑 Trocar senha
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {trocando === u.id && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      trocarSenha(u);
+                    }}
+                    className="flex flex-col gap-2 rounded-lg bg-stone-50 p-2 dark:bg-slate-900 sm:flex-row sm:items-center"
+                  >
+                    <input
+                      type="text"
+                      required
+                      minLength={6}
+                      autoFocus
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                      placeholder={`nova senha de ${u.login} (mín. 6)`}
+                      className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-cyan-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={salvandoSenha || novaSenha.length < 6}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 dark:bg-cyan-500 dark:text-slate-950"
+                    >
+                      {salvandoSenha ? "Salvando…" : "Salvar senha"}
+                    </button>
+                    <button type="button" onClick={() => setTrocando(null)} className="px-2 text-sm text-stone-500 dark:text-slate-400">
+                      Cancelar
+                    </button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>
