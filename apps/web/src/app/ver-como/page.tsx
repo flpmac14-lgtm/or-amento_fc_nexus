@@ -28,6 +28,7 @@ const PERFIS: Record<string, { nome: string; ve: string; cor: string }> = {
   pintura: { nome: "Pintura", ve: "Consulta + Pintura (celular)", cor: "border-pink-500" },
   almoxarifado: { nome: "Almoxarifado", ve: "Almoxarifado (conferir o que chegou + fotos) + Consulta dos pedidos + Coletas", cor: "border-teal-500" },
   financeiro: { nome: "Financeiro", ve: "Só o Financeiro (sem Budget e sem Fluxo de caixa)", cor: "border-emerald-500" },
+  financeiro_consulta: { nome: "Financeiro (consulta)", ve: "Financeiro só Pedido - ativo, Coletas e Faturamento (só olhar)", cor: "border-lime-500" },
 };
 
 export default function PaginaVerComo() {
@@ -54,7 +55,7 @@ export default function PaginaVerComo() {
   function entrar(u: Usuario) {
     if (!u.login) return;
     gravarVerComo({ login: u.login, acesso: u.acesso });
-    window.location.assign(u.acesso === "financeiro" ? "/financeiro" : u.acesso ? "/follow-up" : "/");
+    window.location.assign(u.acesso === "financeiro" || u.acesso === "financeiro_consulta" ? "/financeiro" : u.acesso ? "/follow-up" : "/");
   }
 
   const grupos = Object.keys(PERFIS)

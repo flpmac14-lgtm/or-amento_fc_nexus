@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { podeAbrirFinanceiro, podeVerFinanceiro, type BudgetFinanceiro } from "@/lib/financeiro";
+import { perfilFinanceiroConsulta, podeAbrirFinanceiro, podeVerFinanceiro, type BudgetFinanceiro } from "@/lib/financeiro";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
@@ -18,12 +18,12 @@ async function usuarioFinanceiro(): Promise<string | null> {
 
 // Ler o painel: o flpmac14 e o perfil "financeiro" (gabriele). Budget (ver e
 // salvar) continua só do flpmac14 — pedido do usuário: oculto pra ela.
-async function usuarioPainel(): Promise<{ budget: boolean } | null> {
+async function usuarioPainel(): Promise<{ budget: boolean; consulta: boolean } | null> {
   const supabase = await criarClienteSupabaseServidor();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return podeAbrirFinanceiro(user) ? { budget: podeVerFinanceiro(user?.email) } : null;
+  return podeAbrirFinanceiro(user) ? { budget: podeVerFinanceiro(user?.email), consulta: perfilFinanceiroConsulta(user) } : null;
 }
 
 // "JWT issued at future" (07/10): o token que o Supabase gera na hora às vezes
@@ -62,12 +62,15 @@ export async function GET(request: Request) {
       resumo: resumo.data?.dados
         ? semNotas
           ? { ...resumo.data.dados, notas: [], compras: [], pagar: undefined, receber: undefined }
-          : resumo.data.dados
+          : quem.consulta
+            ? { ...resumo.data.dados, compras: [], pagar: undefined, receber: undefined } // luana: sem compras / a pagar / a receber
+            : resumo.data.dados
         : null,
       gerado_em: resumo.data?.gerado_em ?? null,
       // Budget oculto pro perfil "financeiro": nem vai na resposta.
       budget: quem.budget ? (budget.data?.dados ?? { faturamento: {}, custos_pct: {} }) : { faturamento: {}, custos_pct: {} },
       ver_budget: quem.budget,
+      so_consulta: quem.consulta,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

@@ -17,8 +17,14 @@ export function podeVerFinanceiro(email: string | null | undefined): boolean {
 
 // Perfil "financeiro" (gabriele, pedido do usuário 15/10/2026): só o painel, sem Budget.
 export const PERFIL_FINANCEIRO = "financeiro";
+// Perfil "financeiro_consulta" (luana, pedido do usuário 29/10/2026): também presa
+// no /financeiro, mas só as abas Pedido - ativo, Coletas (só olhar) e Faturamento.
+export const PERFIL_FINANCEIRO_CONSULTA = "financeiro_consulta";
+export function perfilFinanceiroConsulta(user: Pick<User, "app_metadata"> | null | undefined): boolean {
+  return user?.app_metadata?.acesso === PERFIL_FINANCEIRO_CONSULTA;
+}
 export function perfilFinanceiro(user: Pick<User, "app_metadata"> | null | undefined): boolean {
-  return user?.app_metadata?.acesso === PERFIL_FINANCEIRO;
+  return user?.app_metadata?.acesso === PERFIL_FINANCEIRO || perfilFinanceiroConsulta(user);
 }
 
 /** Quem abre /financeiro e /api/financeiro: o flpmac14 e o perfil "financeiro". */
@@ -131,6 +137,7 @@ export interface RespostaFinanceiro {
   resumo: ResumoFinanceiro | null;
   gerado_em: string | null;
   budget: BudgetFinanceiro;
+  so_consulta?: boolean; // true pro perfil "financeiro_consulta" (luana)
   ver_budget?: boolean; // false pro perfil "financeiro" (pedido do usuário: Budget oculto)
 }
 

@@ -15,8 +15,9 @@ import FinanceiroNotas from "@/components/FinanceiroNotas";
 import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/FinanceiroPainel";
 import FinanceiroPedidos from "@/components/FinanceiroPedidos";
 import FinanceiroPedidoAtivo from "@/components/FinanceiroPedidoAtivo";
+import Consulta from "@/components/Consulta";
 import { GraficoBarras, SERIE_PEDIDOS, SERIE_PRODUCAO, SERIE_SERVICO, rotuloMes } from "@/components/FinanceiroGraficos";
-import { PERFIL_FINANCEIRO, buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
+import { PERFIL_FINANCEIRO, PERFIL_FINANCEIRO_CONSULTA, buscarFinanceiro, type BudgetFinanceiro, type RespostaFinanceiro } from "@/lib/financeiro";
 import { lerVerComo } from "@/lib/verComo";
 
 function moeda(v: number): string {
@@ -45,6 +46,10 @@ function Secao({ titulo, sub, children }: { titulo: string; sub?: string; childr
   );
 }
 
+type AbaFinanceiro = AbaPainel | "pedidos" | "pedido_ativo" | "coletas" | "faturamento" | "fluxo";
+// Perfil "financeiro_consulta" (luana) — pedido do usuário (29/10/2026): só essas abas, só olhar.
+const ABAS_CONSULTA: AbaFinanceiro[] = ["pedido_ativo", "coletas", "faturamento"];
+
 export default function PaginaFinanceiro() {
   const [dados, setDados] = useState<RespostaFinanceiro | null>(null);
   const [erro, setErro] = useState("");
@@ -53,8 +58,8 @@ export default function PaginaFinanceiro() {
   const [mesNotas, setMesNotas] = useState("");
   // Abas (pedido do usuário, 15/10/2026): Resumo, Compras, A pagar, A receber e
   // Faturamento (o painel de antes). Lembrada no endereço (?aba=).
-  const [aba, setAba] = useState<AbaPainel | "pedidos" | "pedido_ativo" | "faturamento" | "fluxo">("resumo");
-  function irAba(a: AbaPainel | "pedidos" | "pedido_ativo" | "faturamento" | "fluxo") {
+  const [aba, setAba] = useState<AbaFinanceiro>("resumo");
+  function irAba(a: AbaFinanceiro) {
     setAba(a);
     const url = new URL(window.location.href);
     url.searchParams.set("aba", a);
@@ -66,13 +71,18 @@ export default function PaginaFinanceiro() {
     buscarFinanceiro(false)
       .then((r) => {
         // Admin no "Ver como" a gabriele (perfil financeiro): esconde o que ela não vê (Budget, Fluxo de caixa).
-        const j = lerVerComo()?.acesso === PERFIL_FINANCEIRO ? { ...r, ver_budget: false, budget: { faturamento: {}, custos_pct: {} } } : r;
+        const vc = lerVerComo()?.acesso;
+        const j =
+          vc === PERFIL_FINANCEIRO || vc === PERFIL_FINANCEIRO_CONSULTA
+            ? { ...r, ver_budget: false, so_consulta: vc === PERFIL_FINANCEIRO_CONSULTA, budget: { faturamento: {}, custos_pct: {} } }
+            : r;
         // 1ª carga: abre na aba do endereço (as abas só aparecem com os dados).
         setDados((antes) => {
           if (!antes) {
             const a = new URLSearchParams(window.location.search).get("aba");
-            if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || (a === "fluxo" && j.ver_budget !== false) || ABAS_PAINEL.some(([v]) => v === a))
-              setAba(a as AbaPainel | "pedidos" | "pedido_ativo" | "faturamento" | "fluxo");
+            if (j.so_consulta) setAba(ABAS_CONSULTA.includes(a as AbaFinanceiro) ? (a as AbaFinanceiro) : "pedido_ativo");
+            else if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || (a === "fluxo" && j.ver_budget !== false) || ABAS_PAINEL.some(([v]) => v === a))
+              setAba(a as AbaFinanceiro);
           }
           return j;
         });
@@ -169,7 +179,10 @@ export default function PaginaFinanceiro() {
 
         {resumo && (
           <nav className="sticky top-14 z-20 -mx-3 flex gap-1 overflow-x-auto border-b border-stone-200 bg-stone-50/95 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border">
-            {[...ABAS_PAINEL, ["pedidos", "Pedidos"] as const, ["pedido_ativo", "Pedido - ativo"] as const, ["faturamento", "Faturamento"] as const, ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : [])].map(([v, r]) => (
+            {(dados?.so_consulta
+              ? ([["pedido_ativo", "Pedido - ativo"], ["coletas", "Coletas"], ["faturamento", "Faturamento"]] as const)
+              : [...ABAS_PAINEL, ["pedidos", "Pedidos"] as const, ["pedido_ativo", "Pedido - ativo"] as const, ["faturamento", "Faturamento"] as const, ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : [])]
+            ).map(([v, r]) => (
               <button
                 key={v}
                 type="button"
@@ -184,10 +197,15 @@ export default function PaginaFinanceiro() {
           </nav>
         )}
 
-        {resumo && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "fluxo" && <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />}
+        {resumo && !dados?.so_consulta && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "coletas" && aba !== "fluxo" && (
+          <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />
+        )}
+
+        {/* Coletas planejadas no Follow up, só olhar (a mesma tela da Consulta) — luana. */}
+        {resumo && aba === "coletas" && dados?.so_consulta && <Consulta key="coletas" inicial="coletas" soColetas />}
 
         {/* Pedidos de venda do ERP — pedido do usuário (17/10/2026); carrega só ao abrir. */}
-        {resumo && aba === "pedidos" && <FinanceiroPedidos />}
+        {resumo && aba === "pedidos" && !dados?.so_consulta && <FinanceiroPedidos />}
 
         {/* Comparativo Follow up (ativos) × Sectra — pedido do usuário (17/10/2026). */}
         {resumo && aba === "pedido_ativo" && <FinanceiroPedidoAtivo />}

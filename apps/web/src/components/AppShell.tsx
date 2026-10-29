@@ -143,6 +143,7 @@ const ROTULO_PERFIL: Record<string, string> = {
   consulta: "CONSULTA",
   pintura: "PINTURA",
   financeiro: "FINANCEIRO",
+  financeiro_consulta: "FINANCEIRO (CONSULTA)",
   almoxarifado: "ALMOXARIFADO",
 };
 

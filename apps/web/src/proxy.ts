@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
-import { ROTA_FINANCEIRO, perfilFinanceiro, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
+import { ROTA_FINANCEIRO, perfilFinanceiro, perfilFinanceiroConsulta, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
 
 // /instalar, manifesto e ícones do app instalável (PWA): públicos — o celular
@@ -48,6 +48,12 @@ export async function proxy(request: NextRequest) {
   if (user && soFinanceiro) {
     const caminho = request.nextUrl.pathname;
     if (caminho.startsWith(ROTA_FINANCEIRO) || caminho.startsWith("/api/financeiro")) return response;
+    // luana (financeiro_consulta): a aba Coletas abre o relatório de coleta (só olhar).
+    if (
+      perfilFinanceiroConsulta(user) &&
+      (caminho === "/follow-up/coleta" || (caminho === "/api/follow-up/notas-fiscais" && request.method === "GET"))
+    )
+      return response;
     if (caminho.startsWith("/api/")) {
       return NextResponse.json({ erro: "Conta com acesso restrito (financeiro)." }, { status: 403 });
     }
