@@ -444,11 +444,13 @@ export default function FollowUp({
   // Grupos de pintura com 2+ pedidos na lista — só esses ganham cor e botão.
   // Opções do filtro da Coleta: as datas preenchidas (em ordem) e depois os textos.
   // Pedido do usuário (29/10/2026): com o filtro ST (ex.: A = ativo), só as
-  // coletas dos pedidos desse ST aparecem na lista.
+  // coletas dos pedidos desse ST aparecem na lista; e com um cliente escolhido,
+  // só as coletas dele.
   const opcoesColeta = useMemo(() => {
     const m = new Map<string, { rotulo: string; n: number }>();
     for (const i of base) {
       if (filtros.st && i.st !== filtros.st) continue;
+      if (filtros.cliente && i.cliente !== filtros.cliente) continue;
       const chave = valorFiltroColeta(i);
       if (!chave) continue;
       const atual = m.get(chave);
@@ -456,7 +458,7 @@ export default function FollowUp({
       else m.set(chave, { rotulo: i.coleta_data ? formatarDataBr(i.coleta_data) : (i.coleta ?? "").trim(), n: 1 });
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "pt-BR"));
-  }, [base, filtros.st]);
+  }, [base, filtros.st, filtros.cliente]);
 
   const gruposPintura = useMemo(() => {
     const m = new Map<number, { indice: number; n: number; exemplo: ItemFollowUp }>();
