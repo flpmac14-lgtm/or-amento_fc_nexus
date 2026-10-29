@@ -3,7 +3,8 @@
 // Aba Financeiro → Entrada de pedidos — pedido do usuário (29/10/2026), pra ele
 // e pra luana: os pedidos de venda lançados no Sectra e quantos por dia (data
 // do pedido, VE_PEDIDO.DTPEDIDO). Mesmos dados da aba Pedidos
-// (/api/financeiro/pedidos, coluna data_pedido); clicar no dia abre os pedidos.
+// (/api/financeiro/pedidos, coluna data_pedido); clicar no dia abre os itens.
+// Conta por ITEM de pedido, não por pedido (pedido do usuário, 29/10/2026).
 
 import { useEffect, useMemo, useState } from "react";
 import { moeda } from "@/components/FinanceiroPainel";
@@ -23,16 +24,6 @@ interface Linha {
   data_pedido: string | null; // AAAA-MM-DD
 }
 
-interface Pedido {
-  pedido: string;
-  cliente: string | null;
-  pedido_cliente: string | null;
-  obra: string | null;
-  obra_desc: string | null;
-  itens: number;
-  valor: number;
-  cancelado: boolean;
-}
 
 const PERIODOS = [
   [7, "7 dias"],
@@ -97,54 +88,36 @@ export default function FinanceiroEntradaPedidos() {
   const semData = linhas !== null && linhas.length > 0 && linhas.every((l) => !l.data_pedido);
   const clientes = useMemo(() => [...new Set((linhas ?? []).map((l) => l.cliente ?? "—"))].sort(), [linhas]);
 
-  // Dia → pedidos (um pedido de venda tem vários itens).
+  // Dia → itens lançados (cada linha de pedido de venda é um item).
   const porDia = useMemo(() => {
     const desde = new Date();
     desde.setDate(desde.getDate() - (dias - 1));
     const inicio = isoDia(desde);
     const termo = normalizarBusca(busca.trim());
-    const m = new Map<string, Map<string, Pedido>>();
+    const m = new Map<string, Linha[]>();
     for (const l of linhas ?? []) {
       if (!l.data_pedido || l.data_pedido < inicio || !l.pedido) continue;
       if (cliente && (l.cliente ?? "—") !== cliente) continue;
       if (termo && !normalizarBusca([l.pedido, l.pedido_cliente, l.obra, l.obra_desc, l.cliente, l.descricao].filter(Boolean).join(" ")).includes(termo))
         continue;
-      const dia = m.get(l.data_pedido) ?? new Map<string, Pedido>();
+      const dia = m.get(l.data_pedido) ?? [];
+      dia.push(l);
       m.set(l.data_pedido, dia);
-      const p = dia.get(l.pedido) ?? {
-        pedido: l.pedido,
-        cliente: l.cliente,
-        pedido_cliente: l.pedido_cliente,
-        obra: l.obra,
-        obra_desc: l.obra_desc,
-        itens: 0,
-        valor: 0,
-        cancelado: true,
-      };
-      p.itens++;
-      if (l.status !== "CANCELADO") {
-        p.valor += l.valor;
-        p.cancelado = false;
-      }
-      dia.set(l.pedido, p);
     }
     return [...m.entries()]
       .sort(([a], [b]) => b.localeCompare(a))
-      .map(([dia, ps]) => {
-        const pedidos = [...ps.values()].sort((a, b) => Number(b.pedido) - Number(a.pedido));
-        return {
-          dia,
-          pedidos,
-          itens: pedidos.reduce((s, p) => s + p.itens, 0),
-          valor: pedidos.reduce((s, p) => s + p.valor, 0),
-        };
-      });
+      .map(([dia, itens]) => ({
+        dia,
+        itens: itens.sort((a, b) => Number(b.pedido) - Number(a.pedido) || (a.pedido_cliente ?? "").localeCompare(b.pedido_cliente ?? "", "pt-BR", { numeric: true })),
+        pedidos: new Set(itens.map((l) => l.pedido)).size,
+        valor: itens.reduce((s, l) => s + (l.status === "CANCELADO" ? 0 : l.valor), 0),
+      }));
   }, [linhas, dias, cliente, busca]);
 
-  const maior = Math.max(1, ...porDia.map((d) => d.pedidos.length));
+  const maior = Math.max(1, ...porDia.map((d) => d.itens.length));
   const total = {
-    pedidos: porDia.reduce((s, d) => s + d.pedidos.length, 0),
-    itens: porDia.reduce((s, d) => s + d.itens, 0),
+    pedidos: porDia.reduce((s, d) => s + d.pedidos, 0),
+    itens: porDia.reduce((s, d) => s + d.itens.length, 0),
     valor: porDia.reduce((s, d) => s + d.valor, 0),
   };
   const hoje = isoDia(new Date());
@@ -156,8 +129,8 @@ export default function FinanceiroEntradaPedidos() {
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          ["Pedidos lançados", String(total.pedidos), `nos últimos ${dias} dias`],
-          ["Itens", String(total.itens), "linhas de pedido"],
+          ["Itens lançados", String(total.itens), `nos últimos ${dias} dias`],
+          ["Pedidos", String(total.pedidos), "pedidos de venda desses itens"],
           ["Valor", moeda(total.valor), "sem os cancelados"],
         ].map(([r, v, s]) => (
           <div key={r} className="rounded-xl border border-stone-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -223,7 +196,7 @@ export default function FinanceiroEntradaPedidos() {
       )}
 
       <div className="flex flex-col gap-2">
-        {!porDia.length && !semData && <p className="py-6 text-center text-sm text-stone-500 dark:text-slate-400">Nenhum pedido lançado nesse período.</p>}
+        {!porDia.length && !semData && <p className="py-6 text-center text-sm text-stone-500 dark:text-slate-400">Nenhum item lançado nesse período.</p>}
         {porDia.map((d) => (
           <div key={d.dia} className="rounded-xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900">
             <button
@@ -243,31 +216,32 @@ export default function FinanceiroEntradaPedidos() {
                 <span className="h-3 rounded-full bg-stone-100 dark:bg-slate-800">
                   <span
                     className="block h-3 rounded-full bg-green-600 dark:bg-cyan-500"
-                    style={{ width: `${Math.max(4, (d.pedidos.length / maior) * 100)}%` }}
+                    style={{ width: `${Math.max(4, (d.itens.length / maior) * 100)}%` }}
                   />
                 </span>
                 <span className="text-xs text-stone-500 dark:text-slate-400">
-                  {d.itens} ite{d.itens === 1 ? "m" : "ns"} · {moeda(d.valor)}
+                  {d.pedidos} pedido{d.pedidos === 1 ? "" : "s"} · {moeda(d.valor)}
                 </span>
               </span>
               <span className="w-20 shrink-0 text-right">
-                <span className="block text-2xl font-black text-stone-900 dark:text-white">{d.pedidos.length}</span>
-                <span className="text-xs text-stone-500 dark:text-slate-400">pedido{d.pedidos.length === 1 ? "" : "s"}</span>
+                <span className="block text-2xl font-black text-stone-900 dark:text-white">{d.itens.length}</span>
+                <span className="text-xs text-stone-500 dark:text-slate-400">ite{d.itens.length === 1 ? "m" : "ns"}</span>
               </span>
               <span className="text-sm text-stone-400">{aberto === d.dia ? "▲" : "▼"}</span>
             </button>
             {aberto === d.dia && (
               <ul className="flex flex-col gap-1 border-t border-stone-200 p-2 text-sm dark:border-slate-800">
-                {d.pedidos.map((p) => (
-                  <li key={p.pedido} className={`flex flex-wrap items-baseline gap-x-3 rounded-lg px-2 py-1.5 ${p.cancelado ? "opacity-60 line-through" : ""}`}>
-                    <span className="font-mono font-bold text-stone-900 dark:text-white">Pedido {p.pedido}</span>
-                    <span className="text-stone-700 dark:text-slate-300">{p.cliente ?? "—"}</span>
-                    <span className="font-mono text-xs text-stone-500 dark:text-slate-400">PO {p.pedido_cliente ?? "—"}</span>
-                    <span className="truncate text-xs text-stone-500 dark:text-slate-400">
-                      {p.obra ?? ""} {p.obra_desc ? `· ${p.obra_desc}` : ""}
-                    </span>
+                {d.itens.map((l, n) => (
+                  <li
+                    key={`${l.pedido}-${n}`}
+                    className={`flex flex-wrap items-baseline gap-x-3 rounded-lg px-2 py-1.5 odd:bg-stone-50 dark:odd:bg-slate-800/40 ${l.status === "CANCELADO" ? "opacity-60 line-through" : ""}`}
+                  >
+                    <span className="font-mono font-bold text-stone-900 dark:text-white">PO {l.pedido_cliente ?? "—"}</span>
+                    <span className="text-stone-700 dark:text-slate-300">{l.cliente ?? "—"}</span>
+                    <span className="font-mono text-xs text-stone-500 dark:text-slate-400">Pedido {l.pedido} · {l.obra ?? "—"}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-stone-500 dark:text-slate-400">{l.descricao ?? ""}</span>
                     <span className="ml-auto text-xs font-semibold text-stone-700 dark:text-slate-300">
-                      {p.itens} ite{p.itens === 1 ? "m" : "ns"} · {moeda(p.valor)}
+                      {l.qtde.toLocaleString("pt-BR")} pç · {moeda(l.valor)}
                     </span>
                   </li>
                 ))}
