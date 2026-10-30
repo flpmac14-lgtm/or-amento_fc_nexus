@@ -816,7 +816,18 @@ function CartoesColetas({ coletas, hoje }: { coletas: ColetaFluxo[]; hoje: strin
         clientes: [...new Set(itens.map((c) => c.cliente_erp ?? c.cliente ?? "—"))],
       }));
   }, [coletas]);
-  const total = grupos.reduce((s, g) => s + g.valor, 0);
+  // Separado por mês (pedido do usuário, 30/10/2026): subtotal de cada mês no lugar do total geral.
+  const porMes = useMemo(() => {
+    const m = new Map<string, typeof grupos>();
+    for (const g of grupos) m.set(g.data.slice(0, 7), [...(m.get(g.data.slice(0, 7)) ?? []), g]);
+    return [...m.entries()].map(([mes, gs]) => ({
+      mes,
+      rotulo: dataDe(`${mes}-01`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+      grupos: gs,
+      valor: gs.reduce((s, g) => s + g.valor, 0),
+      semValor: gs.reduce((s, g) => s + g.semValor, 0),
+    }));
+  }, [grupos]);
   const sel = grupos.find((g) => g.data === aberto) ?? null;
 
   return (
@@ -827,14 +838,25 @@ function CartoesColetas({ coletas, hoje }: { coletas: ColetaFluxo[]; hoje: strin
           Coletas planejadas no Follow up
         </h2>
         <p className="text-xs text-stone-500 dark:text-slate-400">
-          {grupos.length} coleta(s) · <b className={FONTES.coletas.texto}>{moeda(total)}</b> · toque pra ver os itens
+          {grupos.length} coleta(s) · toque pra ver os itens
         </p>
       </div>
       {!grupos.length ? (
         <p className="py-6 text-center text-sm text-stone-500 dark:text-slate-400">Nenhuma coleta em aberto marcada no Follow up.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {grupos.map((g) => {
+        <div className="flex flex-col gap-4">
+          {porMes.map((pm) => (
+            <div key={pm.mes}>
+              <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 border-b border-stone-200 pb-1 dark:border-slate-700">
+                <h3 className="text-sm font-bold capitalize text-stone-800 dark:text-slate-200">{pm.rotulo}</h3>
+                <p className="text-sm">
+                  <b className={FONTES.coletas.texto}>{moeda(pm.valor)}</b>
+                  <span className="ml-1 text-xs text-stone-500 dark:text-slate-400">· {pm.grupos.length} coleta(s)</span>
+                  {pm.semValor > 0 && <b className="ml-1 text-xs text-amber-600 dark:text-amber-400">· ⚠ {pm.semValor} sem valor</b>}
+                </p>
+              </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {pm.grupos.map((g) => {
             const atrasada = g.data < hoje;
             const ativo = g.data === aberto;
             return (
@@ -863,6 +885,9 @@ function CartoesColetas({ coletas, hoje }: { coletas: ColetaFluxo[]; hoje: strin
               </button>
             );
           })}
+        </div>
+            </div>
+          ))}
         </div>
       )}
       {sel && (
