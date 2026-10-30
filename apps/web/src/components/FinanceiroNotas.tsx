@@ -21,6 +21,42 @@ function dataBr(iso: string): string {
   return iso.split("-").reverse().join("/");
 }
 
+function esc(v: string | null | undefined): string {
+  return (v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+// Relatório de faturamento (pedido do usuário, 30/10/2026): simples, numa folha A4 —
+// só o valor total e as notas emitidas (sem canceladas) do mês da tela (sem mês
+// escolhido = mês mais recente). Abre numa janela nova pra imprimir / salvar em PDF.
+function abrirRelatorio(notas: NotaFiscal[], mes: string) {
+  const mesRel = mes || notas.map((n) => n.emissao.slice(0, 7)).sort().pop() || "";
+  const emitidas = notas.filter((n) => !n.cancelada && n.emissao.startsWith(mesRel));
+  const total = emitidas.reduce((s, n) => s + n.total, 0);
+  const linhas = emitidas
+    .map((n) => `<tr><td>${esc(n.nota)}</td><td>${dataBr(n.emissao)}</td><td class="c">${esc(n.cliente) || "—"}</td><td class="r">${moeda(n.total)}</td></tr>`)
+    .join("");
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Faturamento ${esc(rotuloMes(mesRel))}</title>
+<style>
+@page{size:A4;margin:12mm}
+body{font-family:Arial,sans-serif;color:#000;margin:0;font-size:10px}
+h1{font-size:15px;margin:0 0 2px}p{margin:0 0 8px;font-size:12px}
+table{width:100%;border-collapse:collapse}th{text-align:left;border-bottom:1.5px solid #000;padding:2px 4px}
+td{border-bottom:1px solid #ddd;padding:1.5px 4px;white-space:nowrap}.c{white-space:normal}.r{text-align:right}
+tfoot td{font-weight:bold;font-size:12px;border-top:1.5px solid #000;border-bottom:0}
+button{margin:0 0 10px;padding:5px 12px;font-weight:bold}@media print{button{display:none}}
+</style></head><body>
+<button onclick="print()">Imprimir / salvar PDF</button>
+<h1>Faturamento — ${esc(rotuloMes(mesRel))}</h1>
+<p>Total faturado: <b>${moeda(total)}</b> · ${emitidas.length} nota(s) emitida(s)</p>
+<table><thead><tr><th>NF</th><th>Emissão</th><th>Cliente</th><th class="r">Valor</th></tr></thead>
+<tbody>${linhas}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">${moeda(total)}</td></tr></tfoot></table>
+</body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}
+
 // mes/setMes vêm da página: o filtro de mês do topo também filtra as NFs.
 export default function FinanceiroNotas({
   notas,
@@ -85,6 +121,15 @@ export default function FinanceiroNotas({
           placeholder="Nota, cliente, MAC, PO…"
           className={`${campo} w-56`}
         />
+        <button
+          type="button"
+          onClick={() => abrirRelatorio(notas, mes)}
+          disabled={notas.length === 0}
+          className="rounded-md bg-green-700 px-3 py-1 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 dark:bg-cyan-600 dark:hover:bg-cyan-700"
+          title="Relatório numa folha A4: total faturado e as notas emitidas do mês escolhido (ou do mês atual)"
+        >
+          Relatório
+        </button>
       </div>
 
       <p className="mb-2 text-sm text-stone-700 dark:text-slate-300">
