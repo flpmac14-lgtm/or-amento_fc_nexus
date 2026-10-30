@@ -901,6 +901,37 @@ function CartoesColetas({ coletas, hoje }: { coletas: ColetaFluxo[]; hoje: strin
   );
 }
 
+// Aba "Coletas planejadas" — pedido do usuário (30/10/2026): pra gabriele, só os
+// cartões das coletas do Fluxo de caixa (sem A pagar, A receber e saldo).
+export function FinanceiroColetasPlanejadas() {
+  const [dados, setDados] = useState<RespostaFluxo | null>(null);
+  const [erro, setErro] = useState("");
+  useEffect(() => {
+    let ativo = true;
+    fetch("/api/financeiro/fluxo", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.erro ?? `Falha ao carregar (${r.status}).`);
+        return j as RespostaFluxo;
+      })
+      .then((j) => ativo && setDados(j))
+      .catch((e: Error) => ativo && setErro(e.message));
+    return () => {
+      ativo = false;
+    };
+  }, []);
+  const coletas = useMemo(() => {
+    const vistos = new Set<string>();
+    return (dados?.coletas ?? []).filter(
+      (c) => (c.situacao === "em_aberto" || c.situacao === "sem_entrada") && !vistos.has(c.po) && vistos.add(c.po),
+    );
+  }, [dados]);
+
+  if (erro) return <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">{erro}</p>;
+  if (!dados) return <p className="py-10 text-center text-stone-500 dark:text-slate-400">Carregando coletas…</p>;
+  return <CartoesColetas coletas={coletas} hoje={dados.hoje ?? iso(new Date())} />;
+}
+
 function ListaLancamentos({ lanc, hoje }: { lanc: Lancamento[]; hoje: string }) {
   const [fonte, setFonte] = useState<Fonte | "">("");
   const lista = fonte ? lanc.filter((l) => l.fonte === fonte) : lanc;

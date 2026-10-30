@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { podeVerFinanceiro, type CondicaoPagamento, type ColetaFluxo, type RespostaFluxo, type TituloErp } from "@/lib/financeiro";
+import { perfilFinanceiro, perfilFinanceiroConsulta, podeVerFinanceiro, type CondicaoPagamento, type ColetaFluxo, type RespostaFluxo, type TituloErp } from "@/lib/financeiro";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
@@ -29,7 +29,11 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!podeVerFinanceiro(user?.email)) return NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
+  // gabriele (perfil "financeiro", pedido do usuário 30/10/2026): só as coletas
+  // planejadas — sem A pagar e A receber.
+  const soColetas = !podeVerFinanceiro(user?.email);
+  if (soColetas && !(perfilFinanceiro(user) && !perfilFinanceiroConsulta(user)))
+    return NextResponse.json({ erro: "Acesso restrito." }, { status: 403 });
 
   const admin = criarClienteSupabaseAdmin();
   for (let tentativa = 1; ; tentativa++) {
@@ -73,6 +77,10 @@ export async function GET() {
       };
     });
 
+    if (soColetas) {
+      const corpo: RespostaFluxo = { hoje: resumo?.hoje ?? null, gerado_em: pedidos?.gerado_em ?? null, coletas, receber: [], pagar: [], dias_pagar: 0 };
+      return NextResponse.json(corpo, { headers: { "Cache-Control": "no-store" } });
+    }
     const corpo: RespostaFluxo = {
       hoje: resumo?.hoje ?? null,
       gerado_em: pedidos?.gerado_em ?? null,

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
 import FinanceiroBudget from "@/components/FinanceiroBudget";
-import FinanceiroFluxo from "@/components/FinanceiroFluxo";
+import FinanceiroFluxo, { FinanceiroColetasPlanejadas } from "@/components/FinanceiroFluxo";
 import FinanceiroNotas from "@/components/FinanceiroNotas";
 import FinanceiroPainel, { ABAS_PAINEL, type AbaPainel } from "@/components/FinanceiroPainel";
 import FinanceiroPedidos from "@/components/FinanceiroPedidos";
@@ -47,7 +47,7 @@ function Secao({ titulo, sub, children }: { titulo: string; sub?: string; childr
   );
 }
 
-type AbaFinanceiro = AbaPainel | "pedidos" | "pedido_ativo" | "entrada" | "coletas" | "faturamento" | "fluxo";
+type AbaFinanceiro = AbaPainel | "pedidos" | "pedido_ativo" | "entrada" | "coletas" | "faturamento" | "fluxo" | "coletas_planejadas";
 // Perfil "financeiro_consulta" (luana) — pedido do usuário (29/10/2026): só essas abas, só olhar.
 // Entrada de pedidos (pedidos lançados no Sectra por dia) — só flpmac14 e luana (29/10/2026).
 const ABAS_CONSULTA: AbaFinanceiro[] = ["pedido_ativo", "entrada", "coletas", "faturamento"];
@@ -83,7 +83,7 @@ export default function PaginaFinanceiro() {
           if (!antes) {
             const a = new URLSearchParams(window.location.search).get("aba");
             if (j.so_consulta) setAba(ABAS_CONSULTA.includes(a as AbaFinanceiro) ? (a as AbaFinanceiro) : "pedido_ativo");
-            else if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || ((a === "fluxo" || a === "entrada") && j.ver_budget !== false) || ABAS_PAINEL.some(([v]) => v === a))
+            else if (a === "faturamento" || a === "pedidos" || a === "pedido_ativo" || ((a === "fluxo" || a === "entrada") && j.ver_budget !== false) || (a === "coletas_planejadas" && j.ver_budget === false) || ABAS_PAINEL.some(([v]) => v === a))
               setAba(a as AbaFinanceiro);
           }
           return j;
@@ -189,7 +189,7 @@ export default function PaginaFinanceiro() {
                   ["pedido_ativo", "Pedido - ativo"] as const,
                   ...(dados?.ver_budget !== false ? [["entrada", "Entrada de pedidos"] as const] : []),
                   ["faturamento", "Faturamento"] as const,
-                  ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : []),
+                  ...(dados?.ver_budget !== false ? [["fluxo", "Fluxo de caixa"] as const] : [["coletas_planejadas", "Coletas planejadas"] as const]),
                 ]
             ).map(([v, r]) => (
               <button
@@ -206,7 +206,7 @@ export default function PaginaFinanceiro() {
           </nav>
         )}
 
-        {resumo && !dados?.so_consulta && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "entrada" && aba !== "coletas" && aba !== "fluxo" && (
+        {resumo && !dados?.so_consulta && aba !== "faturamento" && aba !== "pedidos" && aba !== "pedido_ativo" && aba !== "entrada" && aba !== "coletas" && aba !== "fluxo" && aba !== "coletas_planejadas" && (
           <FinanceiroPainel resumo={resumo} aba={aba} ir={irAba} />
         )}
 
@@ -224,6 +224,9 @@ export default function PaginaFinanceiro() {
 
         {/* Fluxo de caixa pelas coletas — pedido do usuário (26/10/2026); só flpmac14, como o Budget. */}
         {resumo && aba === "fluxo" && dados?.ver_budget !== false && <FinanceiroFluxo />}
+
+        {/* Só as coletas planejadas do Fluxo de caixa — gabriele (pedido do usuário, 30/10/2026). */}
+        {resumo && aba === "coletas_planejadas" && dados?.ver_budget === false && !dados?.so_consulta && <FinanceiroColetasPlanejadas />}
 
         {resumo && aba === "faturamento" && (
           <>
