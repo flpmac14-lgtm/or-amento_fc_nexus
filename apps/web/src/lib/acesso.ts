@@ -8,6 +8,15 @@ import type { PerfilModulo } from "@/lib/abasFollowUp";
 import { EMAIL_FINANCEIRO } from "@/lib/financeiro";
 
 export const ACESSO_SO_FOLLOW_UP = "follow_up";
+
+// Contas suspensas — pedido do usuário (03/11/2026): luana temporariamente sem
+// acesso a nada; o proxy manda qualquer página pra /suspenso e nega as APIs.
+// Pra liberar de novo, é só tirar o e-mail daqui e publicar.
+export const ROTA_SUSPENSO = "/suspenso";
+const CONTAS_SUSPENSAS = ["luana@fcnexus.local"];
+export function contaSuspensa(user: Pick<User, "email"> | null | undefined): boolean {
+  return CONTAS_SUSPENSAS.includes((user?.email ?? "").trim().toLowerCase());
+}
 // Projetistas (joao, honorio) — pedido explícito do usuário: dentro do
 // módulo Follow up, só as abas Material de compra e Croqui de corte.
 export const ACESSO_PROJETO = "projeto";

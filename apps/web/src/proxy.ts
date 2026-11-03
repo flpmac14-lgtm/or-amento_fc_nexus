@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
+import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_SUSPENSO, contaSuspensa, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
 import { ROTA_FINANCEIRO, perfilFinanceiro, perfilFinanceiroConsulta, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
@@ -22,6 +22,17 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("proximo", request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // Conta suspensa (luana, pedido do usuário 03/11/2026): só a tela de aviso.
+  if (user && contaSuspensa(user)) {
+    const caminho = request.nextUrl.pathname;
+    if (caminho === ROTA_SUSPENSO || (rotaPublica && !caminho.startsWith("/login"))) return response;
+    if (caminho.startsWith("/api/")) return NextResponse.json({ erro: "Acesso temporariamente suspenso." }, { status: 403 });
+    const url = request.nextUrl.clone();
+    url.pathname = ROTA_SUSPENSO;
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
