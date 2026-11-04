@@ -13,19 +13,38 @@
 // Emissão depois da MAC. A NF é a do Follow up (vem da Controle de obras); se
 // não tiver, a do ERP pelo pedido/item mais perto da data da coleta. O dia de
 // emissão vem do ERP (FN_NFS, /api/follow-up/notas-fiscais).
+// Com status do processo (pedido do usuário, 04/11/2026; ?etapas=1): o % de
+// cada etapa (ENG, COR, MON, SOL, USI, DOB, JAT, PIN) no lugar das 3 colunas
+// em branco de lote — verde = 100, âmbar = em andamento, cinza = não começou.
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { listarFollowUp, urlImagemFollowUp } from "@/lib/api";
 import { formatarDataBr, formatarNumero } from "@/lib/format";
 import { baixarEml, escaparHtml, imagemParaEml, type ImagemEml } from "@/lib/emailEml";
-import { corGrupoPintura } from "@/lib/followUp";
+import { corGrupoPintura, ETAPAS, situacaoEtapa } from "@/lib/followUp";
 import type { ItemFollowUp } from "@/lib/types";
 
 // Pedido do usuário: sem Prazo, Cliente, pintura (já está na faixa do grupo),
 // Coleta (já está no título) e NF; no fim, 3 colunas em branco pra anotar o lote.
-const COLUNAS = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem", "N° Lote 1", "N° Lote 2", "N° Lote 3"];
+const COLUNAS = ["Foto", "PO", "Qtd", "MAC", "Desenho", "Descrição", "Tipagem"];
 const COLUNAS_NF = ["NF", "Emissão"];
+const COLUNAS_LOTE = ["N° Lote 1", "N° Lote 2", "N° Lote 3"];
+const COLUNAS_ETAPAS = ETAPAS.map((e) => e.rotulo);
+
+function textoEtapa(v: number | null): string {
+  return v === null || v <= 0 ? "—" : `${formatarNumero(v, 0)}%`;
+}
+const CLASSE_ETAPA = {
+  concluida: "bg-green-100 font-bold text-green-800",
+  parcial: "bg-amber-100 font-semibold text-amber-800",
+  pendente: "text-stone-400",
+} as const;
+const ESTILO_ETAPA_EMAIL = {
+  concluida: "background:#dcfce7;color:#166534;font-weight:bold",
+  parcial: "background:#fef3c7;color:#92400e;font-weight:bold",
+  pendente: "color:#a8a29e",
+} as const;
 
 interface NotasFiscais {
   po: Record<string, [string, string][]>; // "4501690746-010" → [[NF, emissão AAAA-MM-DD], …]
@@ -113,6 +132,7 @@ function Relatorio() {
   const [comNf, setComNf] = useState(() => params.get("nf") === "1");
   const [notas, setNotas] = useState<NotasFiscais | null>(null);
   const [erroNotas, setErroNotas] = useState("");
+  const [comEtapas, setComEtapas] = useState(() => params.get("etapas") === "1");
 
   // Só busca as NFs quando a opção é ligada (uma vez).
   useEffect(() => {
@@ -160,7 +180,12 @@ function Relatorio() {
   const pecas = naFolha.reduce((s, i) => s + qtd(i), 0);
   const peso = naFolha.reduce((s, i) => s + pesoColeta(i), 0);
   const algumParcial = fracionado && itens.some((i) => qtd(i) !== (i.quantidade ?? 0));
-  const colunas = comNf ? [...COLUNAS.slice(0, 4), ...COLUNAS_NF, ...COLUNAS.slice(4)] : COLUNAS;
+  const colunas = [
+    ...COLUNAS.slice(0, 4),
+    ...(comNf ? COLUNAS_NF : []),
+    ...COLUNAS.slice(4),
+    ...(comEtapas ? COLUNAS_ETAPAS : COLUNAS_LOTE),
+  ];
   const notasDe = (i: ItemFollowUp) => (notas ? notasDoItem(i, notas) : []);
   const textoNf = (i: ItemFollowUp, campo: "nf" | "emissao", separador: string) =>
     notasDe(i)
@@ -182,7 +207,10 @@ function Relatorio() {
       ).filter((im): im is ImagemEml => !!im);
       const temCid = new Set(imagens.map((im) => im.cid));
       const td = "border:1px solid #a8a29e;padding:3px 6px;font-size:12px;text-align:center";
-      const colunas = ["Foto", "PO", "Qtd", "MAC", ...(comNf ? COLUNAS_NF : []), "Desenho", "Descrição", "Tipagem", "Peso (kg)"];
+      const colunas = [
+        "Foto", "PO", "Qtd", "MAC", ...(comNf ? COLUNAS_NF : []), "Desenho", "Descrição", "Tipagem",
+        ...(comEtapas ? COLUNAS_ETAPAS : []), "Peso (kg)",
+      ];
       const linhas = grupos
         .map((g) => {
           const doGrupo = fracionado ? g.itens.filter((i) => qtd(i) > 0) : g.itens;
@@ -207,6 +235,11 @@ function Relatorio() {
                   : "") +
                 `<td style="${td}">${escaparHtml(i.desenho)}</td>` +
                 `<td style="${td};text-align:left">${escaparHtml(i.descricao)}</td><td style="${td}">${escaparHtml(i.tipagem)}</td>` +
+                (comEtapas
+                  ? ETAPAS.map(
+                      (e) => `<td style="${td};${ESTILO_ETAPA_EMAIL[situacaoEtapa(i[e.campo])]}">${textoEtapa(i[e.campo])}</td>`,
+                    ).join("")
+                  : "") +
                 `<td style="${td}">${formatarNumero(pesoColeta(i), 2)}</td></tr>`
               );
             }),
@@ -263,6 +296,18 @@ function Relatorio() {
           }`}
         >
           {comNf ? (notas || erroNotas ? "✓ Com Nota fiscal" : "Buscando notas…") : "Com Nota fiscal"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setComEtapas((v) => !v)}
+          title="Mostra o % de cada etapa do processo (Engenharia, Corte, Montagem, Solda, Usinagem, Dobra, Jato, Pintura) no lugar das colunas de lote"
+          className={`rounded-lg px-3 py-2 text-xs ${
+            comEtapas
+              ? "border border-green-600 bg-green-50 font-semibold text-green-800"
+              : "text-stone-500 hover:bg-stone-300/60 hover:text-stone-800"
+          }`}
+        >
+          {comEtapas ? "✓ Com status do processo" : "Com status do processo"}
         </button>
         <button
           type="button"
@@ -396,9 +441,19 @@ function Relatorio() {
                       <td className="border border-stone-400 px-1 font-mono">{i.desenho}</td>
                       <td className="border border-stone-400 px-1 text-[9px]">{i.descricao}</td>
                       <td className="border border-stone-400 px-1 font-mono">{i.tipagem}</td>
-                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
-                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
-                      <td className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
+                      {comEtapas
+                        ? ETAPAS.map((e) => (
+                            <td
+                              key={e.campo}
+                              title={e.nome}
+                              className={`w-[10mm] border border-stone-400 px-0.5 ${CLASSE_ETAPA[situacaoEtapa(i[e.campo])]}`}
+                            >
+                              {textoEtapa(i[e.campo])}
+                            </td>
+                          ))
+                        : COLUNAS_LOTE.map((c) => (
+                            <td key={c} className={`${comNf ? "w-[18mm]" : "w-[24mm]"} border border-stone-400`} />
+                          ))}
                     </tr>
                   ))}
                 </tbody>
