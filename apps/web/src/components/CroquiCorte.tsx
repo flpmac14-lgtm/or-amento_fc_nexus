@@ -34,8 +34,18 @@ import FollowUpSino from "@/components/FollowUpSino";
 import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
 import { repetirComAbaVisivel } from "@/lib/repetir";
+import { macBase, urlImagemAlmox } from "@/lib/almoxarifado";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
+
+// Foto de referência (pedido do usuário, 04/11/2026): a imagem do Follow up na
+// 1ª coluna — da peça (PO = Pedido sem a posição), senão do desenho, senão da obra (MAC).
+type FotosRef = { po: Record<string, string>; desenho: Record<string, string>; mac: Record<string, string> };
+function fotoDe(f: FotosRef | null, i: ItemCroquiCorte): string | null {
+  if (!f) return null;
+  const po = (i.pedido ?? "").trim().toUpperCase().replace(/\.[^.]*$/, "");
+  return f.po[po] ?? f.desenho[(i.desenho ?? "").trim().toUpperCase()] ?? f.mac[macBase(i.mac)] ?? null;
+}
 
 // Cores da formatação condicional da planilha (Status).
 const COR_STATUS: Record<string, string> = {
@@ -233,6 +243,15 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   // Puxar como no Excel: índices (na página) de onde começou e até onde foi.
   const [arraste, setArraste] = useState<{ campo: Campo; valor: string | null; de: number; ate: number } | null>(null);
   const tabela = useRef<HTMLDivElement>(null);
+  const [fotos, setFotos] = useState<FotosRef | null>(null);
+  const [fotoAberta, setFotoAberta] = useState<{ sha: string; titulo: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/follow-up/croqui-fotos")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setFotos(j as FotosRef))
+      .catch(() => {}); // sem foto não impede a tela
+  }, []);
 
   useEffect(() => {
     let ativo = true;
@@ -660,11 +679,14 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-stone-100 dark:bg-slate-900 text-left text-[11px] uppercase tracking-wide text-stone-600 dark:text-slate-400">
             <tr>
+              <th rowSpan={2} className="sticky left-0 z-20 w-12 min-w-12 border-b border-stone-200 bg-stone-100 px-1 pt-2 pb-1 font-semibold dark:border-slate-800 dark:bg-slate-900">
+                Foto
+              </th>
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
                   className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pt-2 pb-1 font-semibold ${
-                    i === 0 ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
+                    i === 0 ? "sticky left-12 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
                   <button
@@ -688,7 +710,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                 <th
                   key={c.campo}
                   className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pb-1.5 ${
-                    i === 0 ? "sticky left-0 z-20 bg-stone-100 dark:bg-slate-900" : ""
+                    i === 0 ? "sticky left-12 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
                 >
                   <input
@@ -712,13 +734,26 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                 onMouseEnter={() => arraste && setArraste((a) => (a ? { ...a, ate: indice } : a))}
                 className="text-stone-800 dark:text-slate-200 hover:bg-green-50 dark:hover:bg-cyan-950/30"
               >
+                <td className="sticky left-0 z-[1] w-12 min-w-12 border-b border-stone-100 bg-white px-1 py-0.5 align-middle dark:border-slate-800/80 dark:bg-slate-900">
+                  {(() => {
+                    const sha = fotoDe(fotos, item);
+                    if (!sha) return null;
+                    const titulo = [item.pedido, item.desenho, item.descricao].filter(Boolean).join(" · ");
+                    return (
+                      <button type="button" onClick={() => setFotoAberta({ sha, titulo })} title="Ver a foto do Follow up" className="block overflow-hidden rounded border border-stone-200 dark:border-slate-700">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- imagem da API própria, já em cache */}
+                        <img src={urlImagemAlmox(sha)} alt={titulo} loading="lazy" className="h-9 w-10 object-cover" />
+                      </button>
+                    );
+                  })()}
+                </td>
                 {COLUNAS.map((c, i) => (
                   <td
                     key={c.campo}
                     className={`group/celula border-b border-stone-100 dark:border-slate-800/80 ${c.estreita ? "px-0.5 text-center" : "px-2"} py-1 align-middle text-xs ${
                       PUXAVEIS.has(c.campo) ? "relative" : ""
                     } ${naFaixa(indice, c.campo) ? "outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""} ${
-                      i === 0 ? "sticky left-0 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
+                      i === 0 ? "sticky left-12 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
                     } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} whitespace-nowrap`}
                     title={c.maxW ? exibir(item, c) : undefined}
                   >
@@ -740,7 +775,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
             ))}
             {visiveis.length === 0 && (
               <tr>
-                <td colSpan={COLUNAS.length} className="px-3 py-10 text-center text-stone-500 dark:text-slate-500">
+                <td colSpan={COLUNAS.length + 1} className="px-3 py-10 text-center text-stone-500 dark:text-slate-500">
                   {carregando ? "Carregando… (o servidor pode levar até 1 minuto para acordar)" : "Nenhuma linha com esses filtros."}
                 </td>
               </tr>
@@ -748,6 +783,14 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
           </tbody>
         </table>
       </div>
+
+      {fotoAberta && (
+        <div role="dialog" aria-modal="true" onClick={() => setFotoAberta(null)} className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-black/80 p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element -- imagem da API própria */}
+          <img src={urlImagemAlmox(fotoAberta.sha)} alt={fotoAberta.titulo} className="max-h-[85vh] max-w-full rounded-lg bg-white object-contain" />
+          <p className="text-center text-sm text-white">{fotoAberta.titulo} · toque para fechar</p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-stone-600 dark:text-slate-400">
         <span>
