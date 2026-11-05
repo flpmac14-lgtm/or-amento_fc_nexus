@@ -3,7 +3,7 @@
 // Canal de Escuta — pedido do usuário (26/10/2026): os relatos anônimos do
 // formulário do site (macfab.com.br/canal-de-escuta) com a mensagem completa,
 // um relatório (totais por assunto, setor, frequência…) e a tratativa do RH
-// (status + observação). Só o flpmac14 (dados: app/api/canal-escuta).
+// (status + observação). Só o flpmac14 e a gabriele (dados: app/api/canal-escuta).
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import {
@@ -12,10 +12,10 @@ import {
   SETORES,
   STATUS_RELATO,
   semDetalheOutro,
+  podeVerCanalEscuta,
   type RelatoCanalEscuta,
   type StatusRelato,
 } from "@/lib/canalEscuta";
-import { podeVerFinanceiro } from "@/lib/financeiro";
 import { formatarDataBr } from "@/lib/format";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 
@@ -108,7 +108,7 @@ export default function PaginaCanalEscuta() {
   useEffect(() => {
     criarClienteSupabaseNavegador()
       .auth.getUser()
-      .then(({ data }) => setAdmin(podeVerFinanceiro(data.user?.email)));
+      .then(({ data }) => setAdmin(podeVerCanalEscuta(data.user?.email)));
   }, []);
 
   function carregar() {
@@ -192,7 +192,7 @@ export default function PaginaCanalEscuta() {
       }
     >
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4 sm:px-6">
-        {admin === false && <p className="rounded-lg bg-red-50 p-4 text-red-700">Esta tela é só para o administrador.</p>}
+        {admin === false && <p className="rounded-lg bg-red-50 p-4 text-red-700">Esta tela é restrita.</p>}
         {admin && (
           <>
             <p className="rounded-lg border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">

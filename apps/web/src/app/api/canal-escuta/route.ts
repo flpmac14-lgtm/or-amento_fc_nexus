@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { STATUS_RELATO } from "@/lib/canalEscuta";
-import { podeVerFinanceiro } from "@/lib/financeiro";
+import { STATUS_RELATO, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { comRetentativa } from "@/lib/supabase/retentativa";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
 
 // Canal de Escuta — tela /canal-escuta (pedido do usuário, 26/10/2026): só o
-// flpmac14 lê os relatos (conteúdo sigiloso) e muda status / observação do RH.
+// flpmac14 (e a gabriele, 05/11/2026) lê os relatos (conteúdo sigiloso) e muda status / observação do RH.
 // Tabela canal_escuta_relatos (migration 0060, RLS sem policy): só esta rota lê.
 // GET: todos os relatos (o filtro é na tela); PATCH: { numero, status?, observacoes_rh? }.
 
@@ -15,7 +14,7 @@ async function usuario() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return podeVerFinanceiro(user?.email) ? user : null;
+  return podeVerCanalEscuta(user?.email) ? user : null;
 }
 
 export async function GET() {

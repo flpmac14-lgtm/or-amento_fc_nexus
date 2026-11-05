@@ -24,7 +24,7 @@ import {
   type ValorVisao,
 } from "@/lib/abasFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerFornecedores, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
-import { ROTA_CANAL_ESCUTA } from "@/lib/canalEscuta";
+import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -155,7 +155,13 @@ function montarMenu(real: User): Conta {
     return {
       login: emailParaLogin(user.email ?? ""),
       perfil: "financeiro",
-      itens: [{ secao: "Principal", itens: [{ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" }] }],
+      itens: [
+        { secao: "Principal", itens: [{ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" }] },
+        // Canal de Escuta também pra gabriele (pedido do usuário, 05/11/2026).
+        ...(podeVerCanalEscuta(user.email)
+          ? [{ secao: "Administração", itens: [{ href: ROTA_CANAL_ESCUTA, rotulo: "Canal de Escuta", icone: "escuta" } as ItemMenu] }]
+          : []),
+      ],
     };
   }
   const perfil = perfilModulo(user);

@@ -6,6 +6,14 @@
 
 export const ROTA_CANAL_ESCUTA = "/canal-escuta";
 
+// Quem lê os relatos e faz a tratativa: o flpmac14 e a gabriele (pedido do
+// usuário, 05/11/2026). Pelo e-mail, não pelo perfil: a luana também é perfil
+// financeiro e não deve ver. Conferido no proxy, na API e na tela.
+const EMAILS_CANAL_ESCUTA = ["flpmac14@gmail.com", "gabriele@fcnexus.local"];
+export function podeVerCanalEscuta(email: string | null | undefined): boolean {
+  return EMAILS_CANAL_ESCUTA.includes((email ?? "").trim().toLowerCase());
+}
+
 export const SETORES = [
   "Administrativo", "Qualidade", "Serviços Gerais", "Usinagem", "Caldeiraria", "Soldagem",
   "PCP", "Pintura Industrial", "Logística / Expedição", "Almoxarifado", "Outro", "Prefiro não informar",
