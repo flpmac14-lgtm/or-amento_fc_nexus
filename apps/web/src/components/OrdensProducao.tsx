@@ -6,6 +6,7 @@
 // (/follow-up/totem). Tudo pela Vercel: /api/follow-up/producao.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import OrdensProducaoOperadores from "@/components/OrdensProducaoOperadores";
 import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
 import {
   api,
@@ -44,7 +45,7 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "nova" | "chao" | "apontamentos";
+type Sub = "painel" | "nova" | "chao" | "apontamentos" | "operadores";
 
 export default function OrdensProducao() {
   const [dados, setDados] = useState<Dados | null>(null);
@@ -129,6 +130,7 @@ export default function OrdensProducao() {
             ["nova", "Nova OP"],
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
+            ["operadores", "Operadores (crachás)"],
           ] as [Sub, string][]
         )
           .filter(([v]) => v !== "nova" || dados.podeEditar)
@@ -161,6 +163,7 @@ export default function OrdensProducao() {
       )}
       {sub === "chao" && <ChaoFabrica dados={dados} agora={agora} abrir={setAberta} />}
       {sub === "apontamentos" && <Apontamentos cad={dados.cadastros} />}
+      {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
       {op && <DetalheOP op={op} dados={dados} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}
     </div>
