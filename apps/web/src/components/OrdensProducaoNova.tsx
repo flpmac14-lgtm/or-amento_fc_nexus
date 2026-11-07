@@ -37,7 +37,21 @@ export type EtapaEditor = EtapaModelo & { chave: string; id?: string; travada?: 
 
 // Etapas rápidas (fabricação) — pedido do usuário (07/11/2026): a Dobra quase não
 // aparece nos roteiros do Sectra, então fica num botão direto, com a máquina já escolhida.
-const ETAPAS_RAPIDAS = ["01.00", "01.20", "00.90", "00.70", "00.80", "01.10", "01.30"]; // caldeiraria, solda, usinagem, dobra, calandra, montagem, acabamento
+// Inspeções (pedido do usuário, 07/11/2026): duas etapas com a operação 02.10 INSPEÇÃO
+// do Sectra no posto ISP01, separadas pela descrição — uma depois da caldeiraria/solda,
+// outra depois da usinagem.
+type EtapaRapida = { op: string; rotulo?: string; descricao?: string; centro?: string };
+const ETAPAS_RAPIDAS: EtapaRapida[] = [
+  { op: "01.00" }, // caldeiraria
+  { op: "01.20" }, // solda
+  { op: "00.90" }, // usinagem
+  { op: "00.70" }, // dobra
+  { op: "00.80" }, // calandra
+  { op: "01.10" }, // montagem
+  { op: "01.30" }, // acabamento
+  { op: "02.10", rotulo: "Inspeção Caldeiraria/Solda", descricao: "INSPEÇÃO CALDEIRARIA / SOLDA", centro: "ISP01" },
+  { op: "02.10", rotulo: "Inspeção Usinagem", descricao: "INSPEÇÃO USINAGEM", centro: "ISP01" },
+];
 // Máquina padrão quando a operação não aparece em nenhum roteiro do Sectra.
 const CENTRO_PADRAO: Record<string, string> = {
   "00.70": "DOB01",
@@ -139,7 +153,12 @@ export function EditorRoteiro({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cad]);
   const etapaDoCatalogo = (op: string): EtapaModelo => ({ posicao: 0, operacao: op, centro: centroPadrao(op), descricao: null, hr_preparo: 0, hr_unitario: 0 });
-  const rapidas = ETAPAS_RAPIDAS.filter((op) => cad.operacoes.some((o) => o.codigo === op));
+  const rapidas = ETAPAS_RAPIDAS.filter((r) => cad.operacoes.some((o) => o.codigo === r.op));
+  const etapaRapida = (r: EtapaRapida): EtapaModelo => {
+    const e = etapaDoCatalogo(r.op);
+    const centro = r.centro && cad.centros.some((c) => c.codigo === r.centro) ? r.centro : e.centro;
+    return { ...e, centro, descricao: r.descricao ?? null };
+  };
 
   function proximaPosicao(lista: EtapaEditor[]) {
     return (lista.reduce((m, e) => Math.max(m, e.posicao), 0) || 0) + 10;
@@ -192,17 +211,23 @@ export function EditorRoteiro({
       {/* Etapas rápidas — fabricação (pedido do usuário: Dobra não vem nos roteiros do Sectra) */}
       <div className={`${classeCartao} flex flex-wrap items-center gap-1.5 px-3 py-2`}>
         <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">Etapas rápidas</span>
-        {rapidas.map((op) => {
-          const c = centroPadrao(op);
+        {rapidas.map((r) => {
+          const e = etapaRapida(r);
+          const c = e.centro;
+          const inspecao = r.op === "02.10";
           return (
             <button
-              key={op}
+              key={r.rotulo ?? r.op}
               type="button"
-              onClick={() => adicionar([etapaDoCatalogo(op)], "Manual (catálogo Sectra)")}
-              title={`Adiciona ${descOperacao(cad, op)}${c ? ` na máquina ${c} · ${descCentro(cad, c)}` : ""} no fim do roteiro`}
-              className="inline-flex items-center gap-1 rounded-full border border-green-600/40 bg-green-50 px-3 py-1 text-sm font-semibold text-green-800 hover:bg-green-100 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-200 dark:hover:bg-cyan-500/20"
+              onClick={() => adicionar([e], "Manual (catálogo Sectra)")}
+              title={`Adiciona ${r.rotulo ?? descOperacao(cad, r.op)}${c ? ` no posto ${c} · ${descCentro(cad, c)}` : ""} no fim do roteiro`}
+              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-semibold ${
+                inspecao
+                  ? "border-violet-500/40 bg-violet-50 text-violet-800 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
+                  : "border-green-600/40 bg-green-50 text-green-800 hover:bg-green-100 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-200 dark:hover:bg-cyan-500/20"
+              }`}
             >
-              ＋ {(descOperacao(cad, op) ?? op).toLowerCase().replace(/^./, (x) => x.toUpperCase())}
+              ＋ {r.rotulo ?? (descOperacao(cad, r.op) ?? r.op).toLowerCase().replace(/^./, (x) => x.toUpperCase())}
               {c && <span className="font-mono text-[10px] font-medium opacity-70">{c}</span>}
             </button>
           );
