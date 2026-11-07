@@ -34,6 +34,7 @@ sincronizar_fotos_gerencia.estado
 sincronizar_pdfs_corte.estado
 sincronizar_financeiro.estado
 sincronizar_financeiro_pedidos.estado
+sincronizar_producao.estado
 sincronizar_certificados.estado.json
 sincronizar_certificados.backup.estado.json
 programas_corte_excel.estado

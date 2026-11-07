@@ -24,6 +24,7 @@ import CortadosQualidade from "@/components/CortadosQualidade";
 import Qualidade from "@/components/Qualidade";
 import Almoxarifado from "@/components/Almoxarifado";
 import Fornecedores from "@/components/Fornecedores";
+import OrdensProducao from "@/components/OrdensProducao";
 import FuncionariosHoraExtra from "@/components/FuncionariosHoraExtra";
 import ReferenciaPrecosMP from "@/components/ReferenciaPrecosMP";
 import { CONFIG_CALDEIRARIA, CONFIG_PINTURA, CONFIG_USINAGEM } from "@/lib/apontamento";
@@ -285,6 +286,7 @@ export default function ModuloFollowUp({
       {visao === "funcionarios" && <FuncionariosHoraExtra />}
       {visao === "almoxarifado" && <Almoxarifado somenteLeitura={!editaAlmoxarifado} />}
       {visao === "fornecedores" && editaAlmoxarifado && <Fornecedores />}
+      {visao === "ordens" && <OrdensProducao />}
     </div>
   );
 }

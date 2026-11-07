@@ -37,6 +37,7 @@ from sincronizar_financeiro import sincronizar as sincronizar_financeiro  # noqa
 from sincronizar_financeiro import sincronizar_compras, sincronizar_notas_pedido  # noqa: E402
 from sincronizar_financeiro import sincronizar_pedidos as sincronizar_pedidos_venda  # noqa: E402
 from sincronizar_certificados import sincronizar_se_mudou as sincronizar_certificados_se_mudou  # noqa: E402
+from sincronizar_producao import sincronizar as sincronizar_producao  # noqa: E402
 
 CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.xlsm")
 RECEBIMENTO = os.environ.get(
@@ -134,6 +135,14 @@ def main() -> int:
         except Exception as e:  # noqa: BLE001
             print(f"{agora} ERRO no Financeiro (ERP) - {type(e).__name__}: {e}")
             return 1
+        # Ordens de produção / totem: operadores (crachá), centros, operações e
+        # roteiros do Sectra — só grava o que mudou. Falha aqui não para o resto.
+        try:
+            resumo = sincronizar_producao()
+            if resumo:
+                print(f"{agora} Cadastros de produção (Sectra) - {resumo}")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO nos cadastros de produção (Sectra) - {type(e).__name__}: {e}")
         # Aba QUALIDADE (só flpmac14): certificados da pasta do Recebimento e o
         # sininho de PDF adicionado/alterado/excluído — só grava se mudou.
         try:

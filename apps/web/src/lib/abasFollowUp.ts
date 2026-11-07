@@ -6,6 +6,9 @@
 export const VISOES = [
   { valor: "followup", rotulo: "Follow up" },
   { valor: "controle", rotulo: "Controle de obras" },
+  // OP a partir do pedido + etapas da base Sectra; apontamento nos totens (/follow-up/totem) —
+  // pedido do usuário (07/11/2026). Vê: total e follow_up (marcelo/PCP); criar/liberar: lib/acesso.ts::podePlanejarOP.
+  { valor: "ordens", rotulo: "Ordens de produção" },
   // Espelho da aba MACLM do MACLM.xlsx — pedido do usuário (mãe de um projeto novo).
   { valor: "material", rotulo: "Material de compra" },
   // Filha do Material de compra (aba Croqui 2 do Croqui de corte) — pedido do usuário.

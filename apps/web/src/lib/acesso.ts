@@ -119,3 +119,19 @@ export function podeVerFornecedores(user: Pick<User, "app_metadata" | "email"> |
 export function podeEditarAlmoxarifado(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
   return (user?.email ?? "").trim().toLowerCase() === EMAIL_FINANCEIRO || user?.app_metadata?.acesso === ACESSO_ALMOXARIFADO;
 }
+
+// Ordens de produção + totem de apontamento — pedido do usuário (07/11/2026).
+// Conta "totem" (PCs/totens da fábrica): presa na tela /follow-up/totem; quem
+// aponta é o operador, pelo nº do crachá do Sectra (o login é só do aparelho).
+export const ACESSO_TOTEM = "totem";
+export const ROTA_TOTEM = "/follow-up/totem";
+export function contaTotem(user: Pick<User, "app_metadata"> | null | undefined): boolean {
+  return user?.app_metadata?.acesso === ACESSO_TOTEM;
+}
+// Criar / liberar / encerrar OP e corrigir apontamento: o flpmac14 (e contas de
+// acesso total) e o marcelo (PCP, perfil follow_up). Conferido na rota
+// /api/follow-up/producao. Os outros perfis com a aba só olham.
+export function podePlanejarOP(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
+  const p = perfilModulo(user);
+  return !contaTotem(user) && (p === "total" || p === "follow_up");
+}

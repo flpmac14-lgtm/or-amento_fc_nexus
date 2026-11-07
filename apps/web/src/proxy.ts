@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_SUSPENSO, contaSuspensa, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
+import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_TOTEM, contaTotem, ROTA_SUSPENSO, contaSuspensa, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
 import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { ROTA_FINANCEIRO,perfilFinanceiro, perfilFinanceiroConsulta, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
@@ -33,6 +33,20 @@ export async function proxy(request: NextRequest) {
     if (caminho.startsWith("/api/")) return NextResponse.json({ erro: "Acesso temporariamente suspenso." }, { status: 403 });
     const url = request.nextUrl.clone();
     url.pathname = ROTA_SUSPENSO;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Conta "totem" (PCs de apontamento da fábrica — pedido do usuário, 07/11/2026):
+  // só a tela do totem, o que ela chama e as fotos dos pedidos.
+  if (user && contaTotem(user)) {
+    const caminho = request.nextUrl.pathname;
+    if (caminho === ROTA_TOTEM || caminho.startsWith("/api/follow-up/producao/totem") || caminho.startsWith("/api/follow-up/almoxarifado/imagem"))
+      return response;
+    if (rotaPublica && !caminho.startsWith("/login")) return response;
+    if (caminho.startsWith("/api/")) return NextResponse.json({ erro: "Conta do totem: só apontamento." }, { status: 403 });
+    const url = request.nextUrl.clone();
+    url.pathname = ROTA_TOTEM;
     url.search = "";
     return NextResponse.redirect(url);
   }
