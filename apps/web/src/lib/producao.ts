@@ -238,18 +238,20 @@ export function barrasCode39(texto: string): { barras: [number, number][]; largu
 // (caldeiraria, solda, usinagem…). Ficam de fora:
 //   Corte e Pintura — já apontados pelos operadores nas abas Corte e Pintura;
 //   Engenharia — apontada pelo João e pelo Honório (Croqui de corte);
-//   PCP — planejamento, não é apontado na fábrica.
+//   PCP — planejamento, não é apontado na fábrica;
+//   Jateamento — pedido do usuário (07/11/2026).
 // Vale pela operação do Sectra e pelo centro produtivo (1º nível da árvore NIVEL).
 const FORA_DA_OP: { operacao: string; nivel: string; onde: string }[] = [
   { operacao: "00.60", nivel: "12", onde: "aba Corte" },
   { operacao: "01.60", nivel: "08", onde: "aba Pintura" },
   { operacao: "00.20", nivel: "09", onde: "Engenharia (João / Honório)" },
   { operacao: "00.10", nivel: "10", onde: "PCP" },
+  { operacao: "01.40", nivel: "07", onde: "Jateamento (fora da OP)" }, // pedido do usuário (07/11/2026)
 ];
 export const OPERACOES_FORA_DA_OP = FORA_DA_OP.map((f) => f.operacao);
 export const NIVEIS_FORA_DA_OP = FORA_DA_OP.map((f) => f.nivel);
 export const MOTIVO_FORA_DA_OP =
-  "Corte, Pintura, Engenharia e PCP não entram na OP — já são apontados em outro lugar (abas Corte e Pintura, João/Honório).";
+  "Corte, Pintura, Jateamento, Engenharia e PCP não entram na OP — já são apontados em outro lugar (abas Corte e Pintura, João/Honório).";
 
 function nivelRaiz(centros: Pick<Centro, "codigo" | "nivel">[], centro: string | null | undefined): string {
   return (centros.find((c) => c.codigo === centro)?.nivel ?? "").split(".")[0];
