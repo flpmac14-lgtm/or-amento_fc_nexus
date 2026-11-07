@@ -35,6 +35,20 @@ export type PedidoFU = {
 
 export type EtapaEditor = EtapaModelo & { chave: string; id?: string; travada?: boolean };
 
+// Etapas rápidas (fabricação) — pedido do usuário (07/11/2026): a Dobra quase não
+// aparece nos roteiros do Sectra, então fica num botão direto, com a máquina já escolhida.
+const ETAPAS_RAPIDAS = ["01.00", "01.20", "00.90", "00.70", "00.80", "01.10", "01.30"]; // caldeiraria, solda, usinagem, dobra, calandra, montagem, acabamento
+// Máquina padrão quando a operação não aparece em nenhum roteiro do Sectra.
+const CENTRO_PADRAO: Record<string, string> = {
+  "00.70": "DOB01",
+  "00.80": "CAL01",
+  "00.90": "UC",
+  "01.00": "CA",
+  "01.10": "MTG01",
+  "01.20": "SOLD",
+  "01.30": "AC",
+};
+
 let seq = 0;
 const novaChave = () => `e${++seq}-${Date.now()}`;
 const norm = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -105,6 +119,27 @@ export function EditorRoteiro({
   const centros = useMemo(() => centrosOrdenados(cad.centros).filter((c) => !centroForaDaOP(cad.centros, c.codigo)), [cad.centros]);
   const fora = (m: EtapaModelo) => etapaForaDaOP(cad.centros, m);
   const arrastando = useRef<string | null>(null);
+  // Máquina sugerida de cada operação: a mais usada nos roteiros do Sectra; senão a padrão da fábrica.
+  const centroPadrao = useMemo(() => {
+    const conta = new Map<string, Map<string, number>>();
+    for (const r of [...cad.roteiros_padrao, ...cad.roteiros_desenho])
+      for (const e of r.etapas)
+        if (e.operacao && e.centro && !fora(e)) {
+          const m = conta.get(e.operacao) ?? new Map<string, number>();
+          m.set(e.centro, (m.get(e.centro) ?? 0) + 1);
+          conta.set(e.operacao, m);
+        }
+    const existe = (c: string) => cad.centros.some((x) => x.codigo === c);
+    return (op: string): string | null => {
+      const m = conta.get(op);
+      const top = m ? [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] : undefined;
+      const c = top ?? CENTRO_PADRAO[op];
+      return c && existe(c) ? c : null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cad]);
+  const etapaDoCatalogo = (op: string): EtapaModelo => ({ posicao: 0, operacao: op, centro: centroPadrao(op), descricao: null, hr_preparo: 0, hr_unitario: 0 });
+  const rapidas = ETAPAS_RAPIDAS.filter((op) => cad.operacoes.some((o) => o.codigo === op));
 
   function proximaPosicao(lista: EtapaEditor[]) {
     return (lista.reduce((m, e) => Math.max(m, e.posicao), 0) || 0) + 10;
@@ -153,6 +188,26 @@ export function EditorRoteiro({
   const ops = cad.operacoes.filter((o) => !etapaForaDaOP(cad.centros, { operacao: o.codigo })).filter((o) => !buscaOp || norm(`${o.codigo} ${o.descricao}`).includes(norm(buscaOp)));
 
   return (
+    <div className="flex flex-col gap-3">
+      {/* Etapas rápidas — fabricação (pedido do usuário: Dobra não vem nos roteiros do Sectra) */}
+      <div className={`${classeCartao} flex flex-wrap items-center gap-1.5 px-3 py-2`}>
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">Etapas rápidas</span>
+        {rapidas.map((op) => {
+          const c = centroPadrao(op);
+          return (
+            <button
+              key={op}
+              type="button"
+              onClick={() => adicionar([etapaDoCatalogo(op)], "Manual (catálogo Sectra)")}
+              title={`Adiciona ${descOperacao(cad, op)}${c ? ` na máquina ${c} · ${descCentro(cad, c)}` : ""} no fim do roteiro`}
+              className="inline-flex items-center gap-1 rounded-full border border-green-600/40 bg-green-50 px-3 py-1 text-sm font-semibold text-green-800 hover:bg-green-100 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-200 dark:hover:bg-cyan-500/20"
+            >
+              ＋ {(descOperacao(cad, op) ?? op).toLowerCase().replace(/^./, (x) => x.toUpperCase())}
+              {c && <span className="font-mono text-[10px] font-medium opacity-70">{c}</span>}
+            </button>
+          );
+        })}
+      </div>
     <div className="grid gap-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {/* Fontes do Sectra */}
       <div className={`${classeCartao} flex min-h-0 flex-col`}>
@@ -238,7 +293,7 @@ export function EditorRoteiro({
                   <li key={o.codigo}>
                     <button
                       type="button"
-                      onClick={() => adicionar([{ posicao: 0, operacao: o.codigo, centro: null, descricao: null, hr_preparo: 0, hr_unitario: 0 }], "Manual (catálogo Sectra)")}
+                      onClick={() => adicionar([etapaDoCatalogo(o.codigo)], "Manual (catálogo Sectra)")}
                       className="flex w-full items-center gap-2 rounded-lg border border-stone-200 px-2.5 py-2 text-left text-sm hover:border-green-600 hover:bg-green-50/50 dark:border-slate-700 dark:hover:border-cyan-500 dark:hover:bg-cyan-500/5"
                     >
                       <span className="font-mono text-[11px] text-stone-400">{o.codigo}</span>
@@ -361,6 +416,7 @@ export function EditorRoteiro({
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
