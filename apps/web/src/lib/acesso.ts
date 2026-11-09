@@ -12,8 +12,9 @@ export const ACESSO_SO_FOLLOW_UP = "follow_up";
 // Contas suspensas — pedido do usuário (03/11/2026): luana temporariamente sem
 // acesso a nada; o proxy manda qualquer página pra /suspenso e nega as APIs.
 // Pra liberar de novo, é só tirar o e-mail daqui e publicar.
+// 09/11/2026: luana liberada de novo (pedido do usuário) — volta ao perfil financeiro_consulta.
 export const ROTA_SUSPENSO = "/suspenso";
-const CONTAS_SUSPENSAS = ["luana@fcnexus.local"];
+const CONTAS_SUSPENSAS: string[] = [];
 export function contaSuspensa(user: Pick<User, "email"> | null | undefined): boolean {
   return CONTAS_SUSPENSAS.includes((user?.email ?? "").trim().toLowerCase());
 }
