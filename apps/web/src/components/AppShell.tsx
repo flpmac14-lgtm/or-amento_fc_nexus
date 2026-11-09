@@ -27,13 +27,14 @@ import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerForneced
 import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
+import { ROTA_TAREFAS, podeVerTarefas } from "@/lib/tarefas";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
 
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -68,6 +69,13 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
         <g {...p}>
           <circle cx="9" cy="8" r="3.5" />
           <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6" />
+        </g>
+      )}
+      {nome === "tarefas" && (
+        <g {...p}>
+          <rect x="3" y="4" width="5" height="16" rx="1.5" />
+          <rect x="9.5" y="4" width="5" height="11" rx="1.5" />
+          <rect x="16" y="4" width="5" height="7" rx="1.5" />
         </g>
       )}
       {nome === "escuta" && (
@@ -172,6 +180,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(real.email)) principal.push({ href: "/estrutura", rotulo: "Estrutura do sistema", icone: "painel" });
   if (!restrita || perfil === "follow_up") principal.push({ href: "/visao-geral", rotulo: "Visão Geral", icone: "painel" });
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
+  // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
+  if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
   operacao.push({

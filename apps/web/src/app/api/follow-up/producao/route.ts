@@ -10,6 +10,8 @@ import { CAMPOS_AP, cadastros, carregarOps, encerrarSeConcluida, recalcularPecas
 // Ordens de produção (aba "Ordens de produção" do Follow up) — pedido do usuário (07/11/2026).
 // GET                    → cadastros do Sectra + OPs abertas (e encerradas/canceladas nos últimos 30 dias) + apontamentos;
 // GET ?tipo=pedidos&q=   → pedidos ativos do Follow up pra gerar OP (com foto e OPs que já têm);
+// GET ?tipo=arquivo&q=&status=&de=&ate= → todas as OPs já criadas (busca por nº, PO, MAC, cliente, desenho);
+// GET ?tipo=modelos&desenho= → OPs anteriores pra usar o roteiro como modelo na Nova OP;
 // GET ?tipo=historico&de=AAAA-MM-DD&ate=AAAA-MM-DD → apontamentos do período (inclui paradas);
 // POST {acao: "criar" | "liberar" | "voltar" | "encerrar" | "reabrir" | "cancelar" | "excluir" | "editar" |
 //       "concluir_etapa" | "reabrir_etapa" | "corrigir_apontamento" | "fechar_apontamento"}.
@@ -39,6 +41,14 @@ export async function GET(request: NextRequest) {
       if (!dados.ops.length) return erro("OP não encontrada.", 404);
       return NextResponse.json({ op: dados.ops[0], apontamentos: dados.apontamentos });
     }
+    if (tipo === "arquivo") {
+      const p = request.nextUrl.searchParams;
+      const data = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(p.get(k) ?? "") ? p.get(k)! : "");
+      const status = (p.get("status") ?? "").split(",").filter((s) => ["aguardando", "liberada", "encerrada", "cancelada"].includes(s));
+      const dados = await carregarOps(admin, { status, arquivo: { q: (p.get("q") ?? "").slice(0, 60), de: data("de"), ate: data("ate"), limite: 300 } });
+      return NextResponse.json({ ...dados, limite: 300 });
+    }
+    if (tipo === "modelos") return NextResponse.json(await modelos(admin, request.nextUrl.searchParams.get("desenho") ?? ""));
     if (tipo === "pedidos") return NextResponse.json(await pedidos(admin, request.nextUrl.searchParams.get("q") ?? ""));
     if (tipo === "historico") {
       const de = request.nextUrl.searchParams.get("de") ?? "";
@@ -75,6 +85,32 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     return erro(e instanceof Error ? e.message : String(e), 500);
   }
+}
+
+/** OPs já criadas (não canceladas) pra reaproveitar o roteiro: as do mesmo desenho primeiro, depois as mais recentes. */
+async function modelos(admin: Admin, desenho: string) {
+  const campos = "id, numero, desenho, descricao, cliente, mac, criado_em, prod_op_etapas(posicao, operacao, centro, descricao, hr_preparo, hr_unitario)";
+  const des = desenho.replace(/[,()*%\\"']/g, " ").trim();
+  const [mesmo, recentes] = await Promise.all([
+    des
+      ? comRetentativa(() => admin.from("prod_ops").select(campos).neq("status", "cancelada").ilike("desenho", des).order("numero", { ascending: false }).limit(20))
+      : Promise.resolve({ data: [], error: null }),
+    comRetentativa(() => admin.from("prod_ops").select(campos).neq("status", "cancelada").order("numero", { ascending: false }).limit(40)),
+  ]);
+  const erroM = mesmo.error ?? recentes.error;
+  if (erroM) throw new Error(erroM.message);
+  type Linha = { id: string; numero: number; desenho: string | null; descricao: string | null; cliente: string | null; mac: string | null; criado_em: string; prod_op_etapas: EtapaModelo[] };
+  const vistos = new Set<string>();
+  const lista = [...((mesmo.data ?? []) as Linha[]).map((o) => ({ ...o, mesmoDesenho: true })), ...((recentes.data ?? []) as Linha[]).map((o) => ({ ...o, mesmoDesenho: false }))]
+    .filter((o) => !vistos.has(o.id) && vistos.add(o.id))
+    .map(({ prod_op_etapas, ...o }) => ({
+      ...o,
+      etapas: [...prod_op_etapas]
+        .sort((a, b) => a.posicao - b.posicao)
+        .map((e) => ({ ...e, hr_preparo: Number(e.hr_preparo), hr_unitario: Number(e.hr_unitario) })),
+    }))
+    .filter((o) => o.etapas.length);
+  return { modelos: lista };
 }
 
 async function pedidos(admin: Admin, q: string) {

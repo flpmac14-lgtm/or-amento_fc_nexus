@@ -32,10 +32,24 @@ export async function cadastros(admin: Admin): Promise<Cadastros> {
 /** OPs (com etapas e a 1ª foto do pedido) e os apontamentos delas. */
 export async function carregarOps(
   admin: Admin,
-  filtro: { status?: string[]; ids?: string[]; desdeEncerradas?: string },
+  filtro: { status?: string[]; ids?: string[]; desdeEncerradas?: string; arquivo?: { q: string; de: string; ate: string; limite: number } },
 ): Promise<{ ops: OP[]; apontamentos: Apontamento[] }> {
-  let q = admin.from("prod_ops").select(CAMPOS_OP).order("numero", { ascending: false }).limit(1000);
+  let q = admin.from("prod_ops").select(CAMPOS_OP).order("numero", { ascending: false }).limit(filtro.arquivo?.limite ?? 1000);
   if (filtro.ids) q = q.in("id", filtro.ids);
+  else if (filtro.arquivo) {
+    // Arquivo de OPs: todas as já criadas (sem o corte de 30 dias do painel).
+    const a = filtro.arquivo;
+    if (filtro.status?.length) q = q.in("status", filtro.status);
+    if (a.de) q = q.gte("criado_em", `${a.de}T03:00:00Z`);
+    if (a.ate) q = q.lt("criado_em", new Date(new Date(`${a.ate}T03:00:00Z`).getTime() + 86400e3).toISOString());
+    const t = a.q.replace(/[,()*%\\"']/g, " ").trim();
+    if (t) {
+      const num = Number(t.replace(/^OP\s*/i, ""));
+      const campos = ["po", "mac", "cliente", "desenho", "descricao", "observacao"].map((c) => `${c}.ilike.*${t}*`);
+      if (Number.isInteger(num) && num > 0) campos.push(`numero.eq.${num}`);
+      q = q.or(campos.join(","));
+    }
+  }
   else if (filtro.desdeEncerradas)
     q = q.or(`status.in.(aguardando,liberada),encerrado_em.gte.${filtro.desdeEncerradas},criado_em.gte.${filtro.desdeEncerradas}`);
   else if (filtro.status) q = q.in("status", filtro.status);

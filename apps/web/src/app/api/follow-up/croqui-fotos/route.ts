@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import type { ImagemFollowUp } from "@/lib/types";
 import { macBase } from "@/lib/almoxarifado";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
@@ -18,14 +18,23 @@ type Linha = {
   item: { id: string; po: string | null; mac: string | null; desenho: string | null };
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await criarClienteSupabaseServidor();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ erro: "Faça login." }, { status: 401 });
+  const admin = criarClienteSupabaseAdmin();
+  // Versão barata (qtde + última inclusão): o croqui relê a cada 3 min e só baixa a lista se mudou (egress).
+  const [qtd, ultima] = await Promise.all([
+    comRetentativa(() => admin.from("follow_up_imagens").select("id", { count: "exact", head: true })),
+    comRetentativa(() => admin.from("follow_up_imagens").select("created_at").order("created_at", { ascending: false }).limit(1)),
+  ]);
+  const versao = `${qtd.count ?? 0}-${ultima.data?.[0]?.created_at ?? ""}`;
+  if (!qtd.error && !ultima.error && request.nextUrl.searchParams.get("v") === versao)
+    return NextResponse.json({ inalterado: true, versao }, { headers: { "Cache-Control": "private, no-store" } });
   const { data, error } = await comRetentativa(() =>
-    criarClienteSupabaseAdmin()
+    admin
       .from("follow_up_imagens")
       .select("id, midia_sha256, ordem, origem, celula, item:follow_up_itens!inner(id, po, mac, desenho)")
       .order("ordem")
@@ -51,5 +60,5 @@ export async function GET() {
     }
     grupos[g].push({ id: r.id, sha256: r.midia_sha256, ordem: r.ordem, origem: r.origem, celula: r.celula, largura: null, altura: null });
   }
-  return NextResponse.json({ grupos, po, desenho, mac }, { headers: { "Cache-Control": "private, max-age=600" } });
+  return NextResponse.json({ grupos, po, desenho, mac, versao }, { headers: { "Cache-Control": "private, no-store" } });
 }

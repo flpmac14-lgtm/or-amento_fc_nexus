@@ -330,9 +330,11 @@ def adicionar_imagem(item_id: str, conteudo: bytes, enviada_por: str | None = No
                values (%s, %s, %s, %s, %s, %s) on conflict (sha256) do nothing""",
             (sha, tipo, dados, largura, altura, len(dados)),
         )
+        # Imagem nova entra na FRENTE (pedido do usuário 07/11/2026): trocou a foto no Follow up,
+        # ela vira a principal em todo lugar que mostra a 1ª (Croqui, OP, Almoxarifado, Data book…).
         cur.execute(
             """insert into follow_up_imagens (item_id, midia_sha256, ordem, origem, enviada_por)
-               values (%s, %s, (select coalesce(max(ordem), -1) + 1 from follow_up_imagens where item_id = %s),
+               values (%s, %s, (select coalesce(min(ordem), 1) - 1 from follow_up_imagens where item_id = %s),
                        'enviada_app', %s)""",
             (item_id, sha, item_id, enviada_por),
         )

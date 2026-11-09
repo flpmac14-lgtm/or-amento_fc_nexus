@@ -45,13 +45,16 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "nova" | "chao" | "apontamentos" | "operadores";
+type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores";
+type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
 export default function OrdensProducao() {
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState("");
   const [sub, setSub] = useState<Sub>("painel");
   const [aberta, setAberta] = useState<string | null>(null);
+  // OPs vindas do Arquivo (mais antigas que os 30 dias do painel) — pra abrir o detalhe delas.
+  const [arquivo, setArquivo] = useState<Lote | null>(null);
   const agora = useAgora(30000);
 
   const carregar = useCallback(() => {
@@ -85,7 +88,14 @@ export default function OrdensProducao() {
   if (erro && !dados) return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{erro}</p>;
   if (!dados || !kpi) return <p className="px-1 py-6 text-sm text-stone-500">Carregando ordens de produção…</p>;
 
-  const op = aberta ? dados.ops.find((o) => o.id === aberta) ?? null : null;
+  const dadosTudo: Dados = arquivo
+    ? {
+        ...dados,
+        ops: [...dados.ops, ...arquivo.ops.filter((o) => !dados.ops.some((x) => x.id === o.id))],
+        apontamentos: [...dados.apontamentos, ...arquivo.apontamentos.filter((a) => !dados.apontamentos.some((x) => x.id === a.id))],
+      }
+    : dados;
+  const op = aberta ? dadosTudo.ops.find((o) => o.id === aberta) ?? null : null;
   const semCadastro = !dados.cadastros.operadores.length;
 
   return (
@@ -127,6 +137,7 @@ export default function OrdensProducao() {
         {(
           [
             ["painel", "Painel de OPs"],
+            ["arquivo", "Arquivo de OPs"],
             ["nova", "Nova OP"],
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
@@ -149,6 +160,7 @@ export default function OrdensProducao() {
       </div>
 
       {sub === "painel" && <PainelOps dados={dados} agora={agora} abrir={setAberta} />}
+      {sub === "arquivo" && <ArquivoOps dados={dados} agora={agora} abrir={setAberta} aoCarregar={setArquivo} />}
       {sub === "nova" && (
         <OrdensProducaoNova
           cad={dados.cadastros}
@@ -165,7 +177,7 @@ export default function OrdensProducao() {
       {sub === "apontamentos" && <Apontamentos cad={dados.cadastros} />}
       {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
-      {op && <DetalheOP op={op} dados={dados} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}
+      {op && <DetalheOP op={op} dados={dadosTudo} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}
     </div>
   );
 }
@@ -189,8 +201,8 @@ function Kpi({ rotulo, valor, cor, onClick }: { rotulo: string; valor: number | 
 // ---------------------------------------------------------------------------
 // Painel de OPs
 // ---------------------------------------------------------------------------
-function PainelOps({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir: (id: string) => void }) {
-  const [filtro, setFiltro] = useState<"abertas" | StatusOP | "atrasadas" | "todas">("abertas");
+function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; agora: Date; abrir: (id: string) => void; arquivo?: boolean }) {
+  const [filtro, setFiltro] = useState<"abertas" | StatusOP | "atrasadas" | "todas">(arquivo ? "todas" : "abertas");
   const [busca, setBusca] = useState("");
   const [centro, setCentro] = useState("");
   const centrosUsados = useMemo(() => {
@@ -216,6 +228,7 @@ function PainelOps({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir: 
       return [numeroOP(o.numero), String(o.numero), o.po, o.mac, o.desenho, o.descricao, o.cliente].some((v) => (v ?? "").toUpperCase().includes(t));
     })
     .sort((a, b) => {
+      if (arquivo) return b.numero - a.numero;
       const ordem: Record<StatusOP, number> = { liberada: 0, aguardando: 1, encerrada: 2, cancelada: 3 };
       return ordem[a.status] - ordem[b.status] || a.prioridade - b.prioridade || (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") || a.numero - b.numero;
     });
@@ -232,7 +245,7 @@ function PainelOps({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir: 
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${arquivo ? "hidden" : ""}`}>
         <div className="flex flex-wrap gap-1">
           {filtros.map(([v, t]) => (
             <button
@@ -257,7 +270,7 @@ function PainelOps({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir: 
 
       {lista.length === 0 ? (
         <div className={`${classeCartao} px-4 py-10 text-center text-sm text-stone-500`}>
-          Nenhuma OP aqui. {dados.podeEditar && "Clique em ＋ Nova OP e escolha um pedido do Follow up."}
+          {arquivo ? "Nenhuma OP encontrada com essa busca." : <>Nenhuma OP aqui. {dados.podeEditar && "Clique em ＋ Nova OP e escolha um pedido do Follow up."}</>}
         </div>
       ) : (
         <div className={`${classeCartao} overflow-x-auto`}>
@@ -334,6 +347,78 @@ function PainelOps({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir: 
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Arquivo de OPs — pedido do usuário (07/11/2026): toda OP criada fica salva pra
+// abrir depois como referência (o painel só mostra encerradas dos últimos 30 dias).
+// ---------------------------------------------------------------------------
+function ArquivoOps({ dados, agora, abrir, aoCarregar }: { dados: Dados; agora: Date; abrir: (id: string) => void; aoCarregar: (l: Lote) => void }) {
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+  const [lote, setLote] = useState<(Lote & { limite: number }) | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let ativo = true;
+    const t = setTimeout(() => {
+      setCarregando(true);
+      const p = new URLSearchParams({ tipo: "arquivo", q: q.trim(), status, de, ate });
+      api<Lote & { limite: number }>(`/api/follow-up/producao?${p}`)
+        .then((r) => {
+          if (!ativo) return;
+          setLote(r);
+          aoCarregar(r);
+          setErro("");
+        })
+        .catch((e: Error) => ativo && setErro(e.message))
+        .finally(() => ativo && setCarregando(false));
+    }, q ? 350 : 0);
+    return () => {
+      ativo = false;
+      clearTimeout(t);
+    };
+  }, [q, status, de, ate, aoCarregar]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className={`${classeCartao} flex flex-wrap items-end gap-2 px-3 py-2`}>
+        <label className="flex min-w-[16rem] flex-1 flex-col gap-0.5 text-[11px] font-medium text-stone-500">
+          Buscar
+          <input className={classeCampo} placeholder="Nº da OP, PO, MAC, cliente, desenho, descrição…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-stone-500">
+          Situação
+          <select className={`${classeCampo} !w-auto`} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">Todas</option>
+            <option value="aguardando">Aguardando</option>
+            <option value="liberada">Em produção</option>
+            <option value="encerrada">Encerradas</option>
+            <option value="cancelada">Canceladas</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-stone-500">
+          Criada de
+          <input type="date" className={`${classeCampo} !w-auto`} value={de} onChange={(e) => setDe(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-stone-500">
+          até
+          <input type="date" className={`${classeCampo} !w-auto`} value={ate} onChange={(e) => setAte(e.target.value)} />
+        </label>
+        <span className="ml-auto pb-2 text-xs text-stone-500">
+          {carregando ? "Buscando…" : lote ? `${lote.ops.length} OP(s)${lote.ops.length >= lote.limite ? ` — mostrando as ${lote.limite} mais recentes, refine a busca` : ""}` : ""}
+        </span>
+      </div>
+      <p className="px-1 text-[11px] text-stone-500 dark:text-slate-400">
+        Toda OP criada fica guardada aqui, com roteiro, apontamentos e horas. Clique para abrir, reimprimir ou consultar. Na Nova OP, o roteiro de uma OP antiga pode ser usado como modelo.
+      </p>
+      {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{erro}</p>}
+      {lote && <PainelOps arquivo dados={{ ...dados, ops: lote.ops, apontamentos: lote.apontamentos }} agora={agora} abrir={abrir} />}
     </div>
   );
 }

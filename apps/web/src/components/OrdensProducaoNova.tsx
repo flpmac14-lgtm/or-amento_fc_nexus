@@ -18,6 +18,18 @@ import {
 } from "@/components/ProducaoComum";
 import { MOTIVO_FORA_DA_OP, centroForaDaOP, etapaForaDaOP, ondeApontaFora, fmtHoras, fmtQtd, horasPrevistas, numeroOP, type Cadastros, type Centro, type EtapaModelo, type OP } from "@/lib/producao";
 
+/** OP já criada, usada como modelo de roteiro (GET ?tipo=modelos). */
+type ModeloOP = {
+  id: string;
+  numero: number;
+  desenho: string | null;
+  descricao: string | null;
+  cliente: string | null;
+  criado_em: string;
+  mesmoDesenho: boolean;
+  etapas: EtapaModelo[];
+};
+
 export type PedidoFU = {
   id: string;
   po: string | null;
@@ -109,7 +121,18 @@ export function EditorRoteiro({
   setOrigem: (o: string) => void;
 }) {
   const doDesenho = useMemo(() => roteirosDoDesenho(cad, desenho), [cad, desenho]);
-  type Fonte = { chave: string; titulo: string; sub: string; etapas: EtapaModelo[] };
+  // OPs já criadas (ficam salvas) — usar o roteiro de uma delas como modelo; as do mesmo desenho primeiro.
+  const [anteriores, setAnteriores] = useState<ModeloOP[]>([]);
+  useEffect(() => {
+    let ativo = true;
+    api<{ modelos: ModeloOP[] }>(`/api/follow-up/producao?tipo=modelos&desenho=${encodeURIComponent(desenho ?? "")}`)
+      .then((r) => ativo && setAnteriores(r.modelos))
+      .catch(() => {}); // sem modelo não impede montar o roteiro
+    return () => {
+      ativo = false;
+    };
+  }, [desenho]);
+  type Fonte = { chave: string; titulo: string; sub: string; etapas: EtapaModelo[]; mesmo?: boolean };
   const fontes: Fonte[] = useMemo(
     () => [
       ...doDesenho.map((r) => ({
@@ -118,6 +141,13 @@ export function EditorRoteiro({
         sub: `${r.nome ?? ""}${r.padrao ? " · padrão" : ""} · ${r.etapas.length} etapas`,
         etapas: r.etapas,
       })),
+      ...anteriores.map((o) => ({
+        chave: `m${o.id}`,
+        titulo: `${numeroOP(o.numero)} · ${o.descricao ?? ""}${o.desenho ? ` · Des. ${o.desenho}` : ""}${o.cliente ? ` · ${o.cliente}` : ""}`.slice(0, 110),
+        sub: `${o.mesmoDesenho ? "mesmo desenho · " : ""}criada em ${new Date(o.criado_em).toLocaleDateString("pt-BR")} · ${o.etapas.length} etapas`,
+        etapas: o.etapas,
+        mesmo: o.mesmoDesenho,
+      })),
       ...cad.roteiros_padrao.map((r) => ({
         chave: `p${r.codigo}`,
         titulo: `Roteiro padrão ${r.codigo} - ${(r.descricao ?? "").replace(/^ROTEI[RT]O PADR[AÃ]O\s*[-–]?\s*/i, "") || r.descricao}`,
@@ -125,7 +155,7 @@ export function EditorRoteiro({
         etapas: r.etapas,
       })),
     ],
-    [cad, doDesenho],
+    [cad, doDesenho, anteriores],
   );
   const [fonte, setFonte] = useState<string>(() => fontes[0]?.chave ?? "op");
   const [buscaOp, setBuscaOp] = useState("");
@@ -246,11 +276,25 @@ export function EditorRoteiro({
                 ))}
               </optgroup>
             )}
+            {fontes.some((f) => f.chave.startsWith("m") && f.mesmo) && (
+              <optgroup label="★ OPs anteriores deste desenho (salvas)">
+                {fontes.filter((f) => f.chave.startsWith("m") && f.mesmo).map((f) => (
+                  <option key={f.chave} value={f.chave}>{f.titulo}</option>
+                ))}
+              </optgroup>
+            )}
             <optgroup label="Roteiros padrão do Sectra">
               {fontes.filter((f) => f.chave.startsWith("p")).map((f) => (
                 <option key={f.chave} value={f.chave}>{f.titulo}</option>
               ))}
             </optgroup>
+            {fontes.some((f) => f.chave.startsWith("m") && !f.mesmo) && (
+              <optgroup label="OPs anteriores (usar como modelo)">
+                {fontes.filter((f) => f.chave.startsWith("m") && !f.mesmo).map((f) => (
+                  <option key={f.chave} value={f.chave}>{f.titulo}</option>
+                ))}
+              </optgroup>
+            )}
             <option value="op">Catálogo de operações (montar etapa por etapa)</option>
           </select>
           <p className="mt-1 text-[11px] text-stone-500 dark:text-slate-400">Só fabricação (caldeiraria, solda, usinagem…). {MOTIVO_FORA_DA_OP}</p>

@@ -34,13 +34,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ solicitacao: data }, { headers: { "Cache-Control": "no-store" } });
   }
   const [nomes, lista] = await Promise.all([
-    comRetentativa(() => admin.from("funcionarios").select("nome").eq("ativo", true).order("nome")),
+    comRetentativa(() => admin.from("funcionarios").select("nome, codigo_sectra").eq("ativo", true).order("nome")),
     comRetentativa(() => admin.from("horas_extras").select(CAMPOS).order("numero", { ascending: false }).limit(100)),
   ]);
   const erro = nomes.error ?? lista.error;
   if (erro) return NextResponse.json({ erro: erro.message }, { status: 500 });
   return NextResponse.json(
-    { funcionarios: (nomes.data ?? []).map((f) => f.nome as string), solicitacoes: lista.data ?? [] },
+    {
+      funcionarios: (nomes.data ?? []).map((f) => f.nome as string),
+      // Código do funcionário no Sectra (RH_FUNCIONARIO.CODIGO, migration 0064); quem não está no Sectra fica sem.
+      codigos: Object.fromEntries((nomes.data ?? []).filter((f) => f.codigo_sectra != null).map((f) => [f.nome, f.codigo_sectra])),
+      solicitacoes: lista.data ?? [],
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -563,7 +563,9 @@ def importar(conteudo: bytes, nome_arquivo: str, nome_aba: str = ABA_PADRAO) -> 
                     importacao_id = %s, updated_at = now() where id = %s""",
                 alterados,
             )
-            cur.execute("delete from follow_up_imagens where item_id = any(%s)", (ids_com_imagens_trocadas,))
+            # As imagens coladas pelo app ficam (não vêm da planilha).
+            cur.execute("delete from follow_up_imagens where item_id = any(%s) and origem <> 'enviada_app'",
+                        (ids_com_imagens_trocadas,))
         if novos:
             cols = ", ".join(colunas_sql)
             ph = ", ".join(["%s"] * len(colunas_sql))

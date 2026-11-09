@@ -249,11 +249,21 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const [fotos, setFotos] = useState<FotosRef | null>(null);
   const [galeria, setGaleria] = useState<{ imagens: ImagemFollowUp[]; indice: number; titulo: string } | null>(null);
 
+  // Foto trocada no Follow up aparece aqui também (pedido do usuário 07/11/2026): relê a cada 3 min com a aba visível.
   useEffect(() => {
-    fetch("/api/follow-up/croqui-fotos")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => j && setFotos(j as FotosRef))
-      .catch(() => {}); // sem foto não impede a tela
+    let versao = "";
+    function buscarFotos() {
+      fetch(`/api/follow-up/croqui-fotos?v=${encodeURIComponent(versao)}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j || j.inalterado) return;
+          versao = j.versao ?? "";
+          setFotos(j as FotosRef);
+        })
+        .catch(() => {}); // sem foto não impede a tela
+    }
+    buscarFotos();
+    return repetirComAbaVisivel(buscarFotos, 180000);
   }, []);
 
   useEffect(() => {

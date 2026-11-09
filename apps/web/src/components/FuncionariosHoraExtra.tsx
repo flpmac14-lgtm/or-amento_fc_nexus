@@ -45,6 +45,7 @@ const classeCampo =
 export default function FuncionariosHoraExtra() {
   const router = useRouter();
   const [nomes, setNomes] = useState<string[] | null>(null);
+  const [codigos, setCodigos] = useState<Record<string, number>>({});
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoHoraExtra[]>([]);
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
@@ -61,6 +62,7 @@ export default function FuncionariosHoraExtra() {
         const j = await r.json();
         if (!r.ok) throw new Error(j.erro ?? `Erro ${r.status}`);
         setNomes(j.funcionarios);
+        setCodigos(j.codigos ?? {});
         setSolicitacoes(j.solicitacoes);
       })
       .catch((e: Error) => setErro(e.message));
@@ -69,8 +71,9 @@ export default function FuncionariosHoraExtra() {
 
   const filtrados = useMemo(() => {
     const alvo = normalizarBusca(busca);
-    return (nomes ?? []).filter((n) => !alvo || normalizarBusca(n).includes(alvo));
-  }, [nomes, busca]);
+    // Busca pelo nome ou pelo código do Sectra.
+    return (nomes ?? []).filter((n) => !alvo || normalizarBusca(n).includes(alvo) || String(codigos[n] ?? "") === alvo);
+  }, [nomes, codigos, busca]);
 
   function alternar(nome: string) {
     setEscolhidos((s) => {
@@ -168,7 +171,7 @@ export default function FuncionariosHoraExtra() {
             type="search"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Pesquisar nome…"
+            placeholder="Pesquisar nome ou código…"
             className={`${classeCampo} mt-2 w-full sm:max-w-sm`}
           />
           <div className="mt-2 grid max-h-[22rem] grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-stone-200 p-1 sm:grid-cols-2 lg:grid-cols-3 dark:border-slate-700">
@@ -184,6 +187,12 @@ export default function FuncionariosHoraExtra() {
                   }`}
                 >
                   <input type="checkbox" checked={marcado} onChange={() => alternar(n)} className="h-4 w-4 shrink-0 accent-blue-600" />
+                  <span
+                    className="w-7 shrink-0 text-right font-mono text-xs text-stone-500 dark:text-slate-400"
+                    title={codigos[n] != null ? "Código no Sectra" : "Não cadastrado no Sectra"}
+                  >
+                    {codigos[n] ?? "—"}
+                  </span>
                   <span className="truncate">{n}</span>
                 </label>
               );
