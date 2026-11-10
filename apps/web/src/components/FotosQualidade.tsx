@@ -179,7 +179,11 @@ async function baixarFotos(
   let ultimoErro = "";
   for (const f of fotos) {
     try {
-      const r = await fetch(urlImagemFollowUp(f.sha256));
+      // cache "no-store": a miniatura que o <img> já mostrou fica no cache SEM
+      // o cabeçalho de CORS (o <img> não manda Origin e a resposta é
+      // "immutable"); reaproveitá-la aqui fazia o navegador barrar o fetch
+      // ("Failed to fetch") e nada baixava. Busca de novo, direto do servidor.
+      const r = await fetch(urlImagemFollowUp(f.sha256), { cache: "no-store" });
       if (!r.ok) throw new Error(`servidor respondeu ${r.status}`);
       const blob = await r.blob();
       const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";

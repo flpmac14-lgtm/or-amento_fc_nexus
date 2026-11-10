@@ -426,8 +426,11 @@ def follow_up_midia(sha256: str) -> Response:
     if not achado:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
     conteudo, tipo = achado
+    # Vary: Origin — sem isso o navegador reaproveita a cópia que o <img>
+    # guardou (sem CORS) num fetch() e barra o download das fotos.
     return Response(content=conteudo, media_type=tipo,
-                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+                    headers={"Cache-Control": "public, max-age=31536000, immutable",
+                             "Vary": "Origin"})
 
 
 @app.post("/follow-up/carteira-weir")
