@@ -28,13 +28,14 @@ import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { ROTA_TAREFAS, podeVerTarefas } from "@/lib/tarefas";
+import { ROTA_DOCUMENTOS, podeVerDocumentos } from "@/lib/documentos";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
 
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -69,6 +70,12 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
         <g {...p}>
           <circle cx="9" cy="8" r="3.5" />
           <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6" />
+        </g>
+      )}
+      {nome === "documentos" && (
+        <g {...p}>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+          <path d="M8 13h8M8 16h5" />
         </g>
       )}
       {nome === "tarefas" && (
@@ -182,6 +189,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
+  // Documentos (pastas + PDFs): só o flpmac14 — pedido do usuário (11/11/2026).
+  if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
   operacao.push({
