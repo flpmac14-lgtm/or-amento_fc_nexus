@@ -303,6 +303,13 @@ export default function FollowUp({
   // devolveu (Status recalculado lá, com a mesma fórmula da planilha).
   // Troca o item em todo lugar em que aparece (lista, painel, galeria).
   const aplicarItem = useCallback((atualizado: ItemFollowUp) => {
+    // Anexar/remover imagem devolve também os itens do mesmo desenho (replicados).
+    const { replicados, ...principal } = atualizado;
+    if (replicados?.length) {
+      const porId = new Map(replicados.map((r) => [r.id, r]));
+      setDados((d) => (d ? { ...d, itens: d.itens.map((i) => porId.get(i.id) ?? i) } : d));
+    }
+    atualizado = principal;
     setDados((d) => (d ? { ...d, itens: d.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) } : d));
     setItemAberto((aberto) => (aberto?.id === atualizado.id ? atualizado : aberto));
     setGaleria((g) => {
@@ -1412,10 +1419,9 @@ Plano: ${e.plano_pintura ?? "—"}`}
           enviadaPor={editadoPor}
           onEnviada={(atualizado) => {
             aplicarItem(atualizado);
-            // Se a galeria estava aberta nesse item, mostra a imagem nova (última).
-            setGaleria((g) =>
-              g && g.item.id === atualizado.id ? { item: atualizado, indice: atualizado.imagens.length - 1 } : g,
-            );
+            // Se a galeria estava aberta nesse item, mostra a imagem nova (entra na frente — 0066).
+            const principal = { ...atualizado, replicados: undefined };
+            setGaleria((g) => (g && g.item.id === principal.id ? { item: principal, indice: 0 } : g));
           }}
           onFechar={() => setAnexarPara(null)}
         />

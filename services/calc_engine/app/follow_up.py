@@ -576,6 +576,11 @@ def importar(conteudo: bytes, nome_arquivo: str, nome_aba: str = ABA_PADRAO) -> 
                 novos,
             )
         if imagens_novas:
+            # Imagem da planilha que o usuário removeu pelo app não volta (0068).
+            cur.execute("select item_id, midia_sha256 from follow_up_imagens_removidas")
+            removidas = {(str(i), sha) for i, sha in cur.fetchall()}
+            imagens_novas = [im for im in imagens_novas if (str(im[0]), im[1]) not in removidas]
+        if imagens_novas:
             cur.executemany(
                 """insert into follow_up_imagens (item_id, midia_sha256, ordem, origem, celula, media_original, ancora)
                    values (%s, %s, %s, %s, %s, %s, %s)""",

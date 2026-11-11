@@ -316,6 +316,47 @@ def preparar_imagem(conteudo: bytes) -> tuple[bytes, str, int, int]:
     return saida.getvalue(), "image/jpeg", im.size[0], im.size[1]
 
 
+# Mesmo nº de desenho = mesma peça (pedido do usuário 11/11/2026): a imagem
+# anexada num item vai também pros outros itens com o mesmo desenho, e a
+# remoção também vale pra todos eles. Só desenho com algum dígito (evita
+# juntar itens por texto genérico).
+_SQL_MESMO_DESENHO = """
+    select o.id from follow_up_itens o, follow_up_itens a
+     where a.id = %s and o.id <> a.id
+       and a.desenho ~ '[0-9]'
+       and upper(trim(o.desenho)) = upper(trim(a.desenho))
+"""
+
+
+def _ids_mesmo_desenho(cur, item_id: str) -> list[str]:
+    cur.execute(_SQL_MESMO_DESENHO, (item_id,))
+    return [str(r[0]) for r in cur.fetchall()]
+
+
+def _vincular_na_frente(cur, item_id: str, sha: str, enviada_por: str | None) -> None:
+    # Imagem nova entra na FRENTE (pedido do usuário 07/11/2026): trocou a foto no Follow up,
+    # ela vira a principal em todo lugar que mostra a 1ª (Croqui, OP, Almoxarifado, Data book…).
+    cur.execute("delete from follow_up_imagens_removidas where item_id = %s and midia_sha256 = %s", (item_id, sha))
+    frente = "(select coalesce(min(ordem), 1) - 1 from follow_up_imagens where item_id = %s)"
+    # Já tem essa mesma imagem (ex.: veio da planilha): só passa pra frente, sem duplicar.
+    cur.execute(f"update follow_up_imagens set ordem = {frente} where item_id = %s and midia_sha256 = %s",
+                (item_id, item_id, sha))
+    if not cur.rowcount:
+        cur.execute(
+            f"""insert into follow_up_imagens (item_id, midia_sha256, ordem, origem, enviada_por)
+                values (%s, %s, {frente}, 'enviada_app', %s)""",
+            (item_id, sha, item_id, enviada_por),
+        )
+    cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
+                (enviada_por, item_id))
+
+
+def _com_replicados(cur, item_id: str, outros: list[str]) -> dict:
+    item = carregar_itens(cur, item_id)[0]
+    item["replicados"] = [carregar_itens(cur, o)[0] for o in outros]
+    return item
+
+
 def adicionar_imagem(item_id: str, conteudo: bytes, enviada_por: str | None = None) -> dict | None:
     import hashlib
 
@@ -330,41 +371,51 @@ def adicionar_imagem(item_id: str, conteudo: bytes, enviada_por: str | None = No
                values (%s, %s, %s, %s, %s, %s) on conflict (sha256) do nothing""",
             (sha, tipo, dados, largura, altura, len(dados)),
         )
-        # Imagem nova entra na FRENTE (pedido do usuário 07/11/2026): trocou a foto no Follow up,
-        # ela vira a principal em todo lugar que mostra a 1ª (Croqui, OP, Almoxarifado, Data book…).
-        cur.execute(
-            """insert into follow_up_imagens (item_id, midia_sha256, ordem, origem, enviada_por)
-               values (%s, %s, (select coalesce(min(ordem), 1) - 1 from follow_up_imagens where item_id = %s),
-                       'enviada_app', %s)""",
-            (item_id, sha, item_id, enviada_por),
-        )
-        cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
-                    (enviada_por, item_id))
-        item = carregar_itens(cur, item_id)[0]
+        outros = _ids_mesmo_desenho(cur, item_id)
+        for i in [item_id, *outros]:
+            _vincular_na_frente(cur, i, sha, enviada_por)
+        item = _com_replicados(cur, item_id, outros)
         conn.commit()
     return item
 
 
 def remover_imagem(imagem_id: str, removida_por: str | None = None) -> dict | None:
-    """Remove só imagem enviada pelo app — as que vieram da planilha ficam."""
+    """Remove a imagem do item — e a mesma imagem dos outros itens com o mesmo
+    desenho. Se veio da planilha, fica anotada em follow_up_imagens_removidas
+    pra a sync de 15 min não trazer de volta."""
     with _conectar() as conn, conn.cursor() as cur:
-        cur.execute("select item_id, origem, midia_sha256 from follow_up_imagens where id = %s", (imagem_id,))
+        cur.execute("select item_id, midia_sha256 from follow_up_imagens where id = %s", (imagem_id,))
         row = cur.fetchone()
         if not row:
             return None
-        item_id, origem, sha = row
-        if origem != "enviada_app":
-            raise ImagemInvalida("Só dá pra remover imagem adicionada pelo app — as da planilha ficam.")
-        cur.execute("delete from follow_up_imagens where id = %s", (imagem_id,))
+        item_id, sha = str(row[0]), row[1]
+        outros = _ids_mesmo_desenho(cur, item_id)
+        cur.execute(
+            "select item_id, origem from follow_up_imagens where midia_sha256 = %s and item_id = any(%s::uuid[])",
+            (sha, [item_id, *outros]),
+        )
+        afetados = cur.fetchall()
+        for it, origem in afetados:
+            if origem != "enviada_app":
+                cur.execute(
+                    """insert into follow_up_imagens_removidas (item_id, midia_sha256, removida_por)
+                       values (%s, %s, %s) on conflict do nothing""",
+                    (it, sha, removida_por),
+                )
+            cur.execute("delete from follow_up_imagens where item_id = %s and midia_sha256 = %s", (it, sha))
+            cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() "
+                        "where id = %s", (removida_por, it))
+        # A mídia em si fica guardada se ainda houver uso (ou se foi removida da
+        # planilha — a anotação em _removidas aponta pra ela).
         cur.execute(
             "delete from follow_up_midias m where sha256 = %s and not exists "
             "(select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256) and not exists "
-            "(select 1 from fotos_setor f where f.midia_sha256 = m.sha256)",  # foto de qualidade (0048)
+            "(select 1 from fotos_setor f where f.midia_sha256 = m.sha256) and not exists "
+            "(select 1 from follow_up_imagens_removidas r where r.midia_sha256 = m.sha256)",
             (sha,),
         )
-        cur.execute("update follow_up_itens set editado_em = now(), editado_por = %s, updated_at = now() where id = %s",
-                    (removida_por, item_id))
-        item = carregar_itens(cur, str(item_id))[0]
+        replicados = sorted({str(it) for it, _ in afetados} - {item_id})
+        item = _com_replicados(cur, item_id, replicados)
         conn.commit()
     return item
 

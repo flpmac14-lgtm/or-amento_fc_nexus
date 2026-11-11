@@ -133,7 +133,7 @@ export function GaleriaImagens({
   onIndice: (i: number) => void;
   onFechar: () => void;
   onAdicionar?: () => void; // abre a janela de colar/escolher imagem
-  onRemover?: (imagem: ImagemFollowUp) => Promise<void>; // só imagem enviada pelo app
+  onRemover?: (imagem: ImagemFollowUp) => Promise<void>; // qualquer imagem (a da planilha não volta na sync)
 }) {
   const atual = imagens[indice];
   const [removendo, setRemovendo] = useState(false);
@@ -167,7 +167,7 @@ export function GaleriaImagens({
                 + Adicionar imagem
               </button>
             )}
-            {onRemover && atual.origem === "enviada_app" && (
+            {onRemover && (
               <button
                 type="button"
                 disabled={removendo}

@@ -581,6 +581,9 @@ export interface ItemFollowUp {
   editado_em: string | null;
   editado_por: string | null;
   imagens: ImagemFollowUp[];
+  // Só na resposta de anexar/remover imagem: os outros itens com o mesmo nº de
+  // desenho, que receberam (ou perderam) a mesma imagem.
+  replicados?: ItemFollowUp[];
 }
 
 export interface RegraFormatacaoFollowUp {
