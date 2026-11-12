@@ -176,7 +176,7 @@ export default function ControleObras({
     const ativos = Object.entries(filtrosColuna).filter(([, v]) => v.trim());
     const lista = linhas.filter((l) => {
       const v = l.valores;
-      if (st && String(v[idx.st] ?? "") !== st) return false;
+      if (st && idx.st !== undefined && String(v[idx.st] ?? "") !== st) return false; // Recebimento não tem ST
       if (cl && String(v[idx.cl] ?? "") !== cl) return false;
       const pz = typeof v[idx[config.campoPrazo]] === "string" ? (v[idx[config.campoPrazo]] as string) : "";
       if (prazoDe && (!pz || pz < prazoDe)) return false;

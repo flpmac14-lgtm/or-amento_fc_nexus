@@ -104,6 +104,21 @@ function visoesSemHoraExtra(perfil: PerfilModulo, comReferenciaPrecos: boolean, 
   );
 }
 
+// Recebimento em destaque pra carol (Qualidade) — pedido do usuário (12/11/2026):
+// primeira aba da lista e a que abre ao entrar.
+const RECEBIMENTO_EM_DESTAQUE = new Set(["carol@fcnexus.local"]);
+
+export function recebimentoEmDestaque(email: string | null | undefined): boolean {
+  return RECEBIMENTO_EM_DESTAQUE.has((email ?? "").trim().toLowerCase());
+}
+
+/** Põe a aba Recebimento em primeiro (quando a conta tem ela em destaque). */
+export function comDestaque<T extends { valor: string }>(visoes: T[], destaque: boolean): T[] {
+  if (!destaque) return visoes;
+  const r = visoes.filter((v) => v.valor === "recebimento");
+  return [...r, ...visoes.filter((v) => v.valor !== "recebimento")];
+}
+
 export const ROTA_FOLLOW_UP = "/follow-up";
 // Evento entre o menu lateral e o módulo (mesma página, sem recarregar).
 export const EVENTO_IR_PARA_ABA = "fcnexus-ir-para-aba"; // menu → módulo

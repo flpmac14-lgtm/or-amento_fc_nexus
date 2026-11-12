@@ -21,6 +21,8 @@ import {
   abaDoEndereco,
   hrefAba,
   visoesDoPerfil,
+  comDestaque,
+  recebimentoEmDestaque,
   type ValorVisao,
 } from "@/lib/abasFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeSolicitarHoraExtra, podeVerFornecedores, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
@@ -189,7 +191,7 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
-  // Documentos (pastas + PDFs): só o flpmac14 — pedido do usuário (11/11/2026).
+  // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
@@ -197,7 +199,10 @@ function montarMenu(real: User): Conta {
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
     icone: "followup",
-    subitens: visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user)).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+    subitens: comDestaque(
+      visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user)),
+      recebimentoEmDestaque(user.email),
+    ).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
   const admin: ItemMenu[] = [];

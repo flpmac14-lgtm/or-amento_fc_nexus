@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACESSO_SO_FOLLOW_UP, ROTA_FOLLOW_UP, ROTA_TOTEM, contaTotem, ROTA_SUSPENSO, contaSuspensa, ROTA_REGISTRO, ROTA_VISAO_GERAL, acessoSoFollowUp, podeVerQualidade, podeVerRegistro } from "@/lib/acesso";
 import { ehEmailAdmin } from "@/lib/admin";
+import { ROTA_DOCUMENTOS, podeVerDocumentos } from "@/lib/documentos";
 import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { ROTA_FINANCEIRO,perfilFinanceiro, perfilFinanceiroConsulta, podeAbrirFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { atualizarSessaoSupabase } from "@/lib/supabase/proxy";
@@ -119,7 +120,11 @@ export async function proxy(request: NextRequest) {
   const registro = request.nextUrl.pathname.startsWith(ROTA_REGISTRO) && podeVerRegistro(user);
   // NF de cada pedido do relatório de coleta "com Nota fiscal" (a rota confere o login).
   const apiFollowUp = request.nextUrl.pathname.startsWith("/api/follow-up/");
-  if (user && soFollowUp && !apiQualidade && !registro && !apiFollowUp && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
+  // Documentos (pastas + PDFs) pro lailto — pedido do usuário, 12/11/2026 (a rota confere de novo).
+  const documentos =
+    (request.nextUrl.pathname.startsWith(ROTA_DOCUMENTOS) || request.nextUrl.pathname.startsWith("/api/documentos")) &&
+    podeVerDocumentos(user?.email);
+  if (user && soFollowUp && !apiQualidade && !registro && !apiFollowUp && !documentos && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ erro: `Conta com acesso restrito (${user.app_metadata?.acesso ?? ACESSO_SO_FOLLOW_UP}).` }, { status: 403 });
     }

@@ -11,7 +11,8 @@
 // (some a barra do navegador); Esc volta.
 
 import { useEffect, useState } from "react";
-import ControleObras, { CONFIG_MATERIAL_COMPRA, CONFIG_RECEBIMENTO } from "@/components/ControleObras";
+import ControleObras, { CONFIG_MATERIAL_COMPRA } from "@/components/ControleObras";
+import RecebimentoEstoque from "@/components/RecebimentoEstoque";
 import Corte from "@/components/Corte";
 import CroquiCorte from "@/components/CroquiCorte";
 import DataBook from "@/components/DataBook";
@@ -34,6 +35,7 @@ import {
   EVENTO_IR_PARA_ABA,
   abaDoEndereco,
   visoesDoPerfil,
+  comDestaque,
   type PerfilModulo,
   type ValorVisao,
 } from "@/lib/abasFollowUp";
@@ -46,19 +48,23 @@ export default function ModuloFollowUp({
   comQualidade = false,
   comHoraExtra = false,
   editaAlmoxarifado = false,
+  recebimentoDestaque = false,
 }: {
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
   comHoraExtra?: boolean; // aba Funcionários: flpmac14, jeferson e diego
   editaAlmoxarifado?: boolean; // aba Almoxarifado: só leandro e flpmac14 marcam/fotografam; os outros só olham
+  recebimentoDestaque?: boolean; // carol: Recebimento em 1º e aberta ao entrar (pedido do usuário, 12/11/2026)
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura" || perfil === "almoxarifado";
   // Aba inicial: a do endereço (?aba=..., vinda do menu lateral), senão a padrão do perfil.
   const [visaoEscolhida, setVisao] = useState<ValorVisao>(
     () =>
       abaDoEndereco() ??
-      (perfil === "almoxarifado"
+      (recebimentoDestaque
+        ? "recebimento"
+        : perfil === "almoxarifado"
         ? "almoxarifado"
         : perfil === "consulta" || perfil === "pintura"
         ? "consulta"
@@ -75,7 +81,7 @@ export default function ModuloFollowUp({
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
   const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
-  const visoes = visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado);
+  const visoes = comDestaque(visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado), recebimentoDestaque);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
 
   function abrirVisao(v: ValorVisao) {
@@ -268,7 +274,7 @@ export default function ModuloFollowUp({
       )}
       {/* saymon (Usinagem) abre direto nas Coletas — pedido do usuário. */}
       {visao === "databook" && <DataBook somenteLeitura={perfil === "follow_up"} />}
-      {visao === "recebimento" && <ControleObras key="recebimento" telaCheia={telaCheia} config={CONFIG_RECEBIMENTO} />}
+      {visao === "recebimento" && <RecebimentoEstoque telaCheia={telaCheia} />}
       {visao === "coletas" && <Consulta key="coletas" inicial="coletas" soColetas />}
       {visao === "cortados" && (
         <ProvedorPdfsCorte>
