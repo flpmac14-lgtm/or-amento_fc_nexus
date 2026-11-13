@@ -10,7 +10,7 @@ export const CAMPOS_OP =
 export const CAMPOS_ETAPA =
   "id, op_id, posicao, operacao, operacao_desc, centro, centro_desc, descricao, hr_preparo, hr_unitario, qtde_produzida, concluido_em, concluido_por";
 export const CAMPOS_AP =
-  "id, op_id, etapa_id, operador_codigo, operador_nome, tipo, motivo, inicio, fim, fim_tipo, qtde, encerrou_etapa, observacao";
+  "id, op_id, etapa_id, operador_codigo, operador_nome, tipo, motivo, inicio, fim, fim_tipo, qtde, encerrou_etapa, observacao, qtde_refugo, motivo_refugo, retoma_ap_id";
 
 export async function cadastros(admin: Admin): Promise<Cadastros> {
   const [{ data, error }, fer] = await Promise.all([
@@ -28,6 +28,7 @@ export async function cadastros(admin: Admin): Promise<Cadastros> {
     roteiros_padrao: d("roteiros_padrao"),
     roteiros_desenho: d("roteiros_desenho"),
     motivos: d("motivos"),
+    motivos_refugo: d("motivos_refugo"),
     // Sem a tabela (migration 0071 não aplicada) segue sem feriados em vez de derrubar a tela.
     feriados: fer.error ? [] : ((fer.data ?? []) as Feriado[]),
     gerado_em: gerado,

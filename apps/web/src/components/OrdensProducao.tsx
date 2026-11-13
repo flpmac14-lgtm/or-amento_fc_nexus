@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import OrdensProducaoOperadores from "@/components/OrdensProducaoOperadores";
+import OrdensProducaoGerencial from "@/components/OrdensProducaoGerencial";
 import OrdensProducaoRecursos from "@/components/OrdensProducaoRecursos";
 import OrdensProducaoRoteiros from "@/components/OrdensProducaoRoteiros";
 import OrdensProducaoCalendario from "@/components/OrdensProducaoCalendario";
@@ -49,7 +50,7 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros" | "calendario";
+type Sub = "painel" | "gerencial" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros" | "calendario";
 type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
 export default function OrdensProducao() {
@@ -145,6 +146,7 @@ export default function OrdensProducao() {
             ["arquivo", "Arquivo de OPs"],
             ["nova", "Nova OP"],
             ["roteiros", "Roteiros padrão"],
+            ["gerencial", "Painel gerencial (recursos)"],
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
             ["calendario", "Calendário de apontamento"],
@@ -186,6 +188,7 @@ export default function OrdensProducao() {
       {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
       {sub === "calendario" && <OrdensProducaoCalendario feriados={dados.cadastros.feriados ?? []} podeEditar={dados.podeEditar} aoMudar={carregar} />}
       {sub === "roteiros" && <OrdensProducaoRoteiros cad={dados.cadastros} podeEditar={dados.podeEditar} />}
+      {sub === "gerencial" && <OrdensProducaoGerencial cad={dados.cadastros} ops={dados.ops} apontamentos={dados.apontamentos} abertos={dados.abertos} agora={agora} />}
       {sub === "recursos" && <OrdensProducaoRecursos cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
       {op && <DetalheOP op={op} dados={dadosTudo} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}
@@ -636,7 +639,8 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                               <td className="px-2 text-right">{fmtMin(minutosApontamento(a.inicio, a.fim ?? agora))}</td>
                               <td className="px-2 text-right">{a.qtde !== null ? `${fmtQtd(a.qtde)} pç` : ""}</td>
                               <td className="px-2 text-stone-400">
-                                {a.fim_tipo === "pausa" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : a.fim_tipo === "troca" ? "trocou de etapa" : a.fim_tipo === "correcao" ? "corrigido pelo PCP" : a.encerrou_etapa ? "encerrou a etapa" : ""}
+                                {a.fim_tipo === "pausa" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : a.fim_tipo === "troca" ? "trocou de etapa" : a.fim_tipo === "correcao" ? "corrigido pelo PCP" : a.fim_tipo === "parcial" ? "apontou e continuou" : a.encerrou_etapa ? "encerrou a etapa" : ""}
+                                {!!a.qtde_refugo && <span className="text-red-600"> · {fmtQtd(a.qtde_refugo)} NC ({a.motivo_refugo})</span>}
                                 {a.observacao && ` · ${a.observacao}`}
                               </td>
                               <td className="px-2 text-right">
@@ -938,7 +942,7 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
                     <td className="px-2">{a.fim ? fmtDataHora(a.fim) : <b className="text-sky-600">em andamento</b>}</td>
                     <td className="px-2 text-right">{fmtMin(minutosApontamento(a.inicio, a.fim ?? agora))}</td>
                     <td className="px-2 text-right">{a.qtde ?? ""}</td>
-                    <td className="px-2 text-stone-500">{[a.fim_tipo === "pausa" && a.tipo !== "parada" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : null, a.encerrou_etapa ? "encerrou etapa" : null, a.observacao].filter(Boolean).join(" · ")}</td>
+                    <td className="px-2 text-stone-500">{[a.fim_tipo === "pausa" && a.tipo !== "parada" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : null, a.encerrou_etapa ? "encerrou etapa" : null, a.qtde_refugo ? `${a.qtde_refugo} não conforme(s): ${a.motivo_refugo ?? ""}` : null, a.fim_tipo === "parcial" ? "parcial (continuou)" : null, a.observacao].filter(Boolean).join(" · ")}</td>
                   </tr>
                 );
               })}

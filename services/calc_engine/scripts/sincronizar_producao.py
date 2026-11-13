@@ -12,6 +12,7 @@ OP e o totem usam e grava em prod_cadastros (migration 0065), um JSON por tipo:
   PR_DESENHOROTEIROOPCAO.LISTAENG = PR_DESENHO.CODIGO → PR_DESENHOROTEIRO),
   achado pelo nº do desenho do Sectra ou pelo código da peça do cliente (CODPECCLI).
 - motivos: PR_TPINATIVO (motivos de parada) + PR_TPHORA (tipos de hora).
+- motivos_refugo: PR_OPPERDAMOTIVO (código + motivo do refugo / não conforme no totem).
 
 Roda dentro de sincronizar_controle_obras.py (15 min); só grava o que mudou
 (hash por tipo em sincronizar_producao.estado, fora do git).
@@ -157,6 +158,9 @@ def montar() -> dict[str, object]:
         cur.execute("SELECT CODIGO, DESCRICAO FROM PR_TPINATIVO WHERE ISNULL(CKATIVO, 'S') = 'S' ORDER BY CODIGO")
         motivos = [_t(d) for _c, d in cur.fetchall() if _t(d)]
 
+        cur.execute("SELECT CODIGO, DESCRICAO FROM PR_OPPERDAMOTIVO WHERE ISNULL(CKATIVO, 'S') = 'S' ORDER BY CODIGO")
+        motivos_refugo = [{"codigo": str(int(c)), "descricao": _t(d)} for c, d in cur.fetchall() if _t(d)]
+
     return {
         "operadores": operadores,
         "centros": centros,
@@ -164,6 +168,7 @@ def montar() -> dict[str, object]:
         "roteiros_padrao": roteiros_padrao,
         "roteiros_desenho": roteiros_desenho,
         "motivos": motivos,
+        "motivos_refugo": motivos_refugo,
     }
 
 

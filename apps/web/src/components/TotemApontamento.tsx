@@ -6,6 +6,12 @@
 // Fluxo: Crachá → (o que está fazendo agora) → Iniciar etapa / Pausar /
 // Finalizar / Parada → "Apontamento registrado" → volta pro crachá.
 // Sai sozinho depois de 45 s sem toque. API: /api/follow-up/producao/totem.
+// 13/11/2026 — fluxo produtivo / improdutivo (pedido do usuário): ao bipar o
+// crachá o totem avisa o que está em aberto; no produtivo aponta peças
+// conformes e não conformes (com código do refugo) e escolhe continuar,
+// sair, ir pra outra obra ou finalizar a operação; "Apontar parada" pausa o
+// produtivo e conta o improdutivo; na volta oferece retomar a mesma obra ou
+// outra (pedindo as peças, se ainda não informou). Tudo volta pro crachá.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
@@ -23,12 +29,15 @@ import {
   type Apontamento,
   type Centro,
   type Etapa,
+  type MotivoRefugo,
   type OP,
 } from "@/lib/producao";
 
 type Sessao = {
   operador: { codigo: number; nome: string; apelido: string; cracha: string; centro: string | null };
   aberto: Apontamento | null;
+  pausado?: Apontamento | null; // trecho produtivo que a parada aberta pausou
+  motivos_refugo?: MotivoRefugo[];
   ops: OP[];
   apontamentos: Apontamento[];
   ocupadas: { etapa_id: string; operador_nome: string }[];
@@ -42,13 +51,26 @@ type Tela =
   | { t: "inicio" }
   | { t: "op"; opId: string }
   | { t: "tipo"; opId: string; etapaId: string }
-  | { t: "finalizar" }
+  | { t: "qtde"; modo: ModoQtde; depois: Depois }
   | { t: "pausar" }
   | { t: "parada" }
   | { t: "ok"; titulo: string; sub?: string };
 
+// Quantidade: do apontamento aberto, ao trocar de obra, ou do trecho pausado pela parada.
+type ModoQtde = "aberto" | "trocar" | "pausado";
+// O que fazer depois de apontar a quantidade (troca de obra / retomada).
+type Depois = { k: "nada" } | { k: "retomar" } | { k: "iniciar"; opId: string; etapaId: string; tipo: "setup" | "producao" };
+export type Quantidades = { qtde: number; qtde_refugo: number; motivo_refugo: string | null; observacao: string };
+type Passo = Record<string, unknown>;
+
 const INATIVO_MS = 45000;
 const MOTIVOS_PAUSA = ["Almoço / intervalo", "Fim do expediente", "Falta de material", "Aguardando engenharia", "Aguardando inspeção", "Máquina em manutenção", "Ferramenta / dispositivo", "Outro serviço urgente"];
+
+// Produção pausada pela parada que ainda está sem as peças informadas.
+function pausadoSemQtde(s: Sessao | null): boolean {
+  const p = s?.aberto?.tipo === "parada" ? s.pausado : null;
+  return !!p && p.qtde === null && !p.qtde_refugo;
+}
 
 // Grupo do centro = 1º nível da árvore do Sectra (04 USINAGEM, 03 SOLDA…).
 function grupoDoCentro(centros: Centro[], cod: string | null): string {
@@ -122,17 +144,82 @@ export default function TotemApontamento() {
     }
   }
 
-  async function enviar(corpo: Record<string, unknown>, ok: { titulo: string; sub?: string }) {
+  // Um ou mais passos em sequência (ex.: apontar as peças do anterior e começar a nova obra).
+  async function enviar(corpo: Passo | Passo[], ok: { titulo: string; sub?: string }) {
     setOcupado(true);
     setErro("");
+    let feitos = 0;
+    let opEncerrada = false;
     try {
-      const r = await api<{ opEncerrada?: boolean }>("/api/follow-up/producao/totem", { cracha, ...corpo });
-      setTela({ t: "ok", ...ok, sub: r.opEncerrada ? `${ok.sub ?? ""} · OP concluída! 🎉` : ok.sub });
+      for (const p of Array.isArray(corpo) ? corpo : [corpo]) {
+        const r = await api<{ opEncerrada?: boolean }>("/api/follow-up/producao/totem", { cracha, ...p });
+        opEncerrada ||= !!r.opEncerrada;
+        feitos++;
+      }
+      setTela({ t: "ok", ...ok, sub: opEncerrada ? `${ok.sub ?? ""} · OP concluída! 🎉` : ok.sub });
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
+      // Parte já gravada: recarrega o que ele tem em aberto pra tela não mentir.
+      if (feitos > 0) {
+        try {
+          const s = await api<Sessao>("/api/follow-up/producao/totem", { acao: "identificar", cracha });
+          setSessao(s);
+          setTela({ t: "inicio" });
+        } catch {
+          // fica a mensagem de erro
+        }
+      }
     } finally {
       setOcupado(false);
     }
+  }
+
+  // Começar uma etapa: se está produzindo outra, ou se a produção pausada pela parada
+  // ainda está sem as peças, pede a quantidade antes.
+  function irParaEtapa(opId: string, etapaId: string, tipo: "setup" | "producao") {
+    const s = sessao!;
+    const a = s.aberto;
+    if (a && a.tipo !== "parada" && a.etapa_id !== etapaId) return setTela({ t: "qtde", modo: "trocar", depois: { k: "iniciar", opId, etapaId, tipo } });
+    if (a?.tipo === "parada" && pausadoSemQtde(s)) return setTela({ t: "qtde", modo: "pausado", depois: { k: "iniciar", opId, etapaId, tipo } });
+    iniciar(opId, etapaId, tipo, []);
+  }
+  function iniciar(opId: string, etapaId: string, tipo: "setup" | "producao", antes: Passo[]) {
+    const op = sessao!.ops.find((o) => o.id === opId);
+    const et = op?.etapas.find((e) => e.id === etapaId);
+    enviar([...antes, { acao: "iniciar", etapa_id: etapaId, tipo }], {
+      titulo: tipo === "setup" ? "Preparação iniciada" : "Produção iniciada",
+      sub: op && et ? `${numeroOP(op.numero)} · etapa ${et.posicao} ${et.operacao_desc ?? ""} · ${et.centro}` : undefined,
+    });
+  }
+  function retomar(antes: Passo[]) {
+    const s = sessao!;
+    const op = s.pausado?.op_id ? s.ops.find((o) => o.id === s.pausado!.op_id) : null;
+    const et = op?.etapas.find((e) => e.id === s.pausado?.etapa_id);
+    enviar([...antes, { acao: "retomar" }], {
+      titulo: "Produção retomada",
+      sub: op && et ? `${numeroOP(op.numero)} · etapa ${et.posicao} ${et.operacao_desc ?? ""} · parada encerrada` : "Parada encerrada",
+    });
+  }
+
+  // Confirmação da tela de quantidade.
+  function confirmarQtde(modo: ModoQtde, depois: Depois, q: Quantidades, acao: "parcial" | "sair" | "encerrar" | "outra" | "pular") {
+    const pecas = { qtde: q.qtde, qtde_refugo: q.qtde_refugo, motivo_refugo: q.motivo_refugo, observacao: q.observacao };
+    const sub = `${fmtQtd(q.qtde)} conforme(s)${q.qtde_refugo ? ` · ${fmtQtd(q.qtde_refugo)} não conforme(s)` : ""}`;
+    if (modo === "aberto") {
+      if (acao === "parcial") return enviar({ acao: "parcial", ...pecas }, { titulo: "Peças apontadas — continua produzindo", sub });
+      if (acao === "outra")
+        return enviar({ acao: "pausar", motivo: "Foi para outra obra", ...pecas }, { titulo: "Apontamento encerrado", sub: `${sub} · bipe o crachá de novo e escolha a outra obra` });
+      return enviar({ acao: "finalizar", encerrar_etapa: acao === "encerrar", ...pecas }, { titulo: acao === "encerrar" ? "Operação finalizada" : "Apontamento encerrado", sub });
+    }
+    const antes: Passo[] = [];
+    if (modo === "trocar") {
+      antes.push(acao === "encerrar" ? { acao: "finalizar", encerrar_etapa: true, ...pecas } : { acao: "pausar", motivo: "Foi para outra obra", ...pecas });
+    } else if (acao !== "pular") {
+      antes.push({ acao: "apontar_pausado", ap_id: sessao!.pausado!.id, encerrar_etapa: acao === "encerrar", ...pecas });
+    }
+    if (depois.k === "iniciar") return iniciar(depois.opId, depois.etapaId, depois.tipo, antes);
+    if (depois.k === "retomar") return retomar(antes);
+    return enviar(antes, { titulo: "Peças apontadas", sub });
   }
 
   // Leitor de código de barras na tela inicial do operador: "OP12-30" abre a etapa direto.
@@ -173,9 +260,11 @@ export default function TotemApontamento() {
             }}
             abrirOp={(opId) => (setErro(""), setTela({ t: "op", opId }))}
             pausar={() => setTela({ t: "pausar" })}
-            finalizar={() => setTela({ t: "finalizar" })}
+            apontarQtde={() => setTela({ t: "qtde", modo: "aberto", depois: { k: "nada" } })}
+            informarPausado={() => setTela({ t: "qtde", modo: "pausado", depois: { k: "nada" } })}
             parada={() => setTela({ t: "parada" })}
-            voltarParada={() => enviar({ acao: "finalizar", qtde: null }, { titulo: "Parada encerrada" })}
+            voltarParada={() => enviar({ acao: "finalizar" }, { titulo: "Parada encerrada", sub: "Você está livre — escolha uma obra quando for começar." })}
+            retomar={() => (pausadoSemQtde(sessao) ? setTela({ t: "qtde", modo: "pausado", depois: { k: "retomar" } }) : retomar([]))}
           />
         )}
         {sessao && tela.t === "op" && (
@@ -196,28 +285,30 @@ export default function TotemApontamento() {
               s={sessao}
               ocupado={ocupado}
               voltar={() => setTela({ t: "op", opId: op.id })}
-              iniciar={(tipo) =>
-                enviar(
-                  { acao: "iniciar", etapa_id: et.id, tipo },
-                  { titulo: tipo === "setup" ? "Preparação iniciada" : "Produção iniciada", sub: `${numeroOP(op.numero)} · etapa ${et.posicao} ${et.operacao_desc ?? ""} · ${et.centro}` },
-                )
-              }
+              iniciar={(tipo) => irParaEtapa(op.id, et.id, tipo)}
             />
           );
         })()}
-        {sessao && tela.t === "finalizar" && sessao.aberto && (
-          <TelaFinalizar
-            s={sessao}
-            ocupado={ocupado}
-            voltar={() => setTela({ t: "inicio" })}
-            confirmar={(qtde, encerrar, obs) =>
-              enviar(
-                { acao: "finalizar", qtde, encerrar_etapa: encerrar, observacao: obs },
-                { titulo: encerrar ? "Etapa concluída" : "Apontamento finalizado", sub: `${fmtQtd(qtde)} peça(s) apontada(s)` },
-              )
-            }
-          />
-        )}
+        {sessao && tela.t === "qtde" && (() => {
+          const ap = tela.modo === "pausado" ? sessao.pausado : sessao.aberto;
+          if (!ap) return null;
+          const destino = tela.depois.k === "iniciar" ? tela.depois : null;
+          const opD = destino ? sessao.ops.find((o) => o.id === destino.opId) : null;
+          const etD = opD?.etapas.find((e) => e.id === destino?.etapaId);
+          return (
+            <TelaQuantidade
+              key={`${tela.modo}-${ap.id}`}
+              s={sessao}
+              ap={ap}
+              modo={tela.modo}
+              depois={tela.depois}
+              destino={opD && etD ? `${numeroOP(opD.numero)} · etapa ${etD.posicao} ${etD.operacao_desc ?? ""}` : null}
+              ocupado={ocupado}
+              voltar={() => setTela({ t: "inicio" })}
+              confirmar={(q, acao) => confirmarQtde(tela.modo, tela.depois, q, acao)}
+            />
+          );
+        })()}
         {sessao && tela.t === "pausar" && (
           <TelaMotivos
             titulo="Por que está pausando?"
@@ -230,8 +321,12 @@ export default function TotemApontamento() {
         )}
         {sessao && tela.t === "parada" && (
           <TelaMotivos
-            titulo="Registrar parada — qual o motivo?"
-            sub="Use quando você está sem conseguir trabalhar em nenhuma OP."
+            titulo="Apontar parada — qual o motivo?"
+            sub={
+              sessao.aberto && sessao.aberto.tipo !== "parada"
+                ? "A produção que está rodando fica PAUSADA e o tempo passa a contar como improdutivo. Na volta é só bipar o crachá e retomar."
+                : "Tempo improdutivo: conta até você encerrar a parada ou começar uma obra."
+            }
             motivos={[...new Set([...sessao.motivos, "Máquina em manutenção", "Limpeza / organização", "Treinamento / reunião"])]}
             cor="red"
             ocupado={ocupado}
@@ -362,9 +457,11 @@ function TelaInicio({
   enter,
   abrirOp,
   pausar,
-  finalizar,
+  apontarQtde,
+  informarPausado,
   parada,
   voltarParada,
+  retomar,
 }: {
   s: Sessao;
   agora: Date;
@@ -375,13 +472,26 @@ function TelaInicio({
   enter: (v: string) => void;
   abrirOp: (id: string) => void;
   pausar: () => void;
-  finalizar: () => void;
+  apontarQtde: () => void;
+  informarPausado: () => void;
   parada: () => void;
   voltarParada: () => void;
+  retomar: () => void;
 }) {
   const a = s.aberto;
   const opA = a?.op_id ? s.ops.find((o) => o.id === a.op_id) : null;
   const etA = a?.etapa_id ? opA?.etapas.find((e) => e.id === a.etapa_id) : null;
+  const p = a?.tipo === "parada" ? s.pausado ?? null : null;
+  const opP = p?.op_id ? s.ops.find((o) => o.id === p.op_id) : null;
+  const etP = p?.etapa_id ? opP?.etapas.find((e) => e.id === p.etapa_id) : null;
+  const semQtdeP = pausadoSemQtde(s);
+  // Aberto desde antes de hoje (esqueceu de fechar ontem): avisa.
+  const deOutroDia = a && new Date(a.inicio).toDateString() !== agora.toDateString();
+  // Visual enxuto (pedido do usuário, 13/11/2026): com produtivo rodando a lista de
+  // obras fica escondida — só aparece em "Trocar de obra".
+  const produzindo = !!a && a.tipo !== "parada";
+  const [verLista, setVerLista] = useState(false);
+  const mostrarLista = !produzindo || verLista;
   // Setores (grupos de centro) que têm etapa pendente; o do operador primeiro.
   const grupos = useMemo(() => {
     const g = new Map<string, number>();
@@ -398,26 +508,38 @@ function TelaInicio({
     .sort((x, y) => x.prioridade - y.prioridade || (x.prazo ?? "9").localeCompare(y.prazo ?? "9"));
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 pt-4">
-      <p className="text-3xl font-bold">Olá, {s.operador.apelido}!</p>
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 pt-3">
 
-      {/* O que está fazendo agora */}
+      {/* O que está fazendo agora — o totem sempre avisa o que está em aberto */}
       {a ? (
-        <div className={`rounded-3xl border-2 p-5 ${a.tipo === "parada" ? "border-red-500/60 bg-red-500/10" : a.tipo === "setup" ? "border-amber-400/60 bg-amber-400/10" : "border-emerald-500/60 bg-emerald-500/10"}`}>
+        <div className={`rounded-3xl border-2 p-4 ${a.tipo === "parada" ? "border-red-500/60 bg-red-500/10" : a.tipo === "setup" ? "border-amber-400/60 bg-amber-400/10" : "border-emerald-500/60 bg-emerald-500/10"}`}>
+          <p className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white">
+            <span className="h-3 w-3 animate-pulse rounded-full bg-current" /> {s.operador.apelido}, você tem apontamento em aberto
+          </p>
+          {deOutroDia && (
+            <p className="mb-2 rounded-xl bg-amber-400/20 px-3 py-1.5 text-base font-semibold text-amber-100">
+              ⚠ Aberto desde {new Date(a.inicio).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — se esqueceu de fechar, feche agora e avise o PCP.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold uppercase tracking-widest text-slate-300">
-                {a.tipo === "parada" ? "Você está PARADO" : a.tipo === "setup" ? "Você está em PREPARAÇÃO" : "Você está PRODUZINDO"}
+                {a.tipo === "parada" ? "IMPRODUTIVO — você está PARADO" : a.tipo === "setup" ? "PRODUTIVO — PREPARAÇÃO rodando" : "PRODUTIVO — PRODUÇÃO rodando"}
               </p>
               {a.tipo === "parada" ? (
                 <>
-                  <p className="text-3xl font-bold text-red-200">{a.motivo}</p>
-                  <p className="text-base text-slate-300">Para voltar ao trabalho é só escolher a OP abaixo — a parada fecha sozinha.</p>
+                  <p className="text-3xl font-bold capitalize text-red-200">{(a.motivo ?? "").toLowerCase()}</p>
+                  {opP && etP && (
+                    <p className="mt-1 text-lg text-slate-200">
+                      ⏸ Produção pausada: <b>{numeroOP(opP.numero)} · etapa {etP.posicao} {etP.operacao_desc}</b> ({etP.centro})
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
                   <p className="text-3xl font-bold">{opA ? numeroOP(opA.numero) : "OP"} · Etapa {etA?.posicao} {etA?.operacao_desc}</p>
                   <p className="truncate text-lg text-slate-300">{etA?.centro} · {opA?.descricao}</p>
+                  {etA && opA && <p className="text-base text-slate-400">{fmtQtd(etA.qtde_produzida)} de {fmtQtd(opA.quantidade)} pç já apontadas nesta etapa</p>}
                 </>
               )}
             </div>
@@ -426,35 +548,59 @@ function TelaInicio({
               <p className="font-mono text-5xl font-bold tabular-nums">{fmtMin(minutosApontamento(a.inicio, agora))}</p>
             </div>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {a.tipo === "parada" ? (
-              <BotaoGrande cor="emerald" onClick={voltarParada} className="sm:col-span-2">▶ Encerrar parada</BotaoGrande>
-            ) : (
-              <>
-                <BotaoGrande cor="amber" onClick={pausar}>⏸ Pausar</BotaoGrande>
-                <BotaoGrande cor="emerald" onClick={finalizar}>✔ Finalizar / apontar peças</BotaoGrande>
-              </>
-            )}
-          </div>
+          {a.tipo === "parada" ? (
+            <div className="mt-4 flex flex-col gap-3">
+              {semQtdeP && (
+                <button type="button" onClick={informarPausado} className="rounded-2xl border-2 border-sky-400/60 bg-sky-500/15 px-5 py-3 text-left text-xl font-bold text-sky-100 active:scale-[0.99]">
+                  📦 Você ainda não informou as peças da produção pausada — informar agora
+                </button>
+              )}
+              <div className={`grid gap-3 ${opP && etP ? "sm:grid-cols-2" : ""}`}>
+                {opP && etP && (
+                  <BotaoGrande cor="emerald" onClick={retomar}>
+                    ▶ Retomar a mesma obra
+                    <span className="block text-base font-semibold">{numeroOP(opP.numero)} · etapa {etP.posicao}</span>
+                  </BotaoGrande>
+                )}
+                <BotaoGrande cor="slate" onClick={voltarParada}>■ Encerrar parada (ficar livre)</BotaoGrande>
+              </div>
+              <p className="text-base text-slate-300">Ou escolha <b className="text-white">outra obra</b> abaixo — a parada fecha sozinha ao começar.</p>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <BotaoGrande cor="emerald" onClick={apontarQtde}>📦 Peças / finalizar</BotaoGrande>
+              <BotaoGrande cor="sky" onClick={() => setVerLista((v) => !v)}>↪ {verLista ? "Esconder obras" : "Trocar de obra"}</BotaoGrande>
+              <BotaoGrande cor="red" onClick={parada}>⛔ Parada</BotaoGrande>
+              <BotaoGrande cor="amber" onClick={pausar}>⏸ Pausar / sair</BotaoGrande>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="rounded-3xl border-2 border-dashed border-slate-700 px-5 py-4 text-xl text-slate-300">
-          Você não está apontando nada agora. <b className="text-white">Escolha a OP abaixo</b> ou bipe o código da etapa na folha da OP.
+        <div className="flex flex-wrap items-center gap-3 rounded-3xl border-2 border-dashed border-slate-700 px-5 py-3">
+          <p className="min-w-0 flex-1 text-2xl text-slate-200">
+            Olá, <b className="text-white">{s.operador.apelido}</b>! Nada em aberto — <b className="text-white">toque na obra</b> ou bipe a etapa.
+          </p>
+          <button type="button" onClick={parada} className="rounded-2xl border-2 border-red-500/60 bg-red-500/10 px-5 py-3 text-xl font-bold text-red-200 active:scale-95">
+            ⛔ Parada (improdutivo)
+          </button>
         </div>
       )}
 
       {/* Escolher OP */}
+      {mostrarLista && (<>
       <div className="flex flex-wrap items-center gap-3">
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && enter(busca)}
           placeholder="🔍 Bipe o código da etapa ou procure OP / PO / desenho"
-          className="min-w-[18rem] flex-1 rounded-2xl border-2 border-slate-700 bg-slate-900 px-5 py-4 text-xl outline-none focus:border-cyan-500"
+          className="min-w-[18rem] flex-1 rounded-2xl border-2 border-slate-700 bg-slate-900 px-5 py-3 text-xl outline-none focus:border-cyan-500"
         />
-        <button type="button" onClick={parada} className="rounded-2xl border-2 border-red-500/60 bg-red-500/10 px-6 py-4 text-xl font-bold text-red-200 active:scale-95">
-          ⛔ Registrar parada
-        </button>
+        {a?.tipo === "parada" && (
+          <button type="button" onClick={parada} className="rounded-2xl border-2 border-red-500/60 bg-red-500/10 px-5 py-3 text-lg font-bold text-red-200 active:scale-95">
+            Trocar motivo da parada
+          </button>
+        )}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Chip ativo={!grupo} onClick={() => setGrupo("")}>Todos os setores</Chip>
@@ -470,8 +616,8 @@ function TelaInicio({
             const prox = proximaEtapa(o.etapas);
             const dias = diasParaPrazo(o.prazo);
             return (
-              <button key={o.id} type="button" onClick={() => abrirOp(o.id)} className="flex gap-3 rounded-3xl border-2 border-slate-800 bg-slate-900 p-3 text-left transition active:scale-[0.98] hover:border-cyan-500">
-                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-800">
+              <button key={o.id} type="button" onClick={() => abrirOp(o.id)} className="flex items-center gap-3 rounded-2xl border-2 border-slate-800 bg-slate-900 p-2.5 text-left transition active:scale-[0.98] hover:border-cyan-500">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-800">
                   {o.foto ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={urlFoto(o.foto)!} alt="" className="h-full w-full object-cover" />
@@ -484,9 +630,8 @@ function TelaInicio({
                     <span className="font-mono text-2xl font-black">{numeroOP(o.numero)}</span>
                     {o.prioridade === 1 && <span className="rounded-lg bg-red-600 px-2 py-0.5 text-xs font-black">URGENTE</span>}
                   </div>
-                  <p className="line-clamp-2 text-base font-semibold text-slate-200">{o.descricao}</p>
-                  <p className="text-sm text-slate-400">{fmtQtd(o.quantidade)} pç · Des. {o.desenho ?? "—"}</p>
-                  <p className="mt-1 text-sm">
+                  <p className="line-clamp-1 text-base font-semibold text-slate-200">{o.descricao}</p>
+                  <p className="truncate text-sm">
                     {prox && <span className="text-cyan-300">Próxima: {prox.posicao} {prox.operacao_desc} ({prox.centro})</span>}
                     {dias !== null && <span className={`ml-2 ${dias < 0 ? "font-bold text-red-400" : dias <= 3 ? "text-amber-300" : "text-slate-400"}`}>prazo {fmtData(o.prazo)}</span>}
                   </p>
@@ -496,19 +641,24 @@ function TelaInicio({
           })}
         </div>
       )}
+      </>)}
 
-      {s.hoje.length > 0 && (
-        <div className="rounded-2xl bg-slate-900 p-4">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-slate-400">Seus apontamentos de hoje</p>
-          <ul className="flex flex-col gap-1 text-base text-slate-300">
-            {s.hoje.slice(0, 6).map((h) => {
+      {s.hoje.length > 0 && !verLista && (
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-500">Seus apontamentos de hoje</p>
+          <ul className="flex flex-col gap-0.5 text-base text-slate-300">
+            {s.hoje.slice(0, 4).map((h) => {
               const o = h.op_id ? s.ops.find((x) => x.id === h.op_id) : null;
               return (
                 <li key={h.id} className="flex gap-3">
                   <span className="w-28 font-mono text-slate-500">
                     {new Date(h.inicio).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{h.fim ? new Date(h.fim).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "agora"}
                   </span>
-                  <span className="flex-1 truncate">{h.tipo === "parada" ? `Parada: ${h.motivo}` : `${o ? numeroOP(o.numero) : "OP"} · ${h.tipo === "setup" ? "preparação" : "produção"}`}</span>
+                  <span className="flex-1 truncate">
+                    {h.tipo === "parada" ? `Parada: ${h.motivo}` : `${o ? numeroOP(o.numero) : "OP"} · ${h.tipo === "setup" ? "preparação" : "produção"}`}
+                    {h.qtde !== null && h.tipo !== "parada" && <span className="text-emerald-300"> · {fmtQtd(h.qtde)} ok</span>}
+                    {!!h.qtde_refugo && <span className="text-red-300"> · {fmtQtd(h.qtde_refugo)} NC</span>}
+                  </span>
                   <span>{fmtMin(minutosApontamento(h.inicio, h.fim ?? new Date()))}</span>
                 </li>
               );
@@ -607,7 +757,9 @@ function TelaTipo({ op, etapa, s, ocupado, voltar, iniciar }: { op: OP; etapa: E
       )}
       {vaiTrocar && (
         <p className="rounded-2xl border border-sky-500/50 bg-sky-500/10 px-5 py-3 text-lg text-sky-200">
-          O que você está fazendo agora vai ser fechado automaticamente ao começar esta etapa.
+          {s.aberto!.tipo === "parada"
+            ? "A parada aberta fecha sozinha ao começar esta etapa."
+            : "Você está produzindo em outra etapa — antes de começar, aponte as peças dela (e diga se a operação terminou)."}
         </p>
       )}
       <p className="text-2xl text-slate-200">O que você vai fazer?</p>
@@ -627,50 +779,134 @@ function TelaTipo({ op, etapa, s, ocupado, voltar, iniciar }: { op: OP; etapa: E
   );
 }
 
-function TelaFinalizar({ s, ocupado, voltar, confirmar }: { s: Sessao; ocupado: boolean; voltar: () => void; confirmar: (qtde: number, encerrar: boolean, obs: string) => void }) {
-  const a = s.aberto!;
-  const op = s.ops.find((o) => o.id === a.op_id);
-  const et = op?.etapas.find((e) => e.id === a.etapa_id);
+function TelaQuantidade({
+  s,
+  ap,
+  modo,
+  depois,
+  destino,
+  ocupado,
+  voltar,
+  confirmar,
+}: {
+  s: Sessao;
+  ap: Apontamento;
+  modo: ModoQtde;
+  depois: Depois;
+  destino: string | null;
+  ocupado: boolean;
+  voltar: () => void;
+  confirmar: (q: Quantidades, acao: "parcial" | "sair" | "encerrar" | "outra" | "pular") => void;
+}) {
+  const op = s.ops.find((o) => o.id === ap.op_id);
+  const et = op?.etapas.find((e) => e.id === ap.etapa_id);
   const faltam = op && et ? Math.max(0, op.quantidade - et.qtde_produzida) : 0;
-  const [qtde, setQtde] = useState(a.tipo === "setup" ? "0" : String(faltam));
-  const [encerrar, setEncerrar] = useState<boolean | null>(null);
+  const [ok, setOk] = useState("");
+  const [nc, setNc] = useState("");
+  const [campo, setCampo] = useState<"ok" | "nc">("ok");
+  const [motivo, setMotivo] = useState<string | null>(null);
   const [obs, setObs] = useState("");
-  const tecla = (k: string) => setQtde((q) => (k === "⌫" ? q.slice(0, -1) : k === "C" ? "" : (q === "0" ? k : q + k).slice(0, 5)));
-  const n = Number(qtde) || 0;
+  const motivos = s.motivos_refugo ?? [];
+  const set = campo === "ok" ? setOk : setNc;
+  const tecla = (k: string) => set((q) => (k === "⌫" ? q.slice(0, -1) : k === "C" ? "" : (q === "0" ? k : q + k).slice(0, 5)));
+  const nOk = Number(ok) || 0;
+  const nNc = Number(nc) || 0;
+  const falta = nNc > 0 && !motivo ? "Escolha o código do refugo" : "";
+  const q: Quantidades = { qtde: nOk, qtde_refugo: nNc, motivo_refugo: nNc > 0 ? motivo : null, observacao: obs };
+  const titulo = modo === "pausado" ? "Peças da produção pausada" : modo === "trocar" ? "Antes de trocar de obra: peças desta etapa" : "Apontar peças";
+
+  const acoes: { acao: "parcial" | "sair" | "encerrar" | "outra" | "pular"; cor: "emerald" | "amber" | "slate" | "sky"; titulo: string; sub: string }[] =
+    modo === "aberto"
+      ? [
+          { acao: "parcial", cor: "sky", titulo: "▶ Continuar produzindo", sub: "aponta as peças e segue rodando nesta etapa" },
+          { acao: "sair", cor: "slate", titulo: "■ Encerrar meu apontamento", sub: "a operação continua aberta (eu ou outro termina)" },
+          { acao: "encerrar", cor: "emerald", titulo: "✔ Finalizar a operação", sub: "a etapa terminou — a OP segue pra próxima" },
+        ]
+      : modo === "trocar"
+        ? [
+            { acao: "outra", cor: "amber", titulo: "↪ Ir para a nova obra", sub: "esta operação fica aberta pra voltar depois" },
+            { acao: "encerrar", cor: "emerald", titulo: "✔ Finalizar esta operação e ir", sub: "a etapa terminou — a OP segue pra próxima" },
+          ]
+        : [
+            { acao: "sair", cor: "sky", titulo: depois.k === "retomar" ? "▶ Salvar e retomar" : depois.k === "iniciar" ? "▶ Salvar e ir para a nova obra" : "✔ Salvar peças", sub: "a operação continua aberta" },
+            ...(depois.k === "retomar"
+              ? []
+              : [{ acao: "encerrar" as const, cor: "emerald" as const, titulo: "✔ Salvar e finalizar a operação", sub: "a etapa terminou — a OP segue pra próxima" }]),
+            { acao: "pular", cor: "slate", titulo: "Não fiz peças — pular", sub: depois.k === "nada" ? "volta sem gravar" : "segue sem apontar peças" },
+          ];
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 pt-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 pt-4">
       <div className="flex items-center gap-4">
         <BotaoVoltar onClick={voltar} />
-        <div>
-          <p className="text-lg text-slate-400">{op ? numeroOP(op.numero) : ""} · Etapa {et?.posicao} {et?.operacao_desc} ({et?.centro})</p>
-          <p className="text-3xl font-bold">Finalizar apontamento</p>
+        <div className="min-w-0">
+          <p className="text-lg text-slate-400">
+            {op ? numeroOP(op.numero) : ""} · Etapa {et?.posicao} {et?.operacao_desc} ({et?.centro})
+          </p>
+          <p className="text-3xl font-bold">{titulo}</p>
+          {destino && <p className="text-lg text-cyan-300">Depois: {destino}</p>}
         </div>
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="flex flex-col gap-3">
-          <p className="text-xl text-slate-300">Quantas peças <b className="text-white">boas</b> você fez agora?</p>
-          <p className="text-base text-slate-400">Já feitas nesta etapa: {fmtQtd(et?.qtde_produzida)} de {fmtQtd(op?.quantidade)}</p>
-          <div className="rounded-3xl border-2 border-slate-700 bg-slate-900 py-4 text-center font-mono text-6xl font-black">{qtde || "0"}</div>
+          <p className="text-base text-slate-400">
+            Já apontadas nesta etapa: {fmtQtd(et?.qtde_produzida)} de {fmtQtd(op?.quantidade)} · faltam {fmtQtd(faltam)}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => setCampo("ok")} className={`rounded-3xl border-4 p-3 text-center ${campo === "ok" ? "border-emerald-400 bg-emerald-500/15" : "border-slate-700 bg-slate-900"}`}>
+              <span className="block text-lg font-bold text-emerald-300">✔ CONFORMES</span>
+              <span className="block font-mono text-6xl font-black">{ok || "0"}</span>
+            </button>
+            <button type="button" onClick={() => setCampo("nc")} className={`rounded-3xl border-4 p-3 text-center ${campo === "nc" ? "border-red-400 bg-red-500/15" : "border-slate-700 bg-slate-900"}`}>
+              <span className="block text-lg font-bold text-red-300">✖ NÃO CONFORMES</span>
+              <span className="block font-mono text-6xl font-black">{nc || "0"}</span>
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"].map((k) => (
-              <button key={k} type="button" onClick={() => tecla(k)} className="h-16 rounded-2xl bg-slate-800 text-2xl font-bold active:scale-95">{k}</button>
+              <button key={k} type="button" onClick={() => tecla(k)} className="h-16 rounded-2xl bg-slate-800 text-2xl font-bold active:scale-95">
+                {k}
+              </button>
             ))}
           </div>
+          {faltam > 0 && campo === "ok" && (
+            <button type="button" onClick={() => setOk(String(faltam))} className="rounded-2xl bg-slate-800 py-3 text-lg font-semibold text-slate-200 active:scale-95">
+              Conformes = todas as que faltam ({fmtQtd(faltam)})
+            </button>
+          )}
         </div>
         <div className="flex flex-col gap-3">
-          <p className="text-xl text-slate-300">A etapa inteira terminou?</p>
-          <button type="button" onClick={() => setEncerrar(true)} className={`rounded-3xl border-2 px-5 py-5 text-left text-2xl font-bold ${encerrar === true ? "border-emerald-400 bg-emerald-500/20" : "border-slate-700 bg-slate-900"}`}>
-            ✔ SIM — terminei a etapa
-            <span className="block text-base font-normal text-slate-400">a OP segue pra próxima etapa</span>
-          </button>
-          <button type="button" onClick={() => setEncerrar(false)} className={`rounded-3xl border-2 px-5 py-5 text-left text-2xl font-bold ${encerrar === false ? "border-amber-400 bg-amber-400/15" : "border-slate-700 bg-slate-900"}`}>
-            ⏸ NÃO — ainda falta (parcial)
-            <span className="block text-base font-normal text-slate-400">eu ou outro operador continuamos depois</span>
-          </button>
-          <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional): refugo, problema, medida…" className="rounded-2xl border-2 border-slate-700 bg-slate-900 px-4 py-3 text-lg outline-none focus:border-cyan-500" />
-          <BotaoGrande cor="emerald" disabled={encerrar === null || ocupado} onClick={() => confirmar(n, !!encerrar, obs)}>
-            {ocupado ? "Gravando…" : encerrar === null ? "Responda se a etapa terminou" : `Confirmar ${fmtQtd(n)} peça(s)`}
-          </BotaoGrande>
+          {nNc > 0 && (
+            <div className="rounded-3xl border-2 border-red-500/50 bg-red-500/10 p-3">
+              <p className="mb-2 text-lg font-bold text-red-200">Código do motivo do refugo ({fmtQtd(nNc)} não conforme{nNc > 1 ? "s" : ""}):</p>
+              <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                {motivos.map((m) => {
+                  const v = `${m.codigo} - ${m.descricao}`;
+                  return (
+                    <button
+                      key={m.codigo}
+                      type="button"
+                      onClick={() => setMotivo(v)}
+                      className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-left text-base font-semibold active:scale-[0.98] ${motivo === v ? "border-red-300 bg-red-500/40 text-white" : "border-slate-700 bg-slate-900 text-slate-200"}`}
+                    >
+                      <span className="flex h-10 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800 font-mono text-lg font-black">{m.codigo}</span>
+                      <span className="capitalize">{m.descricao.toLowerCase()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional): problema, medida…" className="rounded-2xl border-2 border-slate-700 bg-slate-900 px-4 py-3 text-lg outline-none focus:border-cyan-500" />
+          {falta && <p className="rounded-2xl bg-red-500/20 px-4 py-2 text-lg font-semibold text-red-200">⚠ {falta}</p>}
+          <div className={`grid gap-3 ${acoes.length > 2 ? "sm:grid-cols-2" : ""}`}>
+            {acoes.map((x) => (
+              <BotaoGrande key={x.acao} cor={x.cor} disabled={ocupado || (x.acao !== "pular" && !!falta)} onClick={() => confirmar(q, x.acao)} className="text-left">
+                {ocupado ? "Gravando…" : x.titulo}
+                <span className="block text-sm font-semibold opacity-80">{x.sub}</span>
+              </BotaoGrande>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -715,8 +951,14 @@ function TelaOk({ titulo, sub }: { titulo: string; sub?: string }) {
   );
 }
 
-function BotaoGrande({ cor, onClick, children, disabled, className = "" }: { cor: "emerald" | "amber"; onClick: () => void; children: React.ReactNode; disabled?: boolean; className?: string }) {
-  const c = cor === "emerald" ? "from-emerald-500 to-cyan-500 text-slate-950" : "from-amber-400 to-orange-400 text-slate-950";
+function BotaoGrande({ cor, onClick, children, disabled, className = "" }: { cor: "emerald" | "amber" | "red" | "slate" | "sky"; onClick: () => void; children: React.ReactNode; disabled?: boolean; className?: string }) {
+  const c = {
+    emerald: "from-emerald-500 to-cyan-500 text-slate-950",
+    amber: "from-amber-400 to-orange-400 text-slate-950",
+    red: "from-red-500 to-rose-500 text-white",
+    slate: "from-slate-600 to-slate-700 text-white",
+    sky: "from-sky-400 to-cyan-400 text-slate-950",
+  }[cor];
   return (
     <button type="button" disabled={disabled} onClick={onClick} className={`min-h-20 rounded-2xl bg-gradient-to-r px-6 py-4 text-2xl font-black shadow-xl active:scale-[0.98] disabled:opacity-40 ${c} ${className}`}>
       {children}

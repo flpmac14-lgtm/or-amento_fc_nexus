@@ -36,10 +36,33 @@ export type Cadastros = {
   roteiros_padrao: RoteiroPadrao[];
   roteiros_desenho: RoteiroDesenho[];
   motivos: string[];
+  motivos_refugo?: MotivoRefugo[]; // PR_OPPERDAMOTIVO do Sectra
   feriados: Feriado[]; // Calendário de apontamento (migration 0071)
   gerado_em: string | null;
 };
 export type Feriado = { data: string; descricao: string | null };
+export type MotivoRefugo = { codigo: string; descricao: string };
+
+// Motivos de refugo (não conforme) do totem: os do Sectra (PR_OPPERDAMOTIVO) e,
+// pros códigos que o Sectra ainda não tem, esta lista padrão — pedido do usuário (13/11/2026).
+export const MOTIVOS_REFUGO_PADRAO: MotivoRefugo[] = [
+  { codigo: "1", descricao: "DIMENSIONAL" },
+  { codigo: "2", descricao: "SOLDA (TRINCA / POROSIDADE / FALTA DE FUSÃO)" },
+  { codigo: "3", descricao: "ACABAMENTO / REBARBA" },
+  { codigo: "4", descricao: "MATERIAL COM DEFEITO" },
+  { codigo: "5", descricao: "FURAÇÃO / USINAGEM FORA" },
+  { codigo: "6", descricao: "DOBRA / CALANDRA FORA" },
+  { codigo: "7", descricao: "AMASSADO / RISCADO / EMPENADO" },
+  { codigo: "8", descricao: "ERRO DE DESENHO / ENGENHARIA" },
+  { codigo: "9", descricao: "SETUP / PEÇA DE AJUSTE" },
+  { codigo: "99", descricao: "OUTRO" },
+];
+export function listaMotivosRefugo(doSectra: MotivoRefugo[] | null | undefined): MotivoRefugo[] {
+  const m = new Map<string, MotivoRefugo>();
+  for (const x of MOTIVOS_REFUGO_PADRAO) m.set(x.codigo, x);
+  for (const x of doSectra ?? []) if (x?.codigo && x.descricao) m.set(String(x.codigo), { codigo: String(x.codigo), descricao: x.descricao });
+  return [...m.values()].sort((a, b) => Number(a.codigo) - Number(b.codigo) || a.codigo.localeCompare(b.codigo));
+}
 
 // Feriados do Calendário de apontamento — quem recebe os cadastros (tela de OPs,
 // totem) registra aqui, e todo cálculo de horas do apontamento usa minutosApontamento.
@@ -66,10 +89,15 @@ export type Apontamento = {
   motivo: string | null;
   inicio: string;
   fim: string | null;
-  fim_tipo: "pausa" | "fim" | "troca" | "correcao" | null;
+  fim_tipo: "pausa" | "fim" | "troca" | "correcao" | "parcial" | null;
   qtde: number | null;
   encerrou_etapa: boolean;
   observacao: string | null;
+  // Migration 0072: peças não conformes + código/motivo do refugo, e o trecho
+  // produtivo que a parada pausou (pra retomar a mesma obra depois).
+  qtde_refugo?: number | null;
+  motivo_refugo?: string | null;
+  retoma_ap_id?: string | null;
 };
 
 export type Etapa = {
