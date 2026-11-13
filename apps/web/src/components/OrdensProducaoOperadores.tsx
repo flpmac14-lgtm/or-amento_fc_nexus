@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { classeBotao, classeCampo, classeCartao, CodigoBarras } from "@/components/ProducaoComum";
-import { baixarPdf, gerarPdfCartoesCracha } from "@/lib/cartoesCrachaPdf";
+import { baixarPdf, CARTOES_POR_A4, gerarPdfCartoesCracha } from "@/lib/cartoesCrachaPdf";
 import { minutosUteis } from "@/lib/jornada";
 import { fmtDataHora, fmtMin, numeroOP, type Apontamento, type Cadastros, type OP } from "@/lib/producao";
 
@@ -26,7 +26,7 @@ export default function OrdensProducaoOperadores({
 }) {
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useState<"lista" | "cartoes">("lista");
-  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState<"" | "cartao" | "a4">("");
   const [erroPdf, setErroPdf] = useState("");
   const abertoDe = new Map(abertos.map((a) => [a.operador_codigo, a]));
   const opDe = new Map(ops.map((o) => [o.id, o]));
@@ -38,16 +38,17 @@ export default function OrdensProducaoOperadores({
 
   // PDF só com os cartões (85,6 × 54 mm, um por página) pra gráfica — pedido do usuário (13/11/2026).
   // Vão os da lista filtrada, menos os inativos no Sectra.
-  async function gerarPdf() {
-    setGerandoPdf(true);
+  // "a4" = 10 por folha A4 com linha de corte (pedido do usuário, 13/11/2026).
+  async function gerarPdf(formato: "cartao" | "a4") {
+    setGerandoPdf(formato);
     setErroPdf("");
     try {
-      const bytes = await gerarPdfCartoesCracha(lista.filter((o) => o.ativo));
-      baixarPdf(bytes, "Cartoes cracha MACFAB.pdf");
+      const bytes = await gerarPdfCartoesCracha(lista.filter((o) => o.ativo), formato);
+      baixarPdf(bytes, formato === "a4" ? "Cartoes cracha MACFAB - A4.pdf" : "Cartoes cracha MACFAB.pdf");
     } catch (e) {
       setErroPdf(e instanceof Error ? e.message : "Não consegui gerar o PDF.");
     } finally {
-      setGerandoPdf(false);
+      setGerandoPdf("");
     }
   }
 
@@ -90,15 +91,26 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
           🖨️ Imprimir {modo === "lista" ? "lista" : "cartões"}
         </button>
         {modo === "cartoes" && (
-          <button
-            type="button"
-            className={classeBotao}
-            onClick={gerarPdf}
-            disabled={gerandoPdf || !lista.some((o) => o.ativo)}
-            title="PDF só com os cartões, tamanho padrão de cartão (85,6 × 54 mm), um por página — pra mandar pra gráfica"
-          >
-            📄 {gerandoPdf ? "Gerando PDF…" : `PDF pra gráfica (${lista.filter((o) => o.ativo).length})`}
-          </button>
+          <>
+            <button
+              type="button"
+              className={classeBotao}
+              onClick={() => gerarPdf("cartao")}
+              disabled={!!gerandoPdf || !lista.some((o) => o.ativo)}
+              title="PDF só com os cartões, tamanho padrão de cartão (85,6 × 54 mm), um por página — pra mandar pra gráfica"
+            >
+              📄 {gerandoPdf === "cartao" ? "Gerando PDF…" : `PDF pra gráfica (${lista.filter((o) => o.ativo).length})`}
+            </button>
+            <button
+              type="button"
+              className={classeBotao}
+              onClick={() => gerarPdf("a4")}
+              disabled={!!gerandoPdf || !lista.some((o) => o.ativo)}
+              title={`Folha A4 com ${CARTOES_POR_A4} cartões por folha (tamanho real 85,6 × 54 mm) e linha de corte`}
+            >
+              📄 {gerandoPdf === "a4" ? "Gerando PDF…" : `PDF A4 (${CARTOES_POR_A4} por folha)`}
+            </button>
+          </>
         )}
         {erroPdf && <span className="text-xs text-red-600">{erroPdf}</span>}
         <span className="ml-auto text-xs text-stone-500">
