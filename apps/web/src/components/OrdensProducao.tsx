@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import OrdensProducaoOperadores from "@/components/OrdensProducaoOperadores";
 import OrdensProducaoRecursos from "@/components/OrdensProducaoRecursos";
+import OrdensProducaoRoteiros from "@/components/OrdensProducaoRoteiros";
 import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
 import {
   api,
@@ -46,7 +47,7 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos";
+type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros";
 type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
 export default function OrdensProducao() {
@@ -140,6 +141,7 @@ export default function OrdensProducao() {
             ["painel", "Painel de OPs"],
             ["arquivo", "Arquivo de OPs"],
             ["nova", "Nova OP"],
+            ["roteiros", "Roteiros padrão"],
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
             ["operadores", "Operadores (crachás)"],
@@ -178,6 +180,7 @@ export default function OrdensProducao() {
       {sub === "chao" && <ChaoFabrica dados={dados} agora={agora} abrir={setAberta} />}
       {sub === "apontamentos" && <Apontamentos cad={dados.cadastros} />}
       {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
+      {sub === "roteiros" && <OrdensProducaoRoteiros cad={dados.cadastros} podeEditar={dados.podeEditar} />}
       {sub === "recursos" && <OrdensProducaoRecursos cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
       {op && <DetalheOP op={op} dados={dadosTudo} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}

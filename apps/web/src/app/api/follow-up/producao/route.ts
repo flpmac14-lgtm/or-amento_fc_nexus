@@ -13,8 +13,10 @@ import { CAMPOS_AP, cadastros, carregarOps, encerrarSeConcluida, recalcularPecas
 // GET ?tipo=arquivo&q=&status=&de=&ate= → todas as OPs já criadas (busca por nº, PO, MAC, cliente, desenho);
 // GET ?tipo=modelos&desenho= → OPs anteriores pra usar o roteiro como modelo na Nova OP;
 // GET ?tipo=historico&de=AAAA-MM-DD&ate=AAAA-MM-DD → apontamentos do período (inclui paradas);
+// GET ?tipo=roteiros     → roteiros padrão do FC Nexus (migration 0070), montados e salvos pelo PCP;
 // POST {acao: "criar" | "liberar" | "voltar" | "encerrar" | "reabrir" | "cancelar" | "excluir" | "editar" |
-//       "concluir_etapa" | "reabrir_etapa" | "corrigir_apontamento" | "fechar_apontamento"}.
+//       "concluir_etapa" | "reabrir_etapa" | "corrigir_apontamento" | "fechar_apontamento" |
+//       "salvar_roteiro" | "excluir_roteiro"}.
 // Ver: qualquer conta logada (menos o totem). Gravar: podePlanejarOP (flpmac14 e marcelo/PCP).
 
 async function usuario() {
@@ -47,6 +49,13 @@ export async function GET(request: NextRequest) {
       const status = (p.get("status") ?? "").split(",").filter((s) => ["aguardando", "liberada", "encerrada", "cancelada"].includes(s));
       const dados = await carregarOps(admin, { status, arquivo: { q: (p.get("q") ?? "").slice(0, 60), de: data("de"), ate: data("ate"), limite: 300 } });
       return NextResponse.json({ ...dados, limite: 300 });
+    }
+    if (tipo === "roteiros") {
+      const { data, error } = await comRetentativa(() =>
+        admin.from("prod_roteiros_padrao").select("id, nome, observacao, etapas, criado_por, criado_em, atualizado_por, atualizado_em").order("nome"),
+      );
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ roteiros: data ?? [] });
     }
     if (tipo === "modelos") return NextResponse.json(await modelos(admin, request.nextUrl.searchParams.get("desenho") ?? ""));
     if (tipo === "pedidos") return NextResponse.json(await pedidos(admin, request.nextUrl.searchParams.get("q") ?? ""));
@@ -402,6 +411,55 @@ export async function POST(request: NextRequest) {
         if (error) throw new Error(error.message);
         // Peças da etapa = soma dos apontamentos (recalcula depois da correção).
         if (ap.etapa_id) await recalcularPecas(admin, ap.etapa_id);
+        break;
+      }
+      // Roteiro padrão do FC Nexus — pedido do usuário (13/11/2026): montar, dar nome ("Roteiro padrão Base") e salvar.
+      case "salvar_roteiro": {
+        const nome = typeof b.nome === "string" ? b.nome.trim().replace(/\s+/g, " ").slice(0, 120) : "";
+        if (!nome) return erro("Dê um nome ao roteiro (ex.: Roteiro padrão Base).");
+        const etapas = limparEtapas(b.etapas);
+        if (typeof etapas === "string") return erro(etapas);
+        const { centros } = await cadastros(admin);
+        const fora = etapas.filter((e) => etapaForaDaOP(centros, e));
+        if (fora.length) return erro(`Etapa ${fora.map((e) => e.posicao).join(", ")}: ${MOTIVO_FORA_DA_OP}`);
+        const guardar = etapas.map((e) => ({
+          posicao: e.posicao,
+          operacao: e.operacao,
+          centro: e.centro,
+          descricao: e.descricao,
+          hr_preparo: e.hr_preparo,
+          hr_unitario: e.hr_unitario,
+        }));
+        const observacao = typeof b.observacao === "string" && b.observacao.trim() ? b.observacao.trim().slice(0, 500) : null;
+        // Nome repetido (sem diferenciar maiúscula) com outro roteiro: avisa em vez de sobrescrever.
+        const { data: todos, error: e1 } = await comRetentativa(() => admin.from("prod_roteiros_padrao").select("id, nome"));
+        if (e1) throw new Error(e1.message);
+        if ((todos ?? []).some((m) => m.id !== id && String(m.nome).toLowerCase() === nome.toLowerCase())) return erro(`Já existe um roteiro chamado "${nome}". Escolha outro nome ou abra esse pra editar.`);
+        if (id) {
+          const { data, error } = await comRetentativa(() =>
+            admin
+              .from("prod_roteiros_padrao")
+              .update({ nome, observacao, etapas: guardar, atualizado_por: quem, atualizado_em: agora })
+              .eq("id", id)
+              .select("id"),
+          );
+          if (error) throw new Error(error.message);
+          if (!data?.length) return erro("Roteiro não encontrado (foi excluído?).", 404);
+          return NextResponse.json({ ok: true, id });
+        }
+        const { data, error } = await comRetentativa(() =>
+          admin
+            .from("prod_roteiros_padrao")
+            .insert({ nome, observacao, etapas: guardar, criado_por: quem, atualizado_por: quem })
+            .select("id")
+            .single(),
+        );
+        if (error) throw new Error(error.message);
+        return NextResponse.json({ ok: true, id: data.id });
+      }
+      case "excluir_roteiro": {
+        const { error } = await comRetentativa(() => admin.from("prod_roteiros_padrao").delete().eq("id", id));
+        if (error) throw new Error(error.message);
         break;
       }
       default:

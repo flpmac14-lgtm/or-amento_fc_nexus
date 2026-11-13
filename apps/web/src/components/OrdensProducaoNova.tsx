@@ -30,6 +30,28 @@ type ModeloOP = {
   etapas: EtapaModelo[];
 };
 
+/** Roteiro padrão do FC Nexus (montado e salvo pelo PCP — migration 0070). */
+export type RoteiroSalvo = {
+  id: string;
+  nome: string;
+  observacao: string | null;
+  etapas: EtapaModelo[];
+  criado_por: string | null;
+  criado_em: string;
+  atualizado_por: string | null;
+  atualizado_em: string;
+};
+
+export async function listarRoteirosSalvos(): Promise<RoteiroSalvo[]> {
+  const r = await api<{ roteiros: RoteiroSalvo[] }>("/api/follow-up/producao?tipo=roteiros");
+  return r.roteiros.map((x) => ({
+    ...x,
+    etapas: [...(x.etapas ?? [])]
+      .sort((a, b) => a.posicao - b.posicao)
+      .map((e) => ({ ...e, hr_preparo: Number(e.hr_preparo) || 0, hr_unitario: Number(e.hr_unitario) || 0 })),
+  }));
+}
+
 export type PedidoFU = {
   id: string;
   po: string | null;
@@ -132,6 +154,17 @@ export function EditorRoteiro({
       ativo = false;
     };
   }, [desenho]);
+  // Roteiros padrão do FC Nexus (aba "Roteiros padrão") — pedido do usuário (13/11/2026).
+  const [salvos, setSalvos] = useState<RoteiroSalvo[]>([]);
+  useEffect(() => {
+    let ativo = true;
+    listarRoteirosSalvos()
+      .then((r) => ativo && setSalvos(r))
+      .catch(() => {}); // sem roteiro salvo não impede montar
+    return () => {
+      ativo = false;
+    };
+  }, []);
   type Fonte = { chave: string; titulo: string; sub: string; etapas: EtapaModelo[]; mesmo?: boolean };
   const fontes: Fonte[] = useMemo(
     () => [
@@ -139,6 +172,12 @@ export function EditorRoteiro({
         chave: `d${r.opcao}`,
         titulo: `Roteiro do desenho ${r.desenho}${r.cod_cliente ? ` (${r.cod_cliente})` : ""}`,
         sub: `${r.nome ?? ""}${r.padrao ? " · padrão" : ""} · ${r.etapas.length} etapas`,
+        etapas: r.etapas,
+      })),
+      ...salvos.map((r) => ({
+        chave: `f${r.id}`,
+        titulo: r.nome,
+        sub: `${r.etapas.length} etapas${r.observacao ? ` · ${r.observacao}` : ""}`,
         etapas: r.etapas,
       })),
       ...anteriores.map((o) => ({
@@ -155,7 +194,7 @@ export function EditorRoteiro({
         etapas: r.etapas,
       })),
     ],
-    [cad, doDesenho, anteriores],
+    [cad, doDesenho, anteriores, salvos],
   );
   const [fonte, setFonte] = useState<string>(() => fontes[0]?.chave ?? "op");
   const [buscaOp, setBuscaOp] = useState("");
@@ -279,6 +318,13 @@ export function EditorRoteiro({
             {fontes.some((f) => f.chave.startsWith("m") && f.mesmo) && (
               <optgroup label="★ OPs anteriores deste desenho (salvas)">
                 {fontes.filter((f) => f.chave.startsWith("m") && f.mesmo).map((f) => (
+                  <option key={f.chave} value={f.chave}>{f.titulo}</option>
+                ))}
+              </optgroup>
+            )}
+            {salvos.length > 0 && (
+              <optgroup label="★ Roteiros padrão FC Nexus (salvos)">
+                {fontes.filter((f) => f.chave.startsWith("f")).map((f) => (
                   <option key={f.chave} value={f.chave}>{f.titulo}</option>
                 ))}
               </optgroup>
