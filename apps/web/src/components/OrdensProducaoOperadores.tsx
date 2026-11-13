@@ -126,7 +126,10 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 print:grid-cols-3">
           {lista.map((o) => (
             <div key={o.codigo} className="flex break-inside-avoid flex-col items-center gap-1 rounded-xl border-2 border-dashed border-stone-300 bg-white p-3 text-center text-stone-900">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-500">MACFAB · Apontamento</p>
+              {/* Logo da Macfab no cartão — pedido do usuário (13/11/2026). */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/macfab-logo.png" alt="MACFAB" className="h-7 w-auto" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-500">Apontamento</p>
               <p className="font-mono text-4xl font-black">{o.cracha}</p>
               <p className="text-sm font-bold leading-tight">{o.apelido}</p>
               <p className="line-clamp-1 text-[10px] text-stone-500">{o.nome}</p>
