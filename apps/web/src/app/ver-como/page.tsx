@@ -29,6 +29,8 @@ const PERFIS: Record<string, { nome: string; ve: string; cor: string }> = {
   almoxarifado: { nome: "Almoxarifado", ve: "Almoxarifado (conferir o que chegou + fotos) + Consulta dos pedidos + Coletas", cor: "border-teal-500" },
   financeiro: { nome: "Financeiro", ve: "Só o Financeiro (sem Budget e sem Fluxo de caixa)", cor: "border-emerald-500" },
   financeiro_consulta: { nome: "Financeiro (consulta)", ve: "Financeiro só Pedido - ativo, Coletas e Faturamento (só olhar)", cor: "border-lime-500" },
+  // Conta dos totens da fábrica — pedido do usuário (13/11/2026).
+  totem: { nome: "Apontamento (totem)", ve: "Só a tela do totem: o operador digita o nº do crachá e aponta as etapas da OP", cor: "border-red-500" },
 };
 
 export default function PaginaVerComo() {
@@ -54,6 +56,11 @@ export default function PaginaVerComo() {
 
   function entrar(u: Usuario) {
     if (!u.login) return;
+    // Totem: a conta fica presa numa tela só (sem menu) — abre essa tela direto, sem ligar o "ver como".
+    if (u.acesso === "totem") {
+      window.location.assign("/follow-up/totem");
+      return;
+    }
     gravarVerComo({ login: u.login, acesso: u.acesso });
     window.location.assign(u.acesso === "financeiro" || u.acesso === "financeiro_consulta" ? "/financeiro" : u.acesso ? "/follow-up" : "/");
   }
