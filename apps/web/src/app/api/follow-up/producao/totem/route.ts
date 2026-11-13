@@ -199,11 +199,19 @@ export async function POST(request: NextRequest) {
       );
       const ap = p as Apontamento | null;
       if (!ap || !ap.fim || ap.tipo === "parada" || !ap.etapa_id) return erro("Apontamento não encontrado.");
-      if (ap.qtde !== null || ap.qtde_refugo) return erro("A quantidade desse apontamento já foi informada.");
+      // Se já tinha peças nesse trecho, soma (não apaga o que foi apontado antes).
       const q = quantidades(b, motivosValidos);
       const encerrar = !!b.encerrar_etapa;
       const { error } = await comRetentativa(() =>
-        admin.from("prod_apontamentos").update({ ...q, qtde: q.qtde ?? 0, encerrou_etapa: encerrar }).eq("id", ap.id),
+        admin
+          .from("prod_apontamentos")
+          .update({
+            qtde: (Number(ap.qtde) || 0) + (q.qtde ?? 0),
+            qtde_refugo: (Number(ap.qtde_refugo) || 0) + (q.qtde_refugo ?? 0) || null,
+            motivo_refugo: q.motivo_refugo ?? ap.motivo_refugo ?? null,
+            encerrou_etapa: encerrar || ap.encerrou_etapa,
+          })
+          .eq("id", ap.id),
       );
       if (error) throw new Error(error.message);
       await recalcularPecas(admin, ap.etapa_id);
