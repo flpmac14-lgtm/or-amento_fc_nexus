@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import OrdensProducaoOperadores from "@/components/OrdensProducaoOperadores";
+import OrdensProducaoRecursos from "@/components/OrdensProducaoRecursos";
 import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
 import {
   api,
@@ -45,7 +46,7 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores";
+type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos";
 type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
 export default function OrdensProducao() {
@@ -142,6 +143,7 @@ export default function OrdensProducao() {
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
             ["operadores", "Operadores (crachás)"],
+            ["recursos", "Recursos (máquinas)"],
           ] as [Sub, string][]
         )
           .filter(([v]) => v !== "nova" || dados.podeEditar)
@@ -176,6 +178,7 @@ export default function OrdensProducao() {
       {sub === "chao" && <ChaoFabrica dados={dados} agora={agora} abrir={setAberta} />}
       {sub === "apontamentos" && <Apontamentos cad={dados.cadastros} />}
       {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
+      {sub === "recursos" && <OrdensProducaoRecursos cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
       {op && <DetalheOP op={op} dados={dadosTudo} agora={agora} fechar={() => setAberta(null)} recarregar={carregar} />}
     </div>
