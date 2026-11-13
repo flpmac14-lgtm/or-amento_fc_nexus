@@ -8,8 +8,7 @@
 import { useState } from "react";
 import { classeBotao, classeCampo, classeCartao, CodigoBarras } from "@/components/ProducaoComum";
 import { baixarPdf, CARTOES_POR_A4, gerarPdfCartoesCracha } from "@/lib/cartoesCrachaPdf";
-import { minutosUteis } from "@/lib/jornada";
-import { fmtDataHora, fmtMin, numeroOP, type Apontamento, type Cadastros, type OP } from "@/lib/producao";
+import { fmtDataHora, fmtMin, minutosApontamento, numeroOP, type Apontamento, type Cadastros, type OP } from "@/lib/producao";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -152,7 +151,7 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
                       {a ? (
                         <span className={a.tipo === "parada" ? "font-semibold text-red-600" : "font-semibold text-emerald-600 dark:text-emerald-400"}>
                           ● {a.tipo === "parada" ? `Parada: ${a.motivo}` : `${op ? numeroOP(op.numero) : "OP"} · ${et?.posicao ?? ""} ${et?.operacao_desc ?? ""}`} (
-                          {fmtMin(minutosUteis(a.inicio, agora))})
+                          {fmtMin(minutosApontamento(a.inicio, agora))})
                         </span>
                       ) : (
                         <span className="text-stone-400">—</span>

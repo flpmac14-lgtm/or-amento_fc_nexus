@@ -36,8 +36,21 @@ export type Cadastros = {
   roteiros_padrao: RoteiroPadrao[];
   roteiros_desenho: RoteiroDesenho[];
   motivos: string[];
+  feriados: Feriado[]; // Calendário de apontamento (migration 0071)
   gerado_em: string | null;
 };
+export type Feriado = { data: string; descricao: string | null };
+
+// Feriados do Calendário de apontamento — quem recebe os cadastros (tela de OPs,
+// totem) registra aqui, e todo cálculo de horas do apontamento usa minutosApontamento.
+let FERIADOS: ReadonlySet<string> = new Set();
+export function definirFeriadosApontamento(datas: (string | Feriado)[] | null | undefined) {
+  FERIADOS = new Set((datas ?? []).map((f) => (typeof f === "string" ? f : f.data)));
+}
+/** Minutos do apontamento: só a jornada da Macfab, sem sábado, domingo e os feriados do calendário. */
+export function minutosApontamento(ini: Date | string, fim: Date | string = new Date()): number {
+  return minutosUteis(ini, fim, FERIADOS);
+}
 
 export type StatusOP = "aguardando" | "liberada" | "encerrada" | "cancelada";
 export type StatusEtapa = "pendente" | "andamento" | "pausada" | "concluida";
@@ -158,7 +171,7 @@ export function horasPrevistas(e: Pick<Etapa, "hr_preparo" | "hr_unitario">, qtd
 
 /** Minutos realizados (só jornada da Macfab — lib/jornada.ts) dos apontamentos da etapa/OP. */
 export function minutosRealizados(aps: Apontamento[], agora = new Date()): number {
-  return aps.reduce((s, a) => s + minutosUteis(a.inicio, a.fim ?? agora), 0);
+  return aps.reduce((s, a) => s + minutosApontamento(a.inicio, a.fim ?? agora), 0);
 }
 
 export function fmtHoras(h: number): string {

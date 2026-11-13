@@ -16,7 +16,7 @@ import { CAMPOS_AP, cadastros, carregarOps, encerrarSeConcluida, recalcularPecas
 // GET ?tipo=roteiros     → roteiros padrão do FC Nexus (migration 0070), montados e salvos pelo PCP;
 // POST {acao: "criar" | "liberar" | "voltar" | "encerrar" | "reabrir" | "cancelar" | "excluir" | "editar" |
 //       "concluir_etapa" | "reabrir_etapa" | "corrigir_apontamento" | "fechar_apontamento" |
-//       "salvar_roteiro" | "excluir_roteiro"}.
+//       "salvar_roteiro" | "excluir_roteiro" | "marcar_feriados" | "tirar_feriado"}.
 // Ver: qualquer conta logada (menos o totem). Gravar: podePlanejarOP (flpmac14 e marcelo/PCP).
 
 async function usuario() {
@@ -456,6 +456,29 @@ export async function POST(request: NextRequest) {
         );
         if (error) throw new Error(error.message);
         return NextResponse.json({ ok: true, id: data.id });
+      }
+      // Calendário de apontamento — pedido do usuário (13/11/2026): dia marcado como feriado não conta hora.
+      case "marcar_feriados": {
+        const lista = Array.isArray(b.feriados) ? (b.feriados as { data?: unknown; descricao?: unknown }[]) : [];
+        const linhas = lista
+          .filter((f) => typeof f.data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.data))
+          .slice(0, 60)
+          .map((f) => ({
+            data: f.data as string,
+            descricao: typeof f.descricao === "string" && f.descricao.trim() ? f.descricao.trim().slice(0, 120) : "Feriado",
+            criado_por: quem,
+          }));
+        if (!linhas.length) return erro("Escolha a data do feriado.");
+        const { error } = await comRetentativa(() => admin.from("prod_feriados").upsert(linhas, { onConflict: "data" }));
+        if (error) throw new Error(error.message);
+        break;
+      }
+      case "tirar_feriado": {
+        const data = typeof b.data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.data) ? b.data : "";
+        if (!data) return erro("Data inválida.");
+        const { error } = await comRetentativa(() => admin.from("prod_feriados").delete().eq("data", data));
+        if (error) throw new Error(error.message);
+        break;
       }
       case "excluir_roteiro": {
         const { error } = await comRetentativa(() => admin.from("prod_roteiros_padrao").delete().eq("id", id));

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import OrdensProducaoOperadores from "@/components/OrdensProducaoOperadores";
 import OrdensProducaoRecursos from "@/components/OrdensProducaoRecursos";
 import OrdensProducaoRoteiros from "@/components/OrdensProducaoRoteiros";
+import OrdensProducaoCalendario from "@/components/OrdensProducaoCalendario";
 import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
 import {
   api,
@@ -25,15 +26,16 @@ import {
   urlFoto,
   useAgora,
 } from "@/components/ProducaoComum";
-import { minutosUteis } from "@/lib/jornada";
 import {
   ROTULO_TIPO,
+  definirFeriadosApontamento,
   diasParaPrazo,
   fmtDataHora,
   fmtHoras,
   fmtMin,
   fmtQtd,
   horasPrevistas,
+  minutosApontamento,
   minutosRealizados,
   numeroOP,
   progressoOP,
@@ -47,7 +49,7 @@ import {
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
 type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
-type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros";
+type Sub = "painel" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros" | "calendario";
 type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
 export default function OrdensProducao() {
@@ -62,6 +64,7 @@ export default function OrdensProducao() {
   const carregar = useCallback(() => {
     api<Dados>("/api/follow-up/producao")
       .then((d) => {
+        definirFeriadosApontamento(d.cadastros.feriados);
         setDados(d);
         setErro("");
       })
@@ -83,7 +86,7 @@ export default function OrdensProducao() {
     hoje.setHours(0, 0, 0, 0);
     const minHoje = dados.apontamentos
       .filter((a) => a.tipo !== "parada" && new Date(a.fim ?? agora) > hoje)
-      .reduce((s, a) => s + minutosUteis(new Date(a.inicio) > hoje ? a.inicio : hoje, a.fim ?? agora), 0);
+      .reduce((s, a) => s + minutosApontamento(new Date(a.inicio) > hoje ? a.inicio : hoje, a.fim ?? agora), 0);
     return { ativas: ativas.length, aguardando: aguardando.length, atrasadas: atrasadas.length, trabalhando, parados, minHoje };
   }, [dados, agora]);
 
@@ -144,6 +147,7 @@ export default function OrdensProducao() {
             ["roteiros", "Roteiros padrão"],
             ["chao", "Chão de fábrica (agora)"],
             ["apontamentos", "Apontamentos"],
+            ["calendario", "Calendário de apontamento"],
             ["operadores", "Operadores (crachás)"],
             ["recursos", "Recursos (máquinas)"],
           ] as [Sub, string][]
@@ -180,6 +184,7 @@ export default function OrdensProducao() {
       {sub === "chao" && <ChaoFabrica dados={dados} agora={agora} abrir={setAberta} />}
       {sub === "apontamentos" && <Apontamentos cad={dados.cadastros} />}
       {sub === "operadores" && <OrdensProducaoOperadores cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
+      {sub === "calendario" && <OrdensProducaoCalendario feriados={dados.cadastros.feriados ?? []} podeEditar={dados.podeEditar} aoMudar={carregar} />}
       {sub === "roteiros" && <OrdensProducaoRoteiros cad={dados.cadastros} podeEditar={dados.podeEditar} />}
       {sub === "recursos" && <OrdensProducaoRecursos cad={dados.cadastros} ops={dados.ops} abertos={dados.abertos} agora={agora} />}
 
@@ -603,7 +608,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                         {e.descricao && <p className="text-xs text-stone-500 dark:text-slate-400">{e.descricao}</p>}
                         {agoraNela.length > 0 && (
                           <p className="text-xs font-semibold text-sky-600 dark:text-sky-400">
-                            ● Agora: {agoraNela.map((a) => `${a.operador_nome} (${a.tipo === "setup" ? "preparação" : "produção"} há ${fmtMin(minutosUteis(a.inicio, agora))})`).join(", ")}
+                            ● Agora: {agoraNela.map((a) => `${a.operador_nome} (${a.tipo === "setup" ? "preparação" : "produção"} há ${fmtMin(minutosApontamento(a.inicio, agora))})`).join(", ")}
                           </p>
                         )}
                       </div>
@@ -628,7 +633,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                               <td className="py-1 pl-14 pr-2 font-medium">{a.operador_nome}</td>
                               <td className="px-2">{ROTULO_TIPO[a.tipo]}</td>
                               <td className="px-2">{fmtDataHora(a.inicio)} → {a.fim ? fmtDataHora(a.fim) : <b className="text-sky-600">em andamento</b>}</td>
-                              <td className="px-2 text-right">{fmtMin(minutosUteis(a.inicio, a.fim ?? agora))}</td>
+                              <td className="px-2 text-right">{fmtMin(minutosApontamento(a.inicio, a.fim ?? agora))}</td>
                               <td className="px-2 text-right">{a.qtde !== null ? `${fmtQtd(a.qtde)} pç` : ""}</td>
                               <td className="px-2 text-stone-400">
                                 {a.fim_tipo === "pausa" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : a.fim_tipo === "troca" ? "trocou de etapa" : a.fim_tipo === "correcao" ? "corrigido pelo PCP" : a.encerrou_etapa ? "encerrou a etapa" : ""}
@@ -732,7 +737,7 @@ function ChaoFabrica({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir
         {abertos.map((a) => {
           const o = a.op_id ? opDe.get(a.op_id) : null;
           const e = a.etapa_id ? etapaDe.get(a.etapa_id) : null;
-          const min = minutosUteis(a.inicio, agora);
+          const min = minutosApontamento(a.inicio, agora);
           const parada = a.tipo === "parada";
           return (
             <button
@@ -819,7 +824,7 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
   const porOperador = new Map<string, { prod: number; setup: number; parada: number }>();
   const porCentro = new Map<string, number>();
   for (const a of lista) {
-    const m = minutosUteis(a.inicio, a.fim ?? agora);
+    const m = minutosApontamento(a.inicio, a.fim ?? agora);
     const k = a.operador_nome ?? String(a.operador_codigo);
     const g = porOperador.get(k) ?? { prod: 0, setup: 0, parada: 0 };
     g[a.tipo === "producao" ? "prod" : a.tipo === "setup" ? "setup" : "parada"] += m;
@@ -841,7 +846,7 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
         e?.centro ?? "",
         fmtDataHora(a.inicio),
         a.fim ? fmtDataHora(a.fim) : "em andamento",
-        String(minutosUteis(a.inicio, a.fim ?? agora)),
+        String(minutosApontamento(a.inicio, a.fim ?? agora)),
         a.qtde === null ? "" : String(a.qtde),
         [a.motivo, a.observacao].filter(Boolean).join(" · "),
       ]);
@@ -931,7 +936,7 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
                     <td className="px-2">{a.tipo === "parada" ? a.motivo : `${o ? numeroOP(o.numero) : ""} · ${e?.posicao ?? ""} ${e?.operacao_desc ?? ""} (${e?.centro ?? ""})`}</td>
                     <td className="px-2">{fmtDataHora(a.inicio)}</td>
                     <td className="px-2">{a.fim ? fmtDataHora(a.fim) : <b className="text-sky-600">em andamento</b>}</td>
-                    <td className="px-2 text-right">{fmtMin(minutosUteis(a.inicio, a.fim ?? agora))}</td>
+                    <td className="px-2 text-right">{fmtMin(minutosApontamento(a.inicio, a.fim ?? agora))}</td>
                     <td className="px-2 text-right">{a.qtde ?? ""}</td>
                     <td className="px-2 text-stone-500">{[a.fim_tipo === "pausa" && a.tipo !== "parada" ? `pausa${a.motivo ? `: ${a.motivo}` : ""}` : null, a.encerrou_etapa ? "encerrou etapa" : null, a.observacao].filter(Boolean).join(" · ")}</td>
                   </tr>

@@ -1,5 +1,5 @@
 // Leitura comum das rotas de produção (planejador e totem) — ver lib/producao.ts.
-import type { Apontamento, Cadastros, Etapa, OP } from "@/lib/producao";
+import type { Apontamento, Cadastros, Etapa, Feriado, OP } from "@/lib/producao";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { comRetentativa } from "@/lib/supabase/retentativa";
 
@@ -13,7 +13,10 @@ export const CAMPOS_AP =
   "id, op_id, etapa_id, operador_codigo, operador_nome, tipo, motivo, inicio, fim, fim_tipo, qtde, encerrou_etapa, observacao";
 
 export async function cadastros(admin: Admin): Promise<Cadastros> {
-  const { data, error } = await comRetentativa(() => admin.from("prod_cadastros").select("id, dados, gerado_em"));
+  const [{ data, error }, fer] = await Promise.all([
+    comRetentativa(() => admin.from("prod_cadastros").select("id, dados, gerado_em")),
+    comRetentativa(() => admin.from("prod_feriados").select("data, descricao").order("data")),
+  ]);
   if (error) throw new Error(error.message);
   const m = new Map((data ?? []).map((r) => [r.id as string, r]));
   const d = (k: string) => (m.get(k)?.dados ?? []) as never;
@@ -25,6 +28,8 @@ export async function cadastros(admin: Admin): Promise<Cadastros> {
     roteiros_padrao: d("roteiros_padrao"),
     roteiros_desenho: d("roteiros_desenho"),
     motivos: d("motivos"),
+    // Sem a tabela (migration 0071 não aplicada) segue sem feriados em vez de derrubar a tela.
+    feriados: fer.error ? [] : ((fer.data ?? []) as Feriado[]),
     gerado_em: gerado,
   };
 }

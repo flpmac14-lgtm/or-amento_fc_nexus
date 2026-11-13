@@ -10,8 +10,17 @@ const TURNOS: [number, number][] = [
   [13 * 60, 17 * 60 + 18],
 ];
 
-/** Minutos de jornada entre `ini` e `fim` (0 se fim <= ini). */
-export function minutosUteis(ini: Date | string, fim: Date | string = new Date()): number {
+/** Data local "AAAA-MM-DD" (chave dos feriados). */
+export function chaveDia(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Minutos de jornada entre `ini` e `fim` (0 se fim <= ini).
+ * `feriados` (opcional, "AAAA-MM-DD"): dias que não contam, como sábado/domingo —
+ * Calendário de apontamento das Ordens de produção (pedido do usuário, 13/11/2026).
+ */
+export function minutosUteis(ini: Date | string, fim: Date | string = new Date(), feriados?: ReadonlySet<string>): number {
   const a = new Date(ini).getTime();
   const b = new Date(fim).getTime();
   if (!(b > a)) return 0;
@@ -20,7 +29,7 @@ export function minutosUteis(ini: Date | string, fim: Date | string = new Date()
   dia.setHours(0, 0, 0, 0);
   while (dia.getTime() <= b) {
     const sem = dia.getDay();
-    if (sem >= 1 && sem <= 5) {
+    if (sem >= 1 && sem <= 5 && !feriados?.has(chaveDia(dia))) {
       for (const [t0, t1] of TURNOS) {
         const ini0 = new Date(dia);
         ini0.setMinutes(t0);

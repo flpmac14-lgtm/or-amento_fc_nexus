@@ -9,13 +9,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
-import { minutosUteis } from "@/lib/jornada";
 import {
+  definirFeriadosApontamento,
   diasParaPrazo,
   fmtData,
   fmtMin,
   fmtQtd,
   lerCodigoEtapa,
+  minutosApontamento,
   numeroOP,
   proximaEtapa,
   statusEtapa,
@@ -34,6 +35,7 @@ type Sessao = {
   hoje: Apontamento[];
   motivos: string[];
   centros: Centro[];
+  feriados?: string[];
 };
 type Tela =
   | { t: "cracha" }
@@ -107,6 +109,7 @@ export default function TotemApontamento() {
     setErro("");
     try {
       const s = await api<Sessao>("/api/follow-up/producao/totem", { acao: "identificar", cracha: num });
+      definirFeriadosApontamento(s.feriados);
       setSessao(s);
       setCracha(num);
       setUltimoToque(Date.now());
@@ -420,7 +423,7 @@ function TelaInicio({
             </div>
             <div className="text-right">
               <p className="text-sm text-slate-400">tempo</p>
-              <p className="font-mono text-5xl font-bold tabular-nums">{fmtMin(minutosUteis(a.inicio, agora))}</p>
+              <p className="font-mono text-5xl font-bold tabular-nums">{fmtMin(minutosApontamento(a.inicio, agora))}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -506,7 +509,7 @@ function TelaInicio({
                     {new Date(h.inicio).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{h.fim ? new Date(h.fim).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "agora"}
                   </span>
                   <span className="flex-1 truncate">{h.tipo === "parada" ? `Parada: ${h.motivo}` : `${o ? numeroOP(o.numero) : "OP"} · ${h.tipo === "setup" ? "preparação" : "produção"}`}</span>
-                  <span>{fmtMin(minutosUteis(h.inicio, h.fim ?? new Date()))}</span>
+                  <span>{fmtMin(minutosApontamento(h.inicio, h.fim ?? new Date()))}</span>
                 </li>
               );
             })}

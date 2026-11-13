@@ -12,8 +12,7 @@
 
 import { useState } from "react";
 import { classeBotao, classeCampo, classeCartao } from "@/components/ProducaoComum";
-import { minutosUteis } from "@/lib/jornada";
-import { centroForaDaOP, fmtDataHora, fmtMin, numeroOP, type Apontamento, type Cadastros, type Centro, type OP } from "@/lib/producao";
+import { centroForaDaOP, fmtDataHora, fmtMin, minutosApontamento, numeroOP, type Apontamento, type Cadastros, type Centro, type OP } from "@/lib/producao";
 
 const NIVEL_ALMOXARIFADO = "01";
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -152,7 +151,7 @@ td.c{font-family:monospace;font-weight:bold;width:90px}td.m{color:#666;width:110
                       )}
                       {uso.map(({ a, op, texto }) => (
                         <span key={a.id} className="basis-full pl-[4.6rem] text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                          ● {a.operador_nome ?? `cód. ${a.operador_codigo}`} · {numeroOP(op.numero)} · {texto} ({fmtMin(minutosUteis(a.inicio, agora))})
+                          ● {a.operador_nome ?? `cód. ${a.operador_codigo}`} · {numeroOP(op.numero)} · {texto} ({fmtMin(minutosApontamento(a.inicio, agora))})
                         </span>
                       ))}
                     </li>

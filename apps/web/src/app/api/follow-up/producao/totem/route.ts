@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
         hoje: hoje.data ?? [],
         motivos: cad.motivos.length ? cad.motivos : ["FALTA DE MATERIAL", "AGUARDANDO ENGENHARIA"],
         centros: cad.centros,
+        feriados: cad.feriados.map((f) => f.data), // Calendário de apontamento
       });
     }
 
