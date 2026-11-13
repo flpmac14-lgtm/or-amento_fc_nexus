@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { classeBotao, classeCampo, classeCartao, CodigoBarras } from "@/components/ProducaoComum";
+import { baixarPdf, gerarPdfCartoesCracha } from "@/lib/cartoesCrachaPdf";
 import { minutosUteis } from "@/lib/jornada";
 import { fmtDataHora, fmtMin, numeroOP, type Apontamento, type Cadastros, type OP } from "@/lib/producao";
 
@@ -25,6 +26,8 @@ export default function OrdensProducaoOperadores({
 }) {
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useState<"lista" | "cartoes">("lista");
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [erroPdf, setErroPdf] = useState("");
   const abertoDe = new Map(abertos.map((a) => [a.operador_codigo, a]));
   const opDe = new Map(ops.map((o) => [o.id, o]));
   const centroDesc = (c: string | null) => cad.centros.find((x) => x.codigo === c)?.descricao ?? null;
@@ -32,6 +35,21 @@ export default function OrdensProducaoOperadores({
   const lista = cad.operadores
     .filter((o) => !t || [o.nome, o.apelido, o.cracha, String(o.codigo)].some((v) => v.toUpperCase().includes(t)))
     .sort((a, b) => Number(a.cracha) - Number(b.cracha) || a.nome.localeCompare(b.nome));
+
+  // PDF só com os cartões (85,6 × 54 mm, um por página) pra gráfica — pedido do usuário (13/11/2026).
+  // Vão os da lista filtrada, menos os inativos no Sectra.
+  async function gerarPdf() {
+    setGerandoPdf(true);
+    setErroPdf("");
+    try {
+      const bytes = await gerarPdfCartoesCracha(lista.filter((o) => o.ativo));
+      baixarPdf(bytes, "Cartoes cracha MACFAB.pdf");
+    } catch (e) {
+      setErroPdf(e instanceof Error ? e.message : "Não consegui gerar o PDF.");
+    } finally {
+      setGerandoPdf(false);
+    }
+  }
 
   function imprimirLista() {
     const w = window.open("", "_blank");
@@ -71,6 +89,18 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
         <button type="button" className={classeBotao} onClick={modo === "lista" ? imprimirLista : () => window.print()}>
           🖨️ Imprimir {modo === "lista" ? "lista" : "cartões"}
         </button>
+        {modo === "cartoes" && (
+          <button
+            type="button"
+            className={classeBotao}
+            onClick={gerarPdf}
+            disabled={gerandoPdf || !lista.some((o) => o.ativo)}
+            title="PDF só com os cartões, tamanho padrão de cartão (85,6 × 54 mm), um por página — pra mandar pra gráfica"
+          >
+            📄 {gerandoPdf ? "Gerando PDF…" : `PDF pra gráfica (${lista.filter((o) => o.ativo).length})`}
+          </button>
+        )}
+        {erroPdf && <span className="text-xs text-red-600">{erroPdf}</span>}
         <span className="ml-auto text-xs text-stone-500">
           {lista.length} operador(es) do Sectra · atualizado {cad.gerado_em ? fmtDataHora(cad.gerado_em) : "—"} · no totem o operador digita o <b>nº do crachá</b>
         </span>
@@ -128,7 +158,7 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
             <div key={o.codigo} className="flex break-inside-avoid flex-col items-center gap-1 rounded-xl border-2 border-dashed border-stone-300 bg-white p-3 text-center text-stone-900">
               {/* Logo da Macfab no cartão — pedido do usuário (13/11/2026). */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/macfab-logo.png" alt="MACFAB" className="h-7 w-auto" />
+              <img src="/macfab-logo-alta.png" alt="MACFAB" className="h-7 w-auto" />
               <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-500">Apontamento</p>
               <p className="font-mono text-4xl font-black">{o.cracha}</p>
               <p className="text-sm font-bold leading-tight">{o.apelido}</p>
