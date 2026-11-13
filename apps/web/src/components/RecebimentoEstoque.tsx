@@ -6,7 +6,8 @@
 // Mesmos dados do espelho da aba GERAL (A:X) do CONTROLE DE RECEBIMENTO E
 // ESTOQUE (app/recebimento_estoque.py, sync de 15 min). Só leitura.
 // - Busca única no topo: várias palavras = todas precisam aparecer (ex.: "chapa 63,5 a36").
-// - Mais recentes primeiro (ordem da planilha, que é preenchida de cima pra baixo).
+// - Ordenada pela DT RECEB.: entrada mais recente em cima, descendo pras mais antigas
+//   (pedido de 13/11/2026). Linha sem data válida fica junto da linha de cima na planilha.
 // - Atalhos de período (hoje / 7 / 30 dias) e por tipo de material (1ª palavra da DESCRICAO:
 //   CHAPA, TINTA, BARRA, ARAME… — a coluna "abc" não serve, é texto solto).
 // - Clique na linha = todas as colunas A:X daquele recebimento.
@@ -123,12 +124,12 @@ export default function RecebimentoEstoque({ telaCheia = false }: { telaCheia?: 
   const val = (l: { valores: ValorControleObras[] }, campo: string) =>
     idx[campo] === undefined ? null : l.valores[idx[campo]];
 
-  // Só linhas com dado (a planilha tem ~50 mil linhas formatadas), mais novas primeiro.
+  // Só linhas com dado (a planilha tem ~50 mil linhas formatadas), da data mais recente pra mais antiga.
   const linhas = useMemo<Linha[]>(() => {
     const iBusca = CAMPOS_BUSCA.map((c) => idx[c]).filter((i) => i !== undefined);
     const iDesc = idx.descricao;
     const iNri = idx.nri_2;
-    return (dados?.linhas ?? [])
+    const base = (dados?.linhas ?? [])
       .filter((l) => (iDesc !== undefined && l.valores[iDesc]) || (iNri !== undefined && l.valores[iNri]))
       .map((l) => ({
         linha: l.linha,
@@ -137,8 +138,20 @@ export default function RecebimentoEstoque({ telaCheia = false }: { telaCheia?: 
         tipo: iDesc === undefined ? "" : tipoDe(texto(l.valores[iDesc])),
         busca: normalizarBusca(iBusca.map((i) => texto(l.valores[i])).join(" ")),
       }))
-      .sort((a, b) => b.linha - a.linha);
-  }, [dados, idx]);
+      .sort((a, b) => a.linha - b.linha);
+    // Ordem: data de entrada mais recente em cima. Linha sem data válida (vazia,
+    // digitada errada ou no futuro) herda a data da linha de cima na planilha,
+    // pra não ir parar no fim nem no topo.
+    const limite = agora ? agora + DIA_MS : Infinity;
+    let anterior = 0;
+    const chave = new Map<number, number>();
+    for (const l of base) {
+      const t = l.data?.getTime();
+      if (t !== undefined && t <= limite) anterior = t;
+      chave.set(l.linha, anterior);
+    }
+    return base.sort((a, b) => (chave.get(b.linha)! - chave.get(a.linha)!) || b.linha - a.linha);
+  }, [dados, idx, agora]);
 
   const hoje = useMemo(() => {
     const d = agora ? new Date(agora) : new Date(0);
