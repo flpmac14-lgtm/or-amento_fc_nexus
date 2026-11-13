@@ -199,7 +199,8 @@ export default function ModuloFollowUp({
         )}
         {/* Abas sublinhadas (padrão do FC Nexus ERP) — rolam na horizontal no celular. */}
         <div className="-mb-px flex min-w-0 max-w-full overflow-x-auto">
-          {visoes.map((v) => (
+          {/* Ordens de produção virou item principal do menu lateral, não sub-aba (pedido do usuário, 13/11/2026). */}
+          {visoes.filter((v) => v.valor !== "ordens").map((v) => (
             <button
               key={v.valor}
               type="button"

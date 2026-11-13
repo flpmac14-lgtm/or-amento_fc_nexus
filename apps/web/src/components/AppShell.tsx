@@ -37,7 +37,7 @@ import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerCom
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "producao" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -93,6 +93,12 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
           <path d="M8.5 10.5h7M8.5 13.5h4.5" />
         </g>
       )}
+      {nome === "producao" && (
+        <g {...p}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" />
+        </g>
+      )}
       {nome === "sair" && (
         <g {...p}>
           <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4" />
@@ -142,6 +148,8 @@ interface ItemMenu {
   icone: Icone;
   // Abas de dentro (pedido do usuário: Follow up / Produção abre as sub-abas no menu).
   subitens?: { valor: ValorVisao; rotulo: string }[];
+  // Aba do Follow up que virou item próprio do menu (ex.: Ordens de produção).
+  aba?: ValorVisao;
 }
 
 interface Conta {
@@ -193,16 +201,20 @@ function montarMenu(real: User): Conta {
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
+  const visoes = comDestaque(
+    visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user)),
+    recebimentoEmDestaque(user.email),
+  );
+  // Ordens de produção como item principal do menu, e não como sub-aba — pedido do usuário (13/11/2026).
+  if (visoes.some((v) => v.valor === "ordens"))
+    principal.push({ href: hrefAba("ordens"), rotulo: "Ordens de produção", icone: "producao", aba: "ordens" });
   if (principal.length) secoes.push({ secao: "Principal", itens: principal });
   const operacao: ItemMenu[] = [];
   operacao.push({
     href: ROTA_FOLLOW_UP,
     rotulo: "Follow up / Produção",
     icone: "followup",
-    subitens: comDestaque(
-      visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user)),
-      recebimentoEmDestaque(user.email),
-    ).map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
+    subitens: visoes.filter((v) => v.valor !== "ordens").map((v) => ({ valor: v.valor, rotulo: v.rotulo })),
   });
   secoes.push({ secao: "Operação", itens: operacao });
   const admin: ItemMenu[] = [];
@@ -327,6 +339,9 @@ export default function AppShell({
   }
 
   const ativo = (href: string) => (href === "/" ? caminho === "/" : caminho.startsWith(href));
+  // Item do menu aceso: o de aba própria só quando ela está aberta; o Follow up, nas outras abas.
+  const itemAtivo = (i: ItemMenu) =>
+    i.aba ? caminho === ROTA_FOLLOW_UP && abaAtual === i.aba : ativo(i.href) && !(i.href === ROTA_FOLLOW_UP && abaAtual === "ordens");
 
   return (
     <div data-app-shell className="min-h-screen bg-stone-100 dark:bg-slate-950 print:bg-white">
@@ -381,9 +396,9 @@ export default function AppShell({
                   <div className="flex items-stretch">
                     <Link
                       href={i.href}
-                      onClick={() => setAberto(false)}
+                      onClick={(e) => (i.aba ? irParaAba(e, i.aba) : setAberto(false))}
                       className={`flex min-w-0 flex-1 items-center gap-3 border-l-[3px] px-4 py-2.5 text-sm transition-colors ${
-                        ativo(i.href)
+                        itemAtivo(i)
                           ? "border-amber-400 bg-white/10 font-semibold text-white"
                           : "border-transparent text-white/75 hover:border-amber-400/60 hover:bg-white/5 hover:text-white"
                       }`}
@@ -409,7 +424,7 @@ export default function AppShell({
                   {i.subitens && i.subitens.length > 1 && submenuAberto && (
                     <div className="mb-1 ml-[1.6rem] border-l border-white/15 py-0.5">
                       {i.subitens.map((sub) => {
-                        const naAba = ativo(i.href) && abaAtual === sub.valor;
+                        const naAba = itemAtivo(i) && abaAtual === sub.valor;
                         return (
                           <Link
                             key={sub.valor}
