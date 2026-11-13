@@ -244,6 +244,23 @@ export function EditorRoteiro({
     });
     if (origem) setOrigem(origem);
   }
+  // Botão "usar roteiro padrão" — pedido do usuário (13/11/2026): troca as etapas da OP
+  // pelas do roteiro salvo (as já apontadas ficam), numerando depois delas.
+  function usarRoteiro(r: RoteiroSalvo) {
+    setEtapas((lista) => {
+      const travadas = lista.filter((e) => e.travada);
+      let pos = travadas.reduce((m, e) => Math.max(m, e.posicao), 0) + 10;
+      const novas = r.etapas
+        .filter((m) => !fora(m))
+        .map((m) => {
+          const e: EtapaEditor = { ...m, chave: novaChave(), posicao: pos };
+          pos += 10;
+          return e;
+        });
+      return [...travadas, ...novas];
+    });
+    setOrigem(r.nome);
+  }
   function jaTem(m: EtapaModelo) {
     return etapas.some((e) => e.operacao === m.operacao && e.centro === m.centro && (e.descricao ?? "") === (m.descricao ?? ""));
   }
@@ -277,6 +294,29 @@ export function EditorRoteiro({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Roteiros padrão salvos (aba "Roteiros padrão") — um clique troca as etapas pelo roteiro. */}
+      <div className={`${classeCartao} flex flex-wrap items-center gap-1.5 border-amber-300/70 bg-amber-50/40 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/5`}>
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">★ Usar roteiro padrão</span>
+        {salvos.length ? (
+          salvos.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => usarRoteiro(r)}
+              title={[
+                `Troca as etapas pelas ${r.etapas.length} do "${r.nome}"${etapas.some((e) => e.travada) ? " (as já apontadas ficam)" : ""}:`,
+                ...r.etapas.map((e) => `${e.posicao} · ${descOperacao(cad, e.operacao) ?? e.operacao ?? ""} · ${e.centro ?? ""}`),
+              ].join("\n")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-white px-3 py-1 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:bg-slate-900 dark:text-amber-200 dark:hover:bg-amber-500/15"
+            >
+              {r.nome}
+              <span className="text-[10px] font-medium opacity-70">{r.etapas.length} etapas</span>
+            </button>
+          ))
+        ) : (
+          <span className="text-xs text-stone-500 dark:text-slate-400">Nenhum roteiro padrão salvo ainda — monte na sub-aba “Roteiros padrão”.</span>
+        )}
+      </div>
       {/* Etapas rápidas — fabricação (pedido do usuário: Dobra não vem nos roteiros do Sectra) */}
       <div className={`${classeCartao} flex flex-wrap items-center gap-1.5 px-3 py-2`}>
         <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-slate-400">Etapas rápidas</span>
