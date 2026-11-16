@@ -340,7 +340,10 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                       {ultimoAp.has(o.id) && (
                         <p className="text-[10px] text-stone-400" title="Último apontamento">
                           {ultimoAp.get(o.id) === "9999" ? <span className="font-semibold text-emerald-600">apontando agora</span> : `últ. ${fmtDataHora(ultimoAp.get(o.id)!)}`}
-                          {ultimoAp.quem.get(o.id) && <span className="font-semibold text-stone-600 dark:text-slate-300"> · {ultimoAp.quem.get(o.id)}</span>}
+                          {ultimoAp.quem.get(o.id) && (
+                            // Nome do operador em destaque amarelo — pedido do usuário (16/11/2026).
+                            <span className="ml-1 inline-block rounded bg-yellow-300 px-1.5 py-px text-[11px] font-bold text-yellow-950 dark:bg-yellow-400">{ultimoAp.quem.get(o.id)}</span>
+                          )}
                         </p>
                       )}
                     </td>
@@ -370,7 +373,7 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                           <p className="font-medium text-stone-700 dark:text-slate-200">{prox.posicao} · {prox.operacao_desc ?? prox.centro_desc}</p>
                           <p className="text-[11px] text-stone-500">
                             {prox.centro}
-                            {naEtapa.length > 0 && <span className="ml-1 font-semibold text-sky-600 dark:text-sky-400">● {naEtapa.join(", ")}</span>}
+                            {naEtapa.length > 0 && <span className="ml-1 inline-block rounded bg-yellow-300 px-1.5 py-px font-bold text-yellow-950 dark:bg-yellow-400">● {naEtapa.join(", ")}</span>}
                           </p>
                         </>
                       ) : (
