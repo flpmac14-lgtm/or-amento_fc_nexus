@@ -49,12 +49,14 @@ export default function ModuloFollowUp({
   comHoraExtra = false,
   editaAlmoxarifado = false,
   recebimentoDestaque = false,
+  comOrdens = false,
 }: {
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
   comQualidade?: boolean; // aba QUALIDADE: só flpmac14
   comHoraExtra?: boolean; // aba Funcionários: flpmac14, jeferson e diego
   editaAlmoxarifado?: boolean; // aba Almoxarifado: só leandro e flpmac14 marcam/fotografam; os outros só olham
+  comOrdens?: boolean; // Ordens de produção pro pedro (só olhar/imprimir) — pedido do usuário, 16/11/2026
   recebimentoDestaque?: boolean; // carol: Recebimento em 1º e aberta ao entrar (pedido do usuário, 12/11/2026)
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura" || perfil === "almoxarifado";
@@ -81,7 +83,7 @@ export default function ModuloFollowUp({
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
   const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
-  const visoes = comDestaque(visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado), recebimentoDestaque);
+  const visoes = comDestaque(visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado, comOrdens), recebimentoDestaque);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
 
   function abrirVisao(v: ValorVisao) {

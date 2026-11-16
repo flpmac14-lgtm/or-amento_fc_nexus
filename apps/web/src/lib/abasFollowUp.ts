@@ -67,8 +67,9 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // completas já têm na tela principal.
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
-export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false, comFornecedores = false) {
-  const lista = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade).filter((v) => v.valor !== "fornecedores");
+export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false, comFornecedores = false, comOrdens = false) {
+  const base = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade).filter((v) => v.valor !== "fornecedores");
+  const lista = comOrdens && !base.some((v) => v.valor === "ordens") ? [...base, VISOES.find((v) => v.valor === "ordens")!] : base;
   const comFn = comFornecedores ? [...lista, VISOES.find((v) => v.valor === "fornecedores")!] : lista;
   return comHoraExtra ? comFn : comFn.filter((v) => v.valor !== "funcionarios");
 }
@@ -117,6 +118,15 @@ export function comDestaque<T extends { valor: string }>(visoes: T[], destaque: 
   if (!destaque) return visoes;
   const r = visoes.filter((v) => v.valor === "recebimento");
   return [...r, ...visoes.filter((v) => v.valor !== "recebimento")];
+}
+
+// Ordens de produção pra contas fora do total/PCP — pedido do usuário (16/11/2026):
+// o pedro ajuda a monitorar e imprimir as OPs (só olha; criar/editar segue em lib/acesso.ts::podePlanejarOP).
+// O marcelo já vê pelo perfil follow_up.
+const ORDENS_EXTRA = new Set(["pedro@fcnexus.local"]);
+
+export function veOrdensExtra(email: string | null | undefined): boolean {
+  return ORDENS_EXTRA.has((email ?? "").trim().toLowerCase());
 }
 
 export const ROTA_FOLLOW_UP = "/follow-up";

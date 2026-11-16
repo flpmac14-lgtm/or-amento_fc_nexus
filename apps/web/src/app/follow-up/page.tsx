@@ -8,13 +8,13 @@ import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import ModuloFollowUp from "@/components/ModuloFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeEditarAlmoxarifado, podeSolicitarHoraExtra, podeVerQualidade } from "@/lib/acesso";
-import { recebimentoEmDestaque, type PerfilModulo } from "@/lib/abasFollowUp";
+import { recebimentoEmDestaque, veOrdensExtra, type PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { usuarioEfetivo } from "@/lib/verComo";
 
 export default function PaginaFollowUp() {
-  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean; almoxarifado: boolean; destaque: boolean } | null>(null);
+  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean; almoxarifado: boolean; destaque: boolean; ordens: boolean } | null>(null);
 
   useEffect(() => {
     criarClienteSupabaseNavegador()
@@ -31,6 +31,7 @@ export default function PaginaFollowUp() {
             horaExtra: podeSolicitarHoraExtra(user),
             almoxarifado: podeEditarAlmoxarifado(user),
             destaque: recebimentoEmDestaque(user.email),
+            ordens: veOrdensExtra(user.email),
           });
         }
       });
@@ -48,6 +49,7 @@ export default function PaginaFollowUp() {
             comHoraExtra={conta.horaExtra}
             editaAlmoxarifado={conta.almoxarifado}
             recebimentoDestaque={conta.destaque}
+            comOrdens={conta.ordens}
           />}
       </main>
     </AppShell>

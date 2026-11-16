@@ -20,6 +20,7 @@ import {
   ROTA_FOLLOW_UP,
   abaDoEndereco,
   hrefAba,
+  veOrdensExtra,
   visoesDoPerfil,
   comDestaque,
   recebimentoEmDestaque,
@@ -202,7 +203,7 @@ function montarMenu(real: User): Conta {
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   const visoes = comDestaque(
-    visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user)),
+    visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user), veOrdensExtra(user.email)),
     recebimentoEmDestaque(user.email),
   );
   // Ordens de produção como item principal do menu, e não como sub-aba — pedido do usuário (13/11/2026).
