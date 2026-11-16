@@ -225,6 +225,18 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
     return [...s.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [dados.ops]);
 
+  // Último apontamento de cada OP (aberto conta como agora) — pedido do usuário (16/11/2026):
+  // a OP apontada por último sobe pro topo do painel.
+  const ultimoAp = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of [...dados.apontamentos, ...dados.abertos]) {
+      if (!a.op_id) continue;
+      const t = a.fim ? (a.fim > a.inicio ? a.fim : a.inicio) : "9999";
+      if ((m.get(a.op_id) ?? "") < t) m.set(a.op_id, t);
+    }
+    return m;
+  }, [dados.apontamentos, dados.abertos]);
+
   const lista = dados.ops
     .filter((o) =>
       filtro === "todas"
@@ -243,6 +255,8 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
     })
     .sort((a, b) => {
       if (arquivo) return b.numero - a.numero;
+      const ua = ultimoAp.get(a.id) ?? "", ub = ultimoAp.get(b.id) ?? "";
+      if (ua !== ub) return ub.localeCompare(ua);
       const ordem: Record<StatusOP, number> = { liberada: 0, aguardando: 1, encerrada: 2, cancelada: 3 };
       return ordem[a.status] - ordem[b.status] || a.prioridade - b.prioridade || (a.prazo ?? "9999").localeCompare(b.prazo ?? "9999") || a.numero - b.numero;
     });
@@ -316,6 +330,11 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                         <span className="font-mono font-bold text-stone-800 dark:text-slate-100">{numeroOP(o.numero)}</span>
                         {o.prioridade !== 2 && <SeloPrioridade p={o.prioridade} />}
                       </div>
+                      {ultimoAp.has(o.id) && (
+                        <p className="text-[10px] text-stone-400" title="Último apontamento">
+                          {ultimoAp.get(o.id) === "9999" ? <span className="font-semibold text-emerald-600">apontando agora</span> : `últ. ${fmtDataHora(ultimoAp.get(o.id)!)}`}
+                        </p>
+                      )}
                     </td>
                     <td className="max-w-[22rem] px-2 py-2">
                       <div className="flex items-center gap-2">
