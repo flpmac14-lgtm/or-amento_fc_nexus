@@ -690,7 +690,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
           )}
         </div>
       </aside>
-      {corrigir && <CorrigirApontamento ap={corrigir} etapas={op.etapas} fechar={() => setCorrigir(null)} salvo={() => { setCorrigir(null); recarregar(); }} />}
+      {corrigir && <CorrigirApontamento ap={corrigir} etapas={op.etapas} podeExcluir={!!dados.moverApontadas} fechar={() => setCorrigir(null)} salvo={() => { setCorrigir(null); recarregar(); }} />}
     </div>
   );
 }
@@ -702,7 +702,16 @@ function paraLocal(iso: string | null) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function CorrigirApontamento({ ap, etapas, fechar, salvo }: { ap: Apontamento; etapas: OP["etapas"]; fechar: () => void; salvo: () => void }) {
+function CorrigirApontamento({ ap, etapas, podeExcluir, fechar, salvo }: { ap: Apontamento; etapas: OP["etapas"]; podeExcluir: boolean; fechar: () => void; salvo: () => void }) {
+  const [confirmaExcluir, setConfirmaExcluir] = useState(false);
+  async function excluir() {
+    try {
+      await api("/api/follow-up/producao", { acao: "excluir_apontamento", apontamento_id: ap.id });
+      salvo();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  }
   const [etapa, setEtapa] = useState(ap.etapa_id ?? "");
   const [inicio, setInicio] = useState(paraLocal(ap.inicio));
   const [fim, setFim] = useState(paraLocal(ap.fim));
@@ -763,7 +772,17 @@ function CorrigirApontamento({ ap, etapas, fechar, salvo }: { ap: Apontamento; e
           <label className="text-xs">Observação<input className={classeCampo} value={obs} onChange={(e) => setObs(e.target.value)} /></label>
         </div>
         {erro && <p className="mt-2 text-sm text-red-600">{erro}</p>}
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {/* Excluir (só flpmac14) — dois toques, sem janela do navegador. */}
+          {podeExcluir && (
+            <button
+              type="button"
+              className={`mr-auto rounded-md px-3 py-1.5 text-sm font-medium ${confirmaExcluir ? "bg-red-600 text-white hover:bg-red-700" : "border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-500/40 dark:hover:bg-red-500/10"}`}
+              onClick={() => (confirmaExcluir ? excluir() : setConfirmaExcluir(true))}
+            >
+              {confirmaExcluir ? "Confirmar exclusão" : "🗑️ Excluir"}
+            </button>
+          )}
           {!ap.fim && <button type="button" className={classeBotao} onClick={() => salvar(true)}>Fechar agora</button>}
           <button type="button" className={classeBotao} onClick={fechar}>Desistir</button>
           <button type="button" className={classeBotaoPrimario} onClick={() => salvar(false)}>Salvar</button>

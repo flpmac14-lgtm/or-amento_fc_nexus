@@ -440,6 +440,27 @@ export async function POST(request: NextRequest) {
         if (novaEtapa) await recalcularPecas(admin, novaEtapa);
         break;
       }
+      // Excluir apontamento — pedido do usuário (16/11/2026): só o flpmac14.
+      case "excluir_apontamento": {
+        if (!podeVerFinanceiro(user.email)) return erro("Só o flpmac14 exclui apontamento.", 403);
+        const apId = String(b.apontamento_id ?? "");
+        const { data: ap } = await comRetentativa(() =>
+          admin.from("prod_apontamentos").select("id, etapa_id, op_id, encerrou_etapa, operador_nome, inicio, tipo").eq("id", apId).maybeSingle(),
+        );
+        if (!ap) return erro("Apontamento não encontrado.", 404);
+        const { error } = await comRetentativa(() => admin.from("prod_apontamentos").delete().eq("id", apId));
+        if (error) throw new Error(error.message);
+        if (ap.etapa_id) {
+          await recalcularPecas(admin, ap.etapa_id);
+          // Era ele que tinha concluído a etapa: ela volta a ficar pendente (e a OP, se tinha encerrado, reabre).
+          if (ap.encerrou_etapa) {
+            await comRetentativa(() => admin.from("prod_op_etapas").update({ concluido_em: null, concluido_por: null }).eq("id", ap.etapa_id!));
+            if (ap.op_id)
+              await comRetentativa(() => admin.from("prod_ops").update({ status: "liberada", encerrado_em: null }).eq("id", ap.op_id!).eq("status", "encerrada"));
+          }
+        }
+        break;
+      }
       // Roteiro padrão do FC Nexus — pedido do usuário (13/11/2026): montar, dar nome ("Roteiro padrão Base") e salvar.
       case "salvar_roteiro": {
         const nome = typeof b.nome === "string" ? b.nome.trim().replace(/\s+/g, " ").slice(0, 120) : "";
