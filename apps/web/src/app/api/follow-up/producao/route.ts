@@ -389,8 +389,18 @@ export async function POST(request: NextRequest) {
       case "fechar_apontamento":
       case "corrigir_apontamento": {
         const apId = String(b.apontamento_id ?? "");
-        const { data: ap } = await comRetentativa(() => admin.from("prod_apontamentos").select("id, inicio, fim, qtde, etapa_id").eq("id", apId).maybeSingle());
+        const { data: ap } = await comRetentativa(() =>
+          admin.from("prod_apontamentos").select("id, inicio, fim, qtde, etapa_id, op_id, encerrou_etapa").eq("id", apId).maybeSingle(),
+        );
         if (!ap) return erro("Apontamento não encontrado.", 404);
+        // Trocar a etapa (operador apontou Caldeiraria e era Usinagem) — pedido do usuário (16/11/2026).
+        // Só entre etapas da mesma OP; se o apontamento tinha encerrado a etapa, a conclusão vai junto.
+        const novaEtapa = typeof b.etapa_id === "string" && b.etapa_id && b.etapa_id !== ap.etapa_id ? b.etapa_id : null;
+        if (novaEtapa) {
+          if (!ap.etapa_id || !ap.op_id) return erro("Parada não tem etapa pra trocar.");
+          const { data: dest } = await comRetentativa(() => admin.from("prod_op_etapas").select("id, op_id").eq("id", novaEtapa).maybeSingle());
+          if (!dest || dest.op_id !== ap.op_id) return erro("A etapa nova tem que ser da mesma OP.");
+        }
         const inicio = typeof b.inicio === "string" ? new Date(b.inicio) : new Date(ap.inicio);
         const fim = b.acao === "fechar_apontamento" ? new Date() : typeof b.fim === "string" && b.fim ? new Date(b.fim) : ap.fim ? new Date(ap.fim) : null;
         if (Number.isNaN(inicio.getTime()) || (fim && Number.isNaN(fim.getTime()))) return erro("Data/hora inválida.");
@@ -405,12 +415,21 @@ export async function POST(request: NextRequest) {
               ...(ap.fim && fim ? {} : { fim_tipo: fim ? "correcao" : null }),
               qtde,
               observacao: typeof b.observacao === "string" ? b.observacao.trim() || null : undefined,
+              ...(novaEtapa ? { etapa_id: novaEtapa } : {}),
             })
             .eq("id", apId),
         );
         if (error) throw new Error(error.message);
+        if (novaEtapa && ap.encerrou_etapa && ap.etapa_id) {
+          const { data: velha } = await comRetentativa(() => admin.from("prod_op_etapas").select("concluido_em, concluido_por").eq("id", ap.etapa_id!).maybeSingle());
+          if (velha?.concluido_em) {
+            await comRetentativa(() => admin.from("prod_op_etapas").update({ concluido_em: null, concluido_por: null }).eq("id", ap.etapa_id!));
+            await comRetentativa(() => admin.from("prod_op_etapas").update({ concluido_em: velha.concluido_em, concluido_por: velha.concluido_por }).eq("id", novaEtapa));
+          }
+        }
         // Peças da etapa = soma dos apontamentos (recalcula depois da correção).
         if (ap.etapa_id) await recalcularPecas(admin, ap.etapa_id);
+        if (novaEtapa) await recalcularPecas(admin, novaEtapa);
         break;
       }
       // Roteiro padrão do FC Nexus — pedido do usuário (13/11/2026): montar, dar nome ("Roteiro padrão Base") e salvar.

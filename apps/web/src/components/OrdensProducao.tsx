@@ -645,7 +645,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                               </td>
                               <td className="px-2 text-right">
                                 {pode && (
-                                  <button type="button" className="text-stone-400 hover:text-green-700 dark:hover:text-cyan-400" title="Corrigir horário / peças" onClick={() => setCorrigir(a)}>✏️</button>
+                                  <button type="button" className="text-stone-400 hover:text-green-700 dark:hover:text-cyan-400" title="Corrigir etapa / horário / peças" onClick={() => setCorrigir(a)}>✏️</button>
                                 )}
                               </td>
                             </tr>
@@ -660,7 +660,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
           )}
         </div>
       </aside>
-      {corrigir && <CorrigirApontamento ap={corrigir} fechar={() => setCorrigir(null)} salvo={() => { setCorrigir(null); recarregar(); }} />}
+      {corrigir && <CorrigirApontamento ap={corrigir} etapas={op.etapas} fechar={() => setCorrigir(null)} salvo={() => { setCorrigir(null); recarregar(); }} />}
     </div>
   );
 }
@@ -672,7 +672,8 @@ function paraLocal(iso: string | null) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function CorrigirApontamento({ ap, fechar, salvo }: { ap: Apontamento; fechar: () => void; salvo: () => void }) {
+function CorrigirApontamento({ ap, etapas, fechar, salvo }: { ap: Apontamento; etapas: OP["etapas"]; fechar: () => void; salvo: () => void }) {
+  const [etapa, setEtapa] = useState(ap.etapa_id ?? "");
   const [inicio, setInicio] = useState(paraLocal(ap.inicio));
   const [fim, setFim] = useState(paraLocal(ap.fim));
   const [qtde, setQtde] = useState(ap.qtde === null ? "" : String(ap.qtde));
@@ -687,6 +688,7 @@ function CorrigirApontamento({ ap, fechar, salvo }: { ap: Apontamento; fechar: (
         fim: fim ? new Date(fim).toISOString() : null,
         qtde: qtde === "" ? null : Number(qtde),
         observacao: obs,
+        etapa_id: etapa && etapa !== ap.etapa_id ? etapa : undefined,
       });
       salvo();
     } catch (e) {
@@ -697,8 +699,20 @@ function CorrigirApontamento({ ap, fechar, salvo }: { ap: Apontamento; fechar: (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={fechar}>
       <div className={`${classeCartao} w-full max-w-md p-4`} onClick={(e) => e.stopPropagation()}>
         <h4 className="font-bold text-stone-800 dark:text-slate-100">Corrigir apontamento — {ap.operador_nome}</h4>
-        <p className="text-xs text-stone-500">Use quando o operador esqueceu de pausar/finalizar no totem.</p>
+        <p className="text-xs text-stone-500">Use quando o operador esqueceu de pausar/finalizar no totem ou apontou na etapa errada.</p>
         <div className="mt-3 grid gap-2">
+          {ap.etapa_id && (
+            <label className="text-xs">
+              Etapa (troque se o operador apontou na errada)
+              <select className={classeCampo} value={etapa} onChange={(e) => setEtapa(e.target.value)}>
+                {[...etapas].sort((a, b) => a.posicao - b.posicao).map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.posicao} · {e.operacao_desc ?? e.operacao ?? "—"} · {e.centro ?? ""}{e.descricao ? ` · ${e.descricao}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="text-xs">Início<input type="datetime-local" className={classeCampo} value={inicio} onChange={(e) => setInicio(e.target.value)} /></label>
           <label className="text-xs">Fim {!ap.fim && "(vazio = continua em andamento)"}<input type="datetime-local" className={classeCampo} value={fim} onChange={(e) => setFim(e.target.value)} /></label>
           <label className="text-xs">Peças boas<input type="number" min={0} className={classeCampo} value={qtde} onChange={(e) => setQtde(e.target.value)} /></label>
