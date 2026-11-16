@@ -319,7 +319,10 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
               {lista.map((o) => {
                 const aps = dados.apontamentos.filter((a) => a.op_id === o.id);
                 const st = o.etapas.map((e) => statusEtapa(e, aps));
-                const prox = proximaEtapa(o.etapas);
+                // Etapa atual = onde tem gente apontando agora (pedido do usuário, 16/11/2026: a OP 0022
+                // estava em Usinagem e o painel mostrava Caldeiraria); sem ninguém, a próxima pendente.
+                const abertoAgora = [...aps].filter((a) => !a.fim && a.etapa_id).sort((x, y) => y.inicio.localeCompare(x.inicio))[0];
+                const prox = (abertoAgora && o.etapas.find((e) => e.id === abertoAgora.etapa_id)) || proximaEtapa(o.etapas);
                 const naEtapa = prox ? aps.filter((a) => a.etapa_id === prox.id && !a.fim).map((a) => a.operador_nome) : [];
                 const prev = o.etapas.reduce((s, e) => s + horasPrevistas(e, o.quantidade), 0);
                 const real = minutosRealizados(aps.filter((a) => a.tipo !== "parada"), agora) / 60;
