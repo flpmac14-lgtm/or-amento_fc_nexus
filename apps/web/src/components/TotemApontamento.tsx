@@ -18,7 +18,7 @@
 // (minutosApontamento), então um apontamento esquecido aberto não soma a noite.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, useAgora } from "@/components/ProducaoComum";
+import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
 import {
   definirFeriadosApontamento,
   diasParaPrazo,
@@ -64,6 +64,7 @@ function grupoDoCentro(centros: Centro[], cod: string | null): string {
   return centros.find((x) => x.nivel === raiz)?.descricao ?? c?.descricao ?? "Outros";
 }
 const hora = (d: string | Date) => new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const soLetrasNumeros = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const minuscula = (s: string | null | undefined) => {
   const t = (s ?? "").toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -570,10 +571,12 @@ function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (
       }
     return [...g.entries()].sort((x, y) => y[1] - x[1]);
   }, [s]);
-  const termo = busca.trim().toUpperCase();
+  // Busca por OP, MAC, desenho, PO (pedido), cliente ou descrição — pedido do usuário (16/11/2026).
+  // Ignora espaço, ponto, traço e barra: "MAC 1234", "mac1234" e "1234" acham a mesma obra.
+  const termo = soLetrasNumeros(busca);
   const ops = s.ops
     .filter((o) => !grupo || o.etapas.some((e) => !e.concluido_em && grupoDoCentro(s.centros, e.centro) === grupo))
-    .filter((o) => !termo || [numeroOP(o.numero), String(o.numero), o.po, o.mac, o.desenho, o.descricao].some((v) => (v ?? "").toUpperCase().includes(termo)))
+    .filter((o) => !termo || [numeroOP(o.numero), String(o.numero), o.po, o.mac, o.desenho, o.descricao, o.cliente].some((v) => soLetrasNumeros(v).includes(termo)))
     .sort((x, y) => x.prioridade - y.prioridade || (x.prazo ?? "9").localeCompare(y.prazo ?? "9"));
 
   return (
@@ -595,7 +598,7 @@ function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (
         onKeyDown={(e) => {
           if (e.key === "Enter" && bipar(busca)) setBusca("");
         }}
-        placeholder="Bipe o código da etapa ou procure OP, PO ou desenho"
+        placeholder="Procure por MAC, desenho ou PO (pedido) — ou bipe o código da etapa"
         className="rounded-xl border-2 border-white/15 bg-black/30 px-5 py-3 text-xl outline-none placeholder:text-slate-500 focus:border-teal-400"
       />
       {grupos.length > 1 && (
@@ -611,7 +614,9 @@ function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (
         </div>
       )}
       {ops.length === 0 ? (
-        <p className="rounded-xl bg-white/[0.04] px-5 py-10 text-center text-xl text-slate-400">Nenhuma OP liberada{grupo && ` para ${minuscula(grupo)}`}. Procure o PCP.</p>
+        <p className="rounded-xl bg-white/[0.04] px-5 py-10 text-center text-xl text-slate-400">
+          {termo ? `Nenhuma OP liberada com "${busca.trim()}".` : `Nenhuma OP liberada${grupo ? ` para ${minuscula(grupo)}` : ""}.`} Procure o PCP.
+        </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {ops.map((o) => {
@@ -622,17 +627,26 @@ function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (
                 key={o.id}
                 type="button"
                 onClick={() => abrirOp(o.id)}
-                className="flex flex-col gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-teal-400/60 active:scale-[0.98]"
+                className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-teal-400/60 active:scale-[0.98]"
               >
+                {o.foto && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={urlFoto(o.foto)!} alt="" loading="lazy" className="h-20 w-20 shrink-0 rounded-lg bg-black/30 object-cover" />
+                )}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="flex items-center gap-2 text-sm font-bold tracking-wide text-teal-300">
                   {numeroOP(o.numero)}
                   {o.prioridade === 1 && <span className="rounded bg-red-500 px-1.5 py-0.5 text-[11px] font-black text-white">URGENTE</span>}
                   <span className="ml-auto font-normal text-slate-400">{fmtQtd(o.quantidade)} peças</span>
                 </span>
                 <strong className="line-clamp-1 text-xl">{o.descricao}</strong>
+                <span className="truncate text-sm text-slate-300">
+                  MAC {o.mac ?? "—"} · Des. {o.desenho ?? "—"} · PO {o.po ?? "—"}
+                </span>
                 <span className="truncate text-sm text-slate-400">
                   {prox ? `Próxima: ${prox.posicao} ${prox.operacao_desc ?? ""} · ${prox.centro ?? ""}` : "Sem etapa pendente"}
                   {dias !== null && <span className={dias < 0 ? "font-bold text-red-300" : dias <= 3 ? "text-amber-200" : ""}> · prazo {fmtData(o.prazo)}</span>}
+                </span>
                 </span>
               </button>
             );
@@ -661,11 +675,13 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
           <Rotulo>Passo 3 · {numeroOP(op.numero)}</Rotulo>
           <h2 className="text-3xl font-bold leading-tight">{op.descricao}</h2>
           <p className="text-base text-slate-400">
-            {fmtQtd(op.quantidade)} peças · desenho {op.desenho ?? "—"} · MAC {op.mac ?? "—"} · prazo {fmtData(op.prazo)}
+            {fmtQtd(op.quantidade)} peças · desenho {op.desenho ?? "—"} · MAC {op.mac ?? "—"} · PO {op.po ?? "—"} · prazo {fmtData(op.prazo)}
           </p>
           {op.observacao && <p className="mt-2 rounded-lg bg-amber-400/10 px-3 py-1.5 text-base text-amber-100">{op.observacao}</p>}
         </div>
       </div>
+
+      <FotosPedido fotos={op.fotos?.length ? op.fotos : op.foto ? [op.foto] : []} />
 
       <Rotulo>Qual etapa você vai fazer?</Rotulo>
       <div className="flex flex-col gap-2">
@@ -722,6 +738,52 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
         </div>
       )}
     </div>
+  );
+}
+
+// Imagens anexadas ao pedido no Follow up — pedido do usuário (16/11/2026).
+// Toque na miniatura abre grande; toque fora (ou ✕) fecha; setas trocam de imagem.
+function FotosPedido({ fotos }: { fotos: string[] }) {
+  const [aberta, setAberta] = useState<number | null>(null);
+  if (!fotos.length) return null;
+  const n = fotos.length;
+  const ir = (d: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAberta((i) => (i === null ? 0 : (i + d + n) % n));
+  };
+  return (
+    <>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {fotos.map((sha, i) => (
+          <button key={sha} type="button" onClick={() => setAberta(i)} className="shrink-0 overflow-hidden rounded-lg border-2 border-white/10 hover:border-teal-400">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={urlFoto(sha)!} alt={`Imagem ${i + 1} do pedido`} loading="lazy" className="h-28 w-28 bg-black/30 object-cover" />
+          </button>
+        ))}
+      </div>
+      {aberta !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setAberta(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={urlFoto(fotos[aberta])!} alt="" className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+          <button type="button" onClick={() => setAberta(null)} className="absolute right-4 top-4 rounded-xl bg-white/15 px-5 py-3 text-2xl font-bold text-white">
+            ✕
+          </button>
+          {n > 1 && (
+            <>
+              <button type="button" onClick={ir(-1)} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-xl bg-white/15 px-5 py-6 text-3xl font-bold text-white">
+                ‹
+              </button>
+              <button type="button" onClick={ir(1)} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-xl bg-white/15 px-5 py-6 text-3xl font-bold text-white">
+                ›
+              </button>
+              <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-black/60 px-3 py-1 text-lg text-white">
+                {aberta + 1} / {n}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

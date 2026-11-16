@@ -138,6 +138,7 @@ export type OP = {
   encerrado_em: string | null;
   cancelado_motivo: string | null;
   foto: string | null; // sha256 da 1ª imagem do pedido no Follow up
+  fotos?: string[]; // todas as imagens do pedido no Follow up (totem mostra a galeria)
   etapas: Etapa[];
 };
 

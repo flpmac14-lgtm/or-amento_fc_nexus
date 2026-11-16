@@ -74,7 +74,13 @@ export async function carregarOps(
   const erro = et.error ?? ap.error ?? im.error;
   if (erro) throw new Error(erro.message);
   const foto = new Map<string, string>();
-  for (const f of im.data ?? []) if (!foto.has(f.item_id)) foto.set(f.item_id, f.midia_sha256);
+  const fotos = new Map<string, string[]>();
+  for (const f of im.data ?? []) {
+    if (!foto.has(f.item_id)) foto.set(f.item_id, f.midia_sha256);
+    const l = fotos.get(f.item_id) ?? [];
+    if (!l.includes(f.midia_sha256)) l.push(f.midia_sha256);
+    fotos.set(f.item_id, l);
+  }
   const porOp = new Map<string, Etapa[]>();
   for (const e of (et.data ?? []) as Etapa[]) {
     const n = { ...e, hr_preparo: Number(e.hr_preparo), hr_unitario: Number(e.hr_unitario), qtde_produzida: Number(e.qtde_produzida) };
@@ -85,6 +91,7 @@ export async function carregarOps(
       ...(o as unknown as OP),
       quantidade: Number(o.quantidade),
       foto: o.item_id ? (foto.get(o.item_id as string) ?? null) : null,
+      fotos: o.item_id ? (fotos.get(o.item_id as string) ?? []) : [],
       etapas: porOp.get(o.id as string) ?? [],
     })),
     apontamentos: ((ap.data ?? []) as Apontamento[]).map((a) => ({ ...a, qtde: a.qtde === null ? null : Number(a.qtde) })),
