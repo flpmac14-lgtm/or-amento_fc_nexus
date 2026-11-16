@@ -724,16 +724,30 @@ function CorrigirApontamento({ ap, etapas, fechar, salvo }: { ap: Apontamento; e
         <p className="text-xs text-stone-500">Use quando o operador esqueceu de pausar/finalizar no totem ou apontou na etapa errada.</p>
         <div className="mt-3 grid gap-2">
           {ap.etapa_id && (
-            <label className="text-xs">
-              Etapa (troque se o operador apontou na errada)
-              <select className={classeCampo} value={etapa} onChange={(e) => setEtapa(e.target.value)}>
-                {[...etapas].sort((a, b) => a.posicao - b.posicao).map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.posicao} · {e.operacao_desc ?? e.operacao ?? "—"} · {e.centro ?? ""}{e.descricao ? ` · ${e.descricao}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            // Todas as etapas à vista (botões, não lista fechada) — pedido do usuário (16/11/2026).
+            <div className="text-xs">
+              <p className="mb-1">Etapa — toque na certa se o operador apontou na errada</p>
+              <div className="grid max-h-64 gap-1 overflow-y-auto">
+                {[...etapas].sort((a, b) => a.posicao - b.posicao).map((e) => {
+                  const sel = etapa === e.id;
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setEtapa(e.id)}
+                      className={`flex items-center gap-2 rounded border px-2 py-1.5 text-left ${sel ? "border-green-600 bg-green-50 font-semibold text-green-800 dark:border-cyan-500 dark:bg-cyan-500/10 dark:text-cyan-200" : "border-stone-200 text-stone-700 hover:border-stone-400 dark:border-slate-700 dark:text-slate-300"}`}
+                    >
+                      <span className="w-7 shrink-0 font-mono">{e.posicao}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {e.operacao_desc ?? e.operacao ?? "—"} <span className="text-stone-400">· {e.centro ?? ""}{e.descricao ? ` · ${e.descricao}` : ""}</span>
+                      </span>
+                      {e.id === ap.etapa_id && <span className="shrink-0 text-[10px] uppercase text-stone-400">apontada</span>}
+                      {sel && <span className="shrink-0">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
           <label className="text-xs">Início<input type="datetime-local" className={classeCampo} value={inicio} onChange={(e) => setInicio(e.target.value)} /></label>
           <label className="text-xs">Fim {!ap.fim && "(vazio = continua em andamento)"}<input type="datetime-local" className={classeCampo} value={fim} onChange={(e) => setFim(e.target.value)} /></label>
