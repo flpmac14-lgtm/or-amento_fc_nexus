@@ -61,7 +61,7 @@ export default function OrdensProducaoGerencial({
       } else {
         const e = a.etapa_id ? etapaDe.get(a.etapa_id) : null;
         centro = e?.centro ?? null;
-        oc = { a, estado: a.tipo === "setup" ? "setup" : "producao", op: e?.op ?? null, texto: e ? `${numeroOP(e.op.numero)} · et. ${e.texto}` : "OP", min };
+        oc = { a, estado: a.tipo === "setup" ? "setup" : "producao", op: e?.op ?? null, texto: e ? `${numeroOP(e.op.numero)} · et. ${e.texto}` : a.tipo === "interno" ? `serviço interno Macfab · ${(a.motivo ?? "").toLowerCase()}` : "OP", min };
       }
       if (centro) porCentro.set(centro, [...(porCentro.get(centro) ?? []), oc]);
       else semRecurso.push(oc);

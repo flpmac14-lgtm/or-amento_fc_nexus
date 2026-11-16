@@ -77,7 +77,9 @@ export function minutosApontamento(ini: Date | string, fim: Date | string = new 
 
 export type StatusOP = "aguardando" | "liberada" | "encerrada" | "cancelada";
 export type StatusEtapa = "pendente" | "andamento" | "pausada" | "concluida";
-export type TipoApontamento = "producao" | "setup" | "parada";
+// "interno" = Serviço interno Macfab (sem OP; setor no motivo) — pedido do usuário (16/11/2026), migration 0073.
+export type TipoApontamento = "producao" | "setup" | "parada" | "interno";
+export const SETORES_INTERNO = ["USINAGEM", "CALDEIRARIA", "SOLDA"] as const;
 
 export type Apontamento = {
   id: string;
@@ -172,7 +174,7 @@ export const COR_PRIORIDADE: Record<1 | 2 | 3, string> = {
   2: "bg-stone-200 text-stone-700 dark:bg-slate-700 dark:text-slate-200",
   3: "bg-stone-100 text-stone-500 dark:bg-slate-800 dark:text-slate-400",
 };
-export const ROTULO_TIPO: Record<TipoApontamento, string> = { producao: "Produção", setup: "Preparação (setup)", parada: "Parada" };
+export const ROTULO_TIPO: Record<TipoApontamento, string> = { producao: "Produção", setup: "Preparação (setup)", parada: "Parada", interno: "Serviço interno Macfab" };
 
 /** Status da etapa a partir dos apontamentos (não fica gravado: não tem como sair do lugar). */
 export function statusEtapa(e: Pick<Etapa, "id" | "concluido_em">, aps: Apontamento[]): StatusEtapa {

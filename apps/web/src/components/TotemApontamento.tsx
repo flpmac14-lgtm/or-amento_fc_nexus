@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
 import {
+  SETORES_INTERNO,
   definirFeriadosApontamento,
   diasParaPrazo,
   fmtData,
@@ -51,7 +52,7 @@ type Sessao = {
   centros: Centro[];
   feriados?: string[];
 };
-type Tela = { t: "cracha" } | { t: "inicio" } | { t: "op"; opId: string } | { t: "parada" } | { t: "encerrar" } | { t: "ok"; titulo: string; sub?: string };
+type Tela = { t: "cracha" } | { t: "inicio" } | { t: "op"; opId: string } | { t: "parada" } | { t: "interno" } | { t: "encerrar" } | { t: "ok"; titulo: string; sub?: string };
 type Passo = Record<string, unknown>;
 
 const INATIVO_MS = 45000;
@@ -205,9 +206,11 @@ export default function TotemApontamento() {
             bipar={bipouEtapa}
             abrirOp={(opId) => (setErro(""), setTela({ t: "op", opId }))}
             parada={() => setTela({ t: "parada" })}
+            interno={() => setTela({ t: "interno" })}
             encerrar={() => {
               // Parada sem produção por trás: encerra direto, não tem peça pra apontar.
               if (a?.tipo === "parada" && !pausado) enviar([{ acao: "finalizar" }], { titulo: "Parada encerrada" });
+              else if (a?.tipo === "interno") enviar([{ acao: "finalizar" }], { titulo: "Serviço interno encerrado", sub: minuscula(a.motivo) });
               else setTela({ t: "encerrar" });
             }}
             fimSetup={() => a?.etapa_id && enviar([{ acao: "iniciar", etapa_id: a.etapa_id, tipo: "producao" }], { titulo: "Produção iniciada", sub: descEtapa(a.op_id, a.etapa_id) })}
@@ -225,7 +228,14 @@ export default function TotemApontamento() {
             escolher={(m) => enviar([{ acao: "parada", motivo: m }], { titulo: "Parada registrada", sub: minuscula(m) })}
           />
         )}
-        {sessao && tela.t === "encerrar" && (pausado ?? (a && a.tipo !== "parada" ? a : null)) && (
+        {sessao && tela.t === "interno" && (
+          <TelaInterno
+            ocupado={ocupado}
+            voltar={() => setTela({ t: "inicio" })}
+            escolher={(setor) => enviar([{ acao: "interno", setor }], { titulo: "Serviço interno iniciado", sub: `Macfab · ${minuscula(setor)}` })}
+          />
+        )}
+        {sessao && tela.t === "encerrar" && (pausado ?? (a && a.etapa_id ? a : null)) && (
           <TelaEncerrar
             s={sessao}
             ap={(pausado ?? a)!}
@@ -365,6 +375,7 @@ function TelaInicio({
   bipar,
   abrirOp,
   parada,
+  interno,
   encerrar,
   fimSetup,
   retomar,
@@ -375,6 +386,7 @@ function TelaInicio({
   bipar: (v: string) => boolean;
   abrirOp: (id: string) => void;
   parada: () => void;
+  interno: () => void;
   encerrar: () => void;
   fimSetup: () => void;
   retomar: () => void;
@@ -382,11 +394,12 @@ function TelaInicio({
   const a = s.aberto;
   const p = a?.tipo === "parada" ? (s.pausado ?? null) : null;
   // A ordem mostrada no painel: a do apontamento aberto, ou a que a parada pausou.
-  const base = a && a.tipo !== "parada" ? a : p;
+  const base = a && a.etapa_id ? a : p;
   const op = base?.op_id ? s.ops.find((o) => o.id === base.op_id) : null;
   const et = base?.etapa_id ? op?.etapas.find((e) => e.id === base.etapa_id) : null;
   // A lista de ordens só aparece quando dá pra começar algo: livre, ou parada sem produção por trás.
-  const escolherOrdem = !a || (a.tipo === "parada" && !p);
+  // Serviço interno também: ao iniciar uma ordem, ele fecha sozinho.
+  const escolherOrdem = !a || (a.tipo === "parada" && !p) || a.tipo === "interno";
   const deOutroDia = a && new Date(a.inicio).toDateString() !== agora.toDateString();
 
   return (
@@ -399,7 +412,7 @@ function TelaInicio({
             <div className="min-w-0 flex-1">
               <Rotulo>Apontamento em aberto{op ? ` · ${numeroOP(op.numero)}${et ? ` · etapa ${et.posicao}` : ""}` : ""}</Rotulo>
               <h2 className="mt-1 text-3xl font-bold leading-tight">
-                {op ? (op.descricao ?? numeroOP(op.numero)) : "Parada sem ordem"}
+                {op ? (op.descricao ?? numeroOP(op.numero)) : a.tipo === "interno" ? "Serviço interno Macfab" : "Parada sem ordem"}
                 {et && <span className="ml-2 text-xl font-semibold text-slate-400">{[et.operacao_desc, et.centro].filter(Boolean).join(" · ")}</span>}
               </h2>
             </div>
@@ -417,7 +430,7 @@ function TelaInicio({
             {op && et ? (
               <Numero rotulo="Produzidas" valor={fmtQtd(et.qtde_produzida)} sub={`de ${fmtQtd(op.quantidade)} peças`} />
             ) : (
-              <Numero rotulo="Motivo" valor={minuscula(a.motivo)} sub="tempo improdutivo" pequeno />
+              <Numero rotulo={a.tipo === "interno" ? "Setor" : "Motivo"} valor={minuscula(a.motivo)} sub={a.tipo === "interno" ? "serviço interno Macfab" : "tempo improdutivo"} pequeno />
             )}
             <Numero rotulo={a.tipo === "parada" ? "Tempo parado" : "Tempo na fase"} valor={fmtMin(minutosApontamento(a.inicio, agora))} sub={`desde ${hora(a.inicio)}`} />
             {op && et ? (
@@ -450,14 +463,23 @@ function TelaInicio({
               </Botao>
             )}
             <Botao cor="leve" disabled={ocupado} onClick={encerrar}>
-              {a.tipo === "parada" && !p ? "Encerrar parada" : "Encerrar apontamento"}
+              {a.tipo === "parada" && !p ? "Encerrar parada" : a.tipo === "interno" ? "Encerrar serviço interno" : "Encerrar apontamento"}
             </Botao>
           </div>
-          {a.tipo !== "parada" && <p className="mt-3 text-sm text-slate-400">Vai para outra obra? Encerre este apontamento e abra o outro.</p>}
+          {a.etapa_id && <p className="mt-3 text-sm text-slate-400">Vai para outra obra? Encerre este apontamento e abra o outro.</p>}
         </section>
       )}
 
-      {escolherOrdem && <ListaOrdens s={s} bipar={bipar} abrirOp={abrirOp} parada={a ? null : parada} aviso={a ? "Ao iniciar uma ordem, a parada é encerrada sozinha." : null} />}
+      {escolherOrdem && (
+        <ListaOrdens
+          s={s}
+          bipar={bipar}
+          abrirOp={abrirOp}
+          parada={a ? null : parada}
+          interno={a ? null : interno}
+          aviso={a ? `Ao iniciar uma ordem, ${a.tipo === "interno" ? "o serviço interno" : "a parada"} é encerrado sozinho.` : null}
+        />
+      )}
 
       {!a && s.hoje.length > 0 && <LinhaDoTempo hoje={s.hoje} agora={agora} titulo />}
     </div>
@@ -490,6 +512,8 @@ function Status({ a }: { a: Apontamento }) {
   const [txt, c] =
     a.tipo === "parada"
       ? [`Parada · ${minuscula(a.motivo)}`, "bg-red-500/20 text-red-200 ring-red-400/50"]
+      : a.tipo === "interno"
+      ? [`Serviço interno · ${minuscula(a.motivo)}`, "bg-sky-500/20 text-sky-100 ring-sky-400/50"]
       : a.tipo === "setup"
         ? ["Em setup", "bg-amber-400/20 text-amber-100 ring-amber-300/50"]
         : ["Em produção", "bg-emerald-500/20 text-emerald-100 ring-emerald-400/50"];
@@ -518,7 +542,7 @@ function LinhaDoTempo({ hoje, agora, titulo }: { hoje: Apontamento[]; agora: Dat
   const ini = new Date(seg[0].inicio).getTime();
   const fim = Math.max(...seg.map((h) => new Date(h.fim ?? agora).getTime()));
   const total = Math.max(1, fim - ini);
-  const cor = { producao: "bg-emerald-400", setup: "bg-amber-400", parada: "bg-red-500" };
+  const cor = { producao: "bg-emerald-400", setup: "bg-amber-400", parada: "bg-red-500", interno: "bg-sky-400" };
   return (
     <div className={titulo ? "rounded-2xl border border-white/10 bg-white/[0.04] p-4" : "mt-4"}>
       {titulo && <Rotulo>Seus apontamentos de hoje</Rotulo>}
@@ -531,7 +555,7 @@ function LinhaDoTempo({ hoje, agora, titulo }: { hoje: Apontamento[]; agora: Dat
               key={h.id}
               className={`absolute inset-y-0 ${cor[h.tipo]}`}
               style={{ left: `${((x - ini) / total) * 100}%`, width: `max(3px, ${(w / total) * 100}%)` }}
-              title={`${hora(h.inicio)}–${h.fim ? hora(h.fim) : "agora"} · ${h.tipo === "parada" ? minuscula(h.motivo) : h.tipo}`}
+              title={`${hora(h.inicio)}–${h.fim ? hora(h.fim) : "agora"} · ${h.tipo === "parada" ? minuscula(h.motivo) : h.tipo === "interno" ? `serviço interno ${minuscula(h.motivo)}` : h.tipo}`}
             />
           );
         })}
@@ -549,6 +573,12 @@ function LinhaDoTempo({ hoje, agora, titulo }: { hoje: Apontamento[]; agora: Dat
           <i className="h-2.5 w-2.5 rounded-sm bg-red-500" />
           Parada
         </span>
+        {seg.some((h) => h.tipo === "interno") && (
+          <span className="inline-flex items-center gap-1.5">
+            <i className="h-2.5 w-2.5 rounded-sm bg-sky-400" />
+            Serviço interno
+          </span>
+        )}
         <span className="ml-auto">
           {hora(seg[0].inicio)} – {seg.some((h) => !h.fim) ? "agora" : hora(new Date(fim))} · {fmtMin(seg.reduce((t, h) => t + minutosApontamento(h.inicio, h.fim ?? agora), 0))} apontados
         </span>
@@ -558,7 +588,21 @@ function LinhaDoTempo({ hoje, agora, titulo }: { hoje: Apontamento[]; agora: Dat
 }
 
 // ---- Passo 2: escolha a ordem ----------------------------------------------------
-function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (v: string) => boolean; abrirOp: (id: string) => void; parada: (() => void) | null; aviso: string | null }) {
+function ListaOrdens({
+  s,
+  bipar,
+  abrirOp,
+  parada,
+  interno,
+  aviso,
+}: {
+  s: Sessao;
+  bipar: (v: string) => boolean;
+  abrirOp: (id: string) => void;
+  parada: (() => void) | null;
+  interno: (() => void) | null;
+  aviso: string | null;
+}) {
   const [grupo, setGrupo] = useState("");
   const [busca, setBusca] = useState("");
   // Setores (grupos de centro) que têm etapa pendente.
@@ -586,6 +630,11 @@ function ListaOrdens({ s, bipar, abrirOp, parada, aviso }: { s: Sessao; bipar: (
           <Rotulo>Passo 2 · Escolha a ordem</Rotulo>
           {aviso && <p className="mt-1 text-base text-slate-300">{aviso}</p>}
         </div>
+        {interno && (
+          <Botao cor="leve" onClick={interno} className="min-h-0 py-3 text-lg">
+            Serviço interno Macfab
+          </Botao>
+        )}
         {parada && (
           <Botao cor="leve" onClick={parada} className="min-h-0 py-3 text-lg">
             Registrar parada
@@ -784,6 +833,31 @@ function FotosPedido({ fotos }: { fotos: string[] }) {
         </div>
       )}
     </>
+  );
+}
+
+// ---- Serviço interno Macfab (sem OP) — pedido do usuário (16/11/2026) ---------------
+function TelaInterno({ ocupado, voltar, escolher }: { ocupado: boolean; voltar: () => void; escolher: (setor: string) => void }) {
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 pt-5">
+      <div className="flex items-start gap-4">
+        <Botao cor="leve" onClick={voltar} className="min-h-0 px-4 py-2 text-base">
+          Voltar
+        </Botao>
+        <div>
+          <Rotulo>Serviço interno Macfab</Rotulo>
+          <h2 className="text-3xl font-bold">Em qual setor?</h2>
+          <p className="text-base text-slate-400">Trabalho da própria fábrica, sem ordem de produção. O tempo conta até você encerrar ou iniciar uma ordem.</p>
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {SETORES_INTERNO.map((s) => (
+          <Botao key={s} cor="producao" disabled={ocupado} onClick={() => escolher(s)} className="py-10 text-3xl">
+            {minuscula(s)}
+          </Botao>
+        ))}
+      </div>
+    </div>
   );
 }
 

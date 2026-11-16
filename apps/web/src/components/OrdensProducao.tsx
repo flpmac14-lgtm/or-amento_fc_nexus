@@ -789,7 +789,7 @@ function ChaoFabrica({ dados, agora, abrir }: { dados: Dados; agora: Date; abrir
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-stone-800 dark:text-slate-100">{a.operador_nome}</p>
                 <p className="truncate text-xs text-stone-500 dark:text-slate-400">
-                  {parada ? `PARADA — ${a.motivo}` : `${o ? numeroOP(o.numero) : "OP"} · ${e?.posicao ?? ""} ${e?.operacao_desc ?? ""} · ${e?.centro ?? ""} · ${ROTULO_TIPO[a.tipo]}`}
+                  {parada ? `PARADA — ${a.motivo}` : a.tipo === "interno" ? `SERVIÇO INTERNO MACFAB — ${a.motivo}` : `${o ? numeroOP(o.numero) : "OP"} · ${e?.posicao ?? ""} ${e?.operacao_desc ?? ""} · ${e?.centro ?? ""} · ${ROTULO_TIPO[a.tipo]}`}
                 </p>
                 {o && <p className="truncate text-[11px] text-stone-400">{o.descricao}</p>}
               </div>
@@ -970,7 +970,7 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
                   <tr key={a.id} className={a.tipo === "parada" ? "bg-red-50/50 dark:bg-red-500/5" : ""}>
                     <td className="px-3 py-1 font-medium">{a.operador_nome}</td>
                     <td className="px-2">{ROTULO_TIPO[a.tipo]}</td>
-                    <td className="px-2">{a.tipo === "parada" ? a.motivo : `${o ? numeroOP(o.numero) : ""} · ${e?.posicao ?? ""} ${e?.operacao_desc ?? ""} (${e?.centro ?? ""})`}</td>
+                    <td className="px-2">{a.tipo === "parada" || a.tipo === "interno" ? a.motivo : `${o ? numeroOP(o.numero) : ""} · ${e?.posicao ?? ""} ${e?.operacao_desc ?? ""} (${e?.centro ?? ""})`}</td>
                     <td className="px-2">{fmtDataHora(a.inicio)}</td>
                     <td className="px-2">{a.fim ? fmtDataHora(a.fim) : <b className="text-sky-600">em andamento</b>}</td>
                     <td className="px-2 text-right">{fmtMin(minutosApontamento(a.inicio, a.fim ?? agora))}</td>

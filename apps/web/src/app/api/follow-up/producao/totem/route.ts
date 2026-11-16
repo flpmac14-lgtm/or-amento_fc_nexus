@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { contaTotem, perfilModulo } from "@/lib/acesso";
 import { emailParaLogin } from "@/lib/loginInterno";
-import { listaMotivosRefugo, numeroOP, type Apontamento, type Operador } from "@/lib/producao";
+import { SETORES_INTERNO, listaMotivosRefugo, numeroOP, type Apontamento, type Operador } from "@/lib/producao";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
 import { comRetentativa } from "@/lib/supabase/retentativa";
 import { criarClienteSupabaseServidor } from "@/lib/supabase/server";
@@ -175,8 +175,9 @@ export async function POST(request: NextRequest) {
     if (b.acao === "parada") {
       const motivo = String(b.motivo ?? "").trim().slice(0, 200);
       if (!motivo) return erro("Escolha o motivo da parada.");
-      // Produtivo aberto: pausa ele (motivo = a parada) e a parada lembra qual trecho retomar.
-      const pausou = aberto && aberto.tipo !== "parada" ? aberto : null;
+      // Produtivo aberto (com OP): pausa ele (motivo = a parada) e a parada lembra qual trecho retomar.
+      // Serviço interno não é retomado: fecha e abre a parada.
+      const pausou = aberto && aberto.tipo !== "parada" && aberto.etapa_id ? aberto : null;
       if (pausou) await fechar(admin, pausou, { fim_tipo: "pausa", motivo });
       else if (aberto) await fechar(admin, aberto, { fim_tipo: "troca" });
       const { data, error } = await comRetentativa(() =>
@@ -187,6 +188,24 @@ export async function POST(request: NextRequest) {
           .single(),
       );
       if (error) throw new Error(error.message);
+      return NextResponse.json({ ok: true, aberto: data });
+    }
+
+    // Serviço interno Macfab (sem OP) — pedido do usuário (16/11/2026): setor no motivo.
+    if (b.acao === "interno") {
+      const setor = String(b.setor ?? "").toUpperCase();
+      if (!(SETORES_INTERNO as readonly string[]).includes(setor)) return erro("Escolha o setor: Usinagem, Caldeiraria ou Solda.");
+      if (aberto && aberto.etapa_id) return erro("Encerre o apontamento da ordem antes de começar um serviço interno.");
+      if (aberto?.tipo === "interno" && aberto.motivo === setor) return erro("Você já está em serviço interno nesse setor.");
+      if (aberto) await fechar(admin, aberto, { fim_tipo: "troca" });
+      const { data, error } = await comRetentativa(() =>
+        admin
+          .from("prod_apontamentos")
+          .insert({ operador_codigo: op.codigo, operador_nome: op.apelido, cracha: op.cracha, tipo: "interno", motivo: setor, origem })
+          .select(CAMPOS_AP)
+          .single(),
+      );
+      if (error) throw new Error(error.message.includes("prod_apontamentos_aberto_idx") ? "Você já tem um apontamento aberto." : error.message);
       return NextResponse.json({ ok: true, aberto: data });
     }
 
@@ -241,7 +260,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, aberto: data });
     }
 
-    const q = aberto.tipo === "parada" ? { qtde: null, qtde_refugo: null, motivo_refugo: null } : quantidades(b, motivosValidos);
+    const q = aberto.tipo === "parada" || aberto.tipo === "interno" ? { qtde: null, qtde_refugo: null, motivo_refugo: null } : quantidades(b, motivosValidos);
     const obs = typeof b.observacao === "string" && b.observacao.trim() ? b.observacao.trim().slice(0, 500) : null;
 
     if (b.acao === "parcial") {
@@ -266,7 +285,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (b.acao === "finalizar") {
-      const encerrar = !!b.encerrar_etapa && aberto.tipo !== "parada";
+      const encerrar = !!b.encerrar_etapa && !!aberto.etapa_id;
       await fechar(admin, aberto, { fim_tipo: "fim", ...q, encerrou_etapa: encerrar, observacao: obs });
       const opEncerrada = encerrar && aberto.etapa_id ? await concluirEtapa(admin, aberto.etapa_id, op.apelido) : false;
       return NextResponse.json({ ok: true, opEncerrada });

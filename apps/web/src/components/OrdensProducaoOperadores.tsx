@@ -150,7 +150,7 @@ td.c{font-size:20px;font-weight:bold;text-align:center;width:80px;font-family:mo
                     <td className="px-2 py-1.5 text-xs">
                       {a ? (
                         <span className={a.tipo === "parada" ? "font-semibold text-red-600" : "font-semibold text-emerald-600 dark:text-emerald-400"}>
-                          ● {a.tipo === "parada" ? `Parada: ${a.motivo}` : `${op ? numeroOP(op.numero) : "OP"} · ${et?.posicao ?? ""} ${et?.operacao_desc ?? ""}`} (
+                          ● {a.tipo === "parada" ? `Parada: ${a.motivo}` : a.tipo === "interno" ? `Serviço interno Macfab: ${a.motivo}` : `${op ? numeroOP(op.numero) : "OP"} · ${et?.posicao ?? ""} ${et?.operacao_desc ?? ""}`} (
                           {fmtMin(minutosApontamento(a.inicio, agora))})
                         </span>
                       ) : (
