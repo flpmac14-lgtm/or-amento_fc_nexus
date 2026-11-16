@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { contaTotem, podePlanejarOP } from "@/lib/acesso";
+import { podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { MOTIVO_FORA_DA_OP, etapaForaDaOP, numeroOP, type EtapaModelo } from "@/lib/producao";
 import { criarClienteSupabaseAdmin } from "@/lib/supabase/admin";
@@ -89,6 +90,8 @@ export async function GET(request: NextRequest) {
       ...dados,
       abertos: abertos.data ?? [],
       podeEditar: podePlanejarOP(user),
+      // flpmac14 muda a ordem até das etapas já apontadas — pedido do usuário (16/11/2026).
+      moverApontadas: podeVerFinanceiro(user.email),
       agora: new Date().toISOString(),
     });
   } catch (e) {
@@ -353,6 +356,11 @@ export async function POST(request: NextRequest) {
           const apagar = (atuais ?? []).filter((e) => !idsTravados.has(e.id)).map((e) => e.id);
           if (apagar.length) {
             const r = await comRetentativa(() => admin.from("prod_op_etapas").delete().in("id", apagar));
+            if (r.error) throw new Error(r.error.message);
+          }
+          // Posição provisória antes (unique op_id+posicao): dá pra trocar a ordem das já apontadas.
+          for (const e of travadas) {
+            const r = await comRetentativa(() => admin.from("prod_op_etapas").update({ posicao: 100000 + (e.posicao as number) }).eq("id", e.id));
             if (r.error) throw new Error(r.error.message);
           }
           for (const e of etapas.filter((x) => x.id && idsTravados.has(x.id))) {

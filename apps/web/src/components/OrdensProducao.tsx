@@ -49,7 +49,7 @@ import {
 } from "@/lib/producao";
 import { repetirComAbaVisivel } from "@/lib/repetir";
 
-type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean };
+type Dados = { cadastros: Cadastros; ops: OP[]; apontamentos: Apontamento[]; abertos: Apontamento[]; podeEditar: boolean; moverApontadas?: boolean };
 type Sub = "painel" | "gerencial" | "arquivo" | "nova" | "chao" | "apontamentos" | "operadores" | "recursos" | "roteiros" | "calendario";
 type Lote = { ops: OP[]; apontamentos: Apontamento[] };
 
@@ -615,7 +615,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                 </label>
                 <label className="text-xs sm:col-span-4">Observação<input className={classeCampo} value={cab.observacao} onChange={(e) => setCab({ ...cab, observacao: e.target.value })} /></label>
               </div>
-              <EditorRoteiro cad={dados.cadastros} desenho={op.desenho} quantidade={cab.quantidade} etapas={etapasEd} setEtapas={(f) => setEtapasEd(f)} setOrigem={setOrigemEd} />
+              <EditorRoteiro cad={dados.cadastros} desenho={op.desenho} quantidade={cab.quantidade} etapas={etapasEd} setEtapas={(f) => setEtapasEd(f)} setOrigem={setOrigemEd} moverApontadas={!!dados.moverApontadas} />
               <div className="flex justify-end gap-2">
                 <button type="button" className={classeBotao} onClick={() => setEditando(false)}>Desistir</button>
                 <button type="button" className={classeBotaoPrimario} disabled={ocupado} onClick={salvarEdicao}>Salvar alterações</button>

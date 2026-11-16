@@ -165,6 +165,7 @@ export function EditorRoteiro({
   quantidade,
   etapas,
   setEtapas,
+  moverApontadas = false,
   setOrigem,
 }: {
   cad: Cadastros;
@@ -172,6 +173,7 @@ export function EditorRoteiro({
   quantidade: number;
   etapas: EtapaEditor[];
   setEtapas: (f: (e: EtapaEditor[]) => EtapaEditor[]) => void;
+  moverApontadas?: boolean; // flpmac14: reordena/renumera até as etapas já apontadas (não tira do roteiro)
   setOrigem: (o: string) => void;
 }) {
   const doDesenho = useMemo(() => roteirosDoDesenho(cad, desenho), [cad, desenho]);
@@ -290,10 +292,11 @@ export function EditorRoteiro({
   }
   function renumerar(l: EtapaEditor[]) {
     // Etapa já apontada mantém o número; as outras seguem 10, 20, 30… sem repetir.
-    const usadas = new Set(l.filter((e) => e.travada).map((e) => e.posicao));
+    const fixa = (e: EtapaEditor) => !!e.travada && !moverApontadas;
+    const usadas = new Set(l.filter(fixa).map((e) => e.posicao));
     let pos = 10;
     return l.map((e) => {
-      if (e.travada) return e;
+      if (fixa(e)) return e;
       while (usadas.has(pos)) pos += 10;
       const r = { ...e, posicao: pos };
       pos += 10;
@@ -497,7 +500,7 @@ export function EditorRoteiro({
               {etapas.map((e, i) => (
                 <li
                   key={e.chave}
-                  draggable={!e.travada}
+                  draggable={!e.travada || moverApontadas}
                   onDragStart={() => (arrastando.current = e.chave)}
                   onDragOver={(ev) => ev.preventDefault()}
                   onDrop={() => {
@@ -520,7 +523,7 @@ export function EditorRoteiro({
                       <input
                         type="number"
                         value={e.posicao}
-                        disabled={e.travada}
+                        disabled={e.travada && !moverApontadas}
                         onChange={(ev) => mudar(e.chave, { posicao: Number(ev.target.value) || 0 })}
                         className="w-12 rounded border border-stone-300 bg-white px-1 py-0.5 text-center font-mono text-xs dark:border-slate-700 dark:bg-slate-900"
                         title="Posição (ordem) da etapa"
