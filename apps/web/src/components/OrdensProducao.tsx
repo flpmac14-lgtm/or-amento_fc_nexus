@@ -229,12 +229,16 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
   // a OP apontada por último sobe pro topo do painel.
   const ultimoAp = useMemo(() => {
     const m = new Map<string, string>();
+    const quem = new Map<string, string>(); // operador do último apontamento (pedido do usuário, 16/11/2026)
     for (const a of [...dados.apontamentos, ...dados.abertos]) {
       if (!a.op_id) continue;
       const t = a.fim ? (a.fim > a.inicio ? a.fim : a.inicio) : "9999";
-      if ((m.get(a.op_id) ?? "") < t) m.set(a.op_id, t);
+      if ((m.get(a.op_id) ?? "") < t) {
+        m.set(a.op_id, t);
+        quem.set(a.op_id, a.operador_nome ?? "");
+      }
     }
-    return m;
+    return Object.assign(m, { quem });
   }, [dados.apontamentos, dados.abertos]);
 
   const lista = dados.ops
@@ -336,6 +340,7 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                       {ultimoAp.has(o.id) && (
                         <p className="text-[10px] text-stone-400" title="Último apontamento">
                           {ultimoAp.get(o.id) === "9999" ? <span className="font-semibold text-emerald-600">apontando agora</span> : `últ. ${fmtDataHora(ultimoAp.get(o.id)!)}`}
+                          {ultimoAp.quem.get(o.id) && <span className="font-semibold text-stone-600 dark:text-slate-300"> · {ultimoAp.quem.get(o.id)}</span>}
                         </p>
                       )}
                     </td>
