@@ -97,6 +97,38 @@ const CENTRO_PADRAO: Record<string, string> = {
   "01.30": "AC",
 };
 
+// Máquina sugerida de cada operação: a mais usada nos roteiros do Sectra; senão a padrão da fábrica.
+function sugeridorCentro(cad: Cadastros) {
+  const conta = new Map<string, Map<string, number>>();
+  for (const r of [...cad.roteiros_padrao, ...cad.roteiros_desenho])
+    for (const e of r.etapas)
+      if (e.operacao && e.centro && !etapaForaDaOP(cad.centros, e)) {
+        const m = conta.get(e.operacao) ?? new Map<string, number>();
+        m.set(e.centro, (m.get(e.centro) ?? 0) + 1);
+        conta.set(e.operacao, m);
+      }
+  const existe = (c: string) => cad.centros.some((x) => x.codigo === c);
+  return (op: string): string | null => {
+    const m = conta.get(op);
+    const top = m ? [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] : undefined;
+    const c = top ?? CENTRO_PADRAO[op];
+    return c && existe(c) ? c : null;
+  };
+}
+function etapaRapidaModelo(cad: Cadastros, centroPadrao: (op: string) => string | null, r: EtapaRapida): EtapaModelo {
+  const centro = r.centro && cad.centros.some((c) => c.codigo === r.centro) ? r.centro : centroPadrao(r.op);
+  return { posicao: 0, operacao: r.op, centro, descricao: r.descricao ?? null, hr_preparo: 0, hr_unitario: 0 };
+}
+// Ordem de produção padrão — pedido do usuário (16/11/2026): a Nova OP já entra com todas
+// as etapas padrão (as mesmas das "Etapas rápidas"); o planejador só tira o que não usa.
+export function etapasPadraoOP(cad: Cadastros): EtapaModelo[] {
+  const centroPadrao = sugeridorCentro(cad);
+  return ETAPAS_RAPIDAS.filter((r) => cad.operacoes.some((o) => o.codigo === r.op)).map((r, i) => ({
+    ...etapaRapidaModelo(cad, centroPadrao, r),
+    posicao: (i + 1) * 10,
+  }));
+}
+
 let seq = 0;
 const novaChave = () => `e${++seq}-${Date.now()}`;
 const norm = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -203,31 +235,10 @@ export function EditorRoteiro({
   const fora = (m: EtapaModelo) => etapaForaDaOP(cad.centros, m);
   const arrastando = useRef<string | null>(null);
   // Máquina sugerida de cada operação: a mais usada nos roteiros do Sectra; senão a padrão da fábrica.
-  const centroPadrao = useMemo(() => {
-    const conta = new Map<string, Map<string, number>>();
-    for (const r of [...cad.roteiros_padrao, ...cad.roteiros_desenho])
-      for (const e of r.etapas)
-        if (e.operacao && e.centro && !fora(e)) {
-          const m = conta.get(e.operacao) ?? new Map<string, number>();
-          m.set(e.centro, (m.get(e.centro) ?? 0) + 1);
-          conta.set(e.operacao, m);
-        }
-    const existe = (c: string) => cad.centros.some((x) => x.codigo === c);
-    return (op: string): string | null => {
-      const m = conta.get(op);
-      const top = m ? [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] : undefined;
-      const c = top ?? CENTRO_PADRAO[op];
-      return c && existe(c) ? c : null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cad]);
+  const centroPadrao = useMemo(() => sugeridorCentro(cad), [cad]);
   const etapaDoCatalogo = (op: string): EtapaModelo => ({ posicao: 0, operacao: op, centro: centroPadrao(op), descricao: null, hr_preparo: 0, hr_unitario: 0 });
   const rapidas = ETAPAS_RAPIDAS.filter((r) => cad.operacoes.some((o) => o.codigo === r.op));
-  const etapaRapida = (r: EtapaRapida): EtapaModelo => {
-    const e = etapaDoCatalogo(r.op);
-    const centro = r.centro && cad.centros.some((c) => c.codigo === r.centro) ? r.centro : e.centro;
-    return { ...e, centro, descricao: r.descricao ?? null };
-  };
+  const etapaRapida = (r: EtapaRapida): EtapaModelo => etapaRapidaModelo(cad, centroPadrao, r);
 
   function proximaPosicao(lista: EtapaEditor[]) {
     return (lista.reduce((m, e) => Math.max(m, e.posicao), 0) || 0) + 10;
@@ -659,8 +670,8 @@ export default function OrdensProducaoNova({
       setEtapasState(pref.etapas.filter((m) => !etapaForaDaOP(cad.centros, m)).map((m) => ({ ...m, chave: novaChave() })));
       setOrigem(`Roteiro do desenho ${pref.desenho} (Sectra)`);
     } else {
-      setEtapasState([]);
-      setOrigem("Manual");
+      setEtapasState(etapasPadraoOP(cad).map((m) => ({ ...m, chave: novaChave() })));
+      setOrigem("Ordem de produção padrão");
     }
     setPasso(2);
   }
