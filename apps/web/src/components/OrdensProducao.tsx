@@ -664,7 +664,7 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
                               </td>
                               <td className="px-2 text-right">
                                 {pode && (
-                                  <button type="button" className="text-stone-400 hover:text-green-700 dark:hover:text-cyan-400" title="Corrigir etapa / horário / peças" onClick={() => setCorrigir(a)}>✏️</button>
+                                  <button type="button" className="whitespace-nowrap rounded border border-stone-200 px-1.5 py-0.5 text-[11px] font-medium text-stone-600 hover:border-green-600 hover:text-green-700 dark:border-slate-700 dark:text-slate-300 dark:hover:text-cyan-400" title="Trocar a etapa, corrigir horário ou peças" onClick={() => setCorrigir(a)}>✏️ Corrigir / trocar etapa</button>
                                 )}
                               </td>
                             </tr>
