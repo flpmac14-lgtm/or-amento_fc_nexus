@@ -241,6 +241,16 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
     return Object.assign(m, { quem });
   }, [dados.apontamentos, dados.abertos]);
 
+  // Improdutivo (parada) e serviço interno em aberto — pedido do usuário (16/11/2026): ver no painel,
+  // linha destacada em amarelo. Parada que pausou uma OP também marca a linha da OP.
+  const semOp = dados.abertos.filter((a) => a.tipo === "parada" || a.tipo === "interno").sort((x, y) => x.inicio.localeCompare(y.inicio));
+  const opDoAp = new Map([...dados.apontamentos, ...dados.abertos].map((a) => [a.id, a.op_id] as const));
+  const paradaNaOp = new Map<string, Apontamento[]>();
+  for (const a of semOp) {
+    const opId = a.tipo === "parada" && a.retoma_ap_id ? opDoAp.get(a.retoma_ap_id) : null;
+    if (opId) paradaNaOp.set(opId, [...(paradaNaOp.get(opId) ?? []), a]);
+  }
+
   const lista = dados.ops
     .filter((o) =>
       filtro === "todas"
@@ -300,6 +310,32 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
         <span className="ml-auto text-xs text-stone-500">{lista.length} OP(s)</span>
       </div>
 
+      {!arquivo && semOp.length > 0 && (
+        <div className={`${classeCartao} overflow-x-auto`}>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-yellow-200 dark:divide-yellow-500/20">
+              {semOp.map((a) => {
+                const opId = a.tipo === "parada" && a.retoma_ap_id ? opDoAp.get(a.retoma_ap_id) : null;
+                const op = opId ? dados.ops.find((o) => o.id === opId) : undefined;
+                return (
+                  <tr
+                    key={a.id}
+                    onClick={op ? () => abrir(op.id) : undefined}
+                    className={`bg-yellow-200 text-yellow-950 dark:bg-yellow-400/80 ${op ? "cursor-pointer hover:bg-yellow-300" : ""}`}
+                  >
+                    <td className="px-3 py-1.5 font-bold">{a.operador_nome}</td>
+                    <td className="px-2 py-1.5 font-semibold">{a.tipo === "parada" ? "⏸ IMPRODUTIVO (parada)" : "🔧 SERVIÇO INTERNO MACFAB"}</td>
+                    <td className="px-2 py-1.5">{a.motivo ?? ""}</td>
+                    <td className="px-2 py-1.5 text-xs">{op ? `pausou OP ${numeroOP(op.numero)}${op.mac ? ` · MAC ${op.mac}` : ""}` : ""}</td>
+                    <td className="px-3 py-1.5 text-right text-xs whitespace-nowrap">desde {fmtDataHora(a.inicio)} · {fmtMin(minutosApontamento(a.inicio, agora))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {lista.length === 0 ? (
         <div className={`${classeCartao} px-4 py-10 text-center text-sm text-stone-500`}>
           {arquivo ? "Nenhuma OP encontrada com essa busca." : <>Nenhuma OP aqui. {dados.podeEditar && "Clique em ＋ Nova OP e escolha um pedido do Follow up."}</>}
@@ -335,7 +371,7 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                 const prev = o.etapas.reduce((s, e) => s + horasPrevistas(e, o.quantidade), 0);
                 const real = minutosRealizados(aps.filter((a) => a.tipo !== "parada"), agora) / 60;
                 return (
-                  <tr key={o.id} onClick={() => abrir(o.id)} className="cursor-pointer hover:bg-green-50/40 dark:hover:bg-cyan-500/5">
+                  <tr key={o.id} onClick={() => abrir(o.id)} className={`cursor-pointer ${paradaNaOp.has(o.id) ? "bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-500/15" : "hover:bg-green-50/40 dark:hover:bg-cyan-500/5"}`}>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono font-bold text-stone-800 dark:text-slate-100">{numeroOP(o.numero)}</span>
@@ -383,6 +419,11 @@ function PainelOps({ dados, agora, abrir, arquivo = false }: { dados: Dados; ago
                       ) : (
                         <span className="text-emerald-600">todas concluídas</span>
                       )}
+                      {(paradaNaOp.get(o.id) ?? []).map((a) => (
+                        <p key={a.id} className="mt-0.5">
+                          <span className="inline-block rounded bg-yellow-300 px-1.5 py-px text-[11px] font-bold text-yellow-950 dark:bg-yellow-400">⏸ {a.operador_nome} parado: {a.motivo}</span>
+                        </p>
+                      ))}
                     </td>
                     <td className="px-2 py-2 text-right text-xs">
                       <span className="text-stone-500">{fmtHoras(prev)}</span> / <b className={real > prev && prev > 0 ? "text-red-600" : "text-stone-800 dark:text-slate-100"}>{fmtHoras(real)}</b>
