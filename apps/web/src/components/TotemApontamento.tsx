@@ -419,6 +419,19 @@ function TelaInicio({
             <Status a={a} />
           </div>
 
+          {/* O que ele está fazendo: foto do pedido + MAC/PO em destaque — pedido do usuário (17/11/2026). */}
+          {op && (
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+              <FotosPedido fotos={op.fotos?.length ? op.fotos : op.foto ? [op.foto] : []} grande />
+              <div className="grid flex-1 grid-cols-2 gap-3">
+                <Destaque rotulo="MAC" valor={op.mac} />
+                <Destaque rotulo="PO" valor={op.po} />
+                <Destaque rotulo="Desenho" valor={op.desenho} pequeno />
+                <Destaque rotulo="Quantidade" valor={`${fmtQtd(op.quantidade)} peças`} pequeno />
+              </div>
+            </div>
+          )}
+
           {deOutroDia && (
             <p className="mt-3 rounded-lg bg-amber-400/15 px-4 py-2 text-base font-semibold text-amber-100">
               Aberto desde {new Date(a.inicio).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. Se esqueceu de
@@ -522,6 +535,15 @@ function Status({ a }: { a: Apontamento }) {
       <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-current" />
       {txt}
     </span>
+  );
+}
+
+function Destaque({ rotulo, valor, pequeno }: { rotulo: string; valor: string | null; pequeno?: boolean }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-teal-400/10 px-4 py-3 ring-1 ring-teal-400/30">
+      <p className="text-xs font-semibold uppercase tracking-widest text-teal-200/80">{rotulo}</p>
+      <p className={`break-words font-mono font-black leading-tight text-white ${pequeno ? "text-xl" : "text-3xl"}`}>{valor || "—"}</p>
+    </div>
   );
 }
 
@@ -792,14 +814,37 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
 
 // Imagens anexadas ao pedido no Follow up — pedido do usuário (16/11/2026).
 // Toque na miniatura abre grande; toque fora (ou ✕) fecha; setas trocam de imagem.
-function FotosPedido({ fotos }: { fotos: string[] }) {
+function FotosPedido({ fotos, grande }: { fotos: string[]; grande?: boolean }) {
   const [aberta, setAberta] = useState<number | null>(null);
-  if (!fotos.length) return null;
-  const n = fotos.length;
-  const ir = (d: number) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAberta((i) => (i === null ? 0 : (i + d + n) % n));
-  };
+  if (!fotos.length)
+    return grande ? (
+      <div className="flex h-44 w-44 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-white/15 text-center text-sm text-slate-500">
+        Pedido sem imagem
+      </div>
+    ) : null;
+  if (grande) {
+    // Painel do apontamento aberto: 1ª imagem grande; as outras em miniatura ao lado.
+    return (
+      <div className="flex shrink-0 gap-2">
+        <button type="button" onClick={() => setAberta(0)} className="overflow-hidden rounded-xl border-2 border-white/15 hover:border-teal-400">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={urlFoto(fotos[0])!} alt="Imagem do pedido" className="h-44 w-44 bg-black/30 object-cover sm:h-52 sm:w-52" />
+        </button>
+        {fotos.length > 1 && (
+          <div className="flex flex-col gap-2">
+            {fotos.slice(1, 4).map((sha, i) => (
+              <button key={sha} type="button" onClick={() => setAberta(i + 1)} className="overflow-hidden rounded-lg border-2 border-white/10 hover:border-teal-400">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={urlFoto(sha)!} alt={`Imagem ${i + 2} do pedido`} loading="lazy" className="h-14 w-14 bg-black/30 object-cover sm:h-16 sm:w-16" />
+              </button>
+            ))}
+            {fotos.length > 4 && <span className="text-center text-sm text-slate-400">+{fotos.length - 4}</span>}
+          </div>
+        )}
+        {aberta !== null && <Ampliada fotos={fotos} aberta={aberta} setAberta={setAberta} />}
+      </div>
+    );
+  }
   return (
     <>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -810,11 +855,24 @@ function FotosPedido({ fotos }: { fotos: string[] }) {
           </button>
         ))}
       </div>
-      {aberta !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setAberta(null)}>
+      {aberta !== null && <Ampliada fotos={fotos} aberta={aberta} setAberta={setAberta} />}
+    </>
+  );
+}
+
+function Ampliada({ fotos, aberta, setAberta }: { fotos: string[]; aberta: number; setAberta: (f: (i: number | null) => number | null) => void }) {
+  const n = fotos.length;
+  const ir = (d: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAberta((i) => (i === null ? 0 : (i + d + n) % n));
+  };
+  return (
+    <>
+      {(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setAberta(() => null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={urlFoto(fotos[aberta])!} alt="" className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
-          <button type="button" onClick={() => setAberta(null)} className="absolute right-4 top-4 rounded-xl bg-white/15 px-5 py-3 text-2xl font-bold text-white">
+          <button type="button" onClick={() => setAberta(() => null)} className="absolute right-4 top-4 rounded-xl bg-white/15 px-5 py-3 text-2xl font-bold text-white">
             ✕
           </button>
           {n > 1 && (
