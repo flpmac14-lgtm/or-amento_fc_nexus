@@ -208,8 +208,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
-  // Pintura (espelho do PCP-Pintura-Estoque.xlsx): só o flpmac14 por enquanto — pedido do usuário (17/11/2026).
-  if (podeVerPintura(user.email)) principal.push({ href: ROTA_PINTURA, rotulo: "Pintura", icone: "pintura" });
+  // Pintura (estoque de tinta, entradas/saídas, vai ter tinta?): flpmac14 e o felipe (perfil pintura) — pedido do usuário (17/11/2026).
+  if (podeVerPintura(user)) principal.push({ href: ROTA_PINTURA, rotulo: "Pintura", icone: "pintura" });
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   const visoes = comDestaque(

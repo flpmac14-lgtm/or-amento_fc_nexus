@@ -1309,6 +1309,55 @@ export async function listarPintura(): Promise<import("@/lib/pintura").RespostaP
   return resposta.json();
 }
 
+// Pintura: estoque do app (planilha + entradas/saídas) e lançamentos — app/pintura_movimentos.py.
+export async function listarEstoquePintura(): Promise<import("@/lib/pintura").RespostaEstoquePintura> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/estoque`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao carregar o estoque de tinta");
+  return resposta.json();
+}
+
+export async function registrarMovimentoPintura(
+  dados: import("@/lib/pintura").NovoMovimentoPintura,
+): Promise<{ id: string; it?: string; saldo_a?: number; saldo_b?: number }> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/movimentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao lançar");
+  return resposta.json();
+}
+
+export async function excluirMovimentoPintura(id: string, por: string | null): Promise<void> {
+  const qs = por ? `?por=${encodeURIComponent(por)}` : "";
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/movimentos/${id}${qs}`, { method: "DELETE" });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao excluir o lançamento");
+}
+
+export async function enviarFotoPintura(
+  movimentoId: string,
+  foto: Blob,
+  por: string | null,
+): Promise<import("@/lib/pintura").FotoPintura> {
+  const form = new FormData();
+  form.append("file", foto, foto instanceof File ? foto.name : "foto.jpg");
+  if (por) form.append("por", por);
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/movimentos/${movimentoId}/fotos`, { method: "POST", body: form });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao enviar a foto");
+  return resposta.json();
+}
+
+export async function removerFotoPintura(fotoId: string): Promise<void> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/fotos/${fotoId}`, { method: "DELETE" });
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao apagar a foto");
+}
+
+export async function necessidadePintura(): Promise<import("@/lib/pintura").RespostaNecessidade> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/necessidade`);
+  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao calcular a necessidade de tinta");
+  return resposta.json();
+}
+
 export async function listarControleObras(): Promise<RespostaControleObras> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/controle-obras`);
   if (!resposta.ok) {

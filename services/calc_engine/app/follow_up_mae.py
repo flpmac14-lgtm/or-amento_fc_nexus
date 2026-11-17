@@ -411,6 +411,7 @@ def remover_imagem(imagem_id: str, removida_por: str | None = None) -> dict | No
             "delete from follow_up_midias m where sha256 = %s and not exists "
             "(select 1 from follow_up_imagens i where i.midia_sha256 = m.sha256) and not exists "
             "(select 1 from fotos_setor f where f.midia_sha256 = m.sha256) and not exists "
+            "(select 1 from pintura_fotos p where p.midia_sha256 = m.sha256) and not exists "
             "(select 1 from follow_up_imagens_removidas r where r.midia_sha256 = m.sha256)",
             (sha,),
         )

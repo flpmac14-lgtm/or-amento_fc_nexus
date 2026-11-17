@@ -103,6 +103,7 @@ from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
 from app.recebimento_estoque import listar as listar_recebimento
 from app.pintura_estoque import listar as listar_pintura
+from app import pintura_movimentos
 from app.registro_geral import registro as registro_geral
 from app import apontamentos_setor, corte_pdfs
 from app.corte import historico as historico_corte
@@ -575,6 +576,68 @@ def pintura_listar() -> dict:
     """Espelho do PCP-Pintura-Estoque.xlsx (abas Estoque e Tinta) — app/pintura_estoque.py."""
     try:
         return listar_pintura()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/pintura/estoque")
+def pintura_estoque_atual() -> dict:
+    """Estoque do app (planilha + entradas/saídas do felipe) e o histórico — app/pintura_movimentos.py."""
+    try:
+        return pintura_movimentos.estoque_atual()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/pintura/movimentos")
+def pintura_registrar(dados: dict) -> dict:
+    """Entrada (chegou tinta) ou saída (baixa) lançada pelo celular."""
+    try:
+        return pintura_movimentos.registrar(dados)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.delete("/pintura/movimentos/{movimento_id}")
+def pintura_excluir(movimento_id: str, por: str | None = None) -> dict:
+    try:
+        if not pintura_movimentos.excluir(movimento_id, por):
+            raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"ok": True}
+
+
+@app.post("/pintura/movimentos/{movimento_id}/fotos")
+def pintura_adicionar_foto(movimento_id: str, file: UploadFile, por: str | None = Form(None)) -> dict:
+    try:
+        foto = pintura_movimentos.adicionar_foto(movimento_id, file.file.read(), por)
+    except (ValueError, ImagemInvalida) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if foto is None:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    return foto
+
+
+@app.delete("/pintura/fotos/{foto_id}")
+def pintura_remover_foto(foto_id: str) -> dict:
+    try:
+        if not pintura_movimentos.remover_foto(foto_id):
+            raise HTTPException(status_code=404, detail="Foto não encontrada")
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"ok": True}
+
+
+@app.get("/pintura/necessidade")
+def pintura_necessidade() -> dict:
+    """'Vai ter tinta?': pedidos ativos (Cor 1/Cor 2/Plano) × estoque."""
+    try:
+        return pintura_movimentos.necessidade()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

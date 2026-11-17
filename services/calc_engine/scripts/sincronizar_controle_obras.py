@@ -31,6 +31,8 @@ from app.recebimento_estoque import registrar_erro as registrar_erro_recebimento
 from app.recebimento_estoque import sincronizar as sincronizar_recebimento  # noqa: E402
 from app.pintura_estoque import registrar_erro as registrar_erro_pintura  # noqa: E402
 from app.pintura_estoque import sincronizar as sincronizar_pintura  # noqa: E402
+from app.pintura_movimentos import analisar_planos_novos as analisar_planos_pintura  # noqa: E402
+from app.pintura_planilha import gerar_se_mudou as gerar_planilha_pintura  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
@@ -117,6 +119,21 @@ def main() -> int:
                 registrar_erro_pintura(f"{type(e).__name__}: {e}")
             except Exception:  # noqa: BLE001
                 pass
+        # Planos de pintura novos lidos pela IA (1 chamada só pros que ainda não
+        # estão no cache; sem GOOGLE_API_KEY no .env, não chama nada) e a
+        # planilha NOVA organizada no J: (só regrava se mudou).
+        try:
+            resumo = analisar_planos_pintura()
+            if resumo:
+                print(f"{agora} Pintura (planos) - {resumo}")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO na leitura dos planos de pintura - {type(e).__name__}: {e}")
+        try:
+            resumo = gerar_planilha_pintura()
+            if resumo:
+                print(f"{agora} Pintura - {resumo}")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO na planilha nova da Pintura - {type(e).__name__}: {e}")
         # Fotos da aba Gerencia que ainda faltam nos pedidos (depois da
         # propagação, pra pedido novo já receber a foto). Só lê se o arquivo mudou.
         try:
