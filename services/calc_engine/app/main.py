@@ -102,6 +102,7 @@ from app.excel_export import gerar_excel_orcamento
 from app.controle_obras import listar as listar_controle_obras
 from app.material_compra import listar as listar_material_compra
 from app.recebimento_estoque import listar as listar_recebimento
+from app.pintura_estoque import listar as listar_pintura
 from app.registro_geral import registro as registro_geral
 from app import apontamentos_setor, corte_pdfs
 from app.corte import historico as historico_corte
@@ -565,6 +566,15 @@ def recebimento_listar() -> dict:
     """Espelho da aba GERAL (A:X) do CONTROLE DE RECEBIMENTO E ESTOQUE — só consulta (Qualidade)."""
     try:
         return listar_recebimento()
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/pintura")
+def pintura_listar() -> dict:
+    """Espelho do PCP-Pintura-Estoque.xlsx (abas Estoque e Tinta) — app/pintura_estoque.py."""
+    try:
+        return listar_pintura()
     except BancoNaoConfigurado as e:
         raise HTTPException(status_code=503, detail=str(e))
 

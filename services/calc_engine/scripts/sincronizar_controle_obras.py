@@ -29,6 +29,8 @@ from app.follow_up_mae import propagar  # noqa: E402
 from app.databook import propagar as propagar_databook  # noqa: E402
 from app.recebimento_estoque import registrar_erro as registrar_erro_recebimento  # noqa: E402
 from app.recebimento_estoque import sincronizar as sincronizar_recebimento  # noqa: E402
+from app.pintura_estoque import registrar_erro as registrar_erro_pintura  # noqa: E402
+from app.pintura_estoque import sincronizar as sincronizar_pintura  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sincronizar_fotos_gerencia import sincronizar_se_mudou as sincronizar_fotos_se_mudou  # noqa: E402
@@ -43,6 +45,7 @@ CAMINHO = os.environ.get("CONTROLE_OBRAS_PATH", r"J:\6 - PCP\Controle de obras.x
 RECEBIMENTO = os.environ.get(
     "RECEBIMENTO_PATH", r"J:\5 - Almoxarifado - Recebimento\ISO_SGQ\Recebimento\CONTROLE DE RECEBIMENTO E ESTOQUE.xlsm"
 )
+PINTURA = os.environ.get("PINTURA_PATH", r"J:\6 - PCP\PCP-Pintura\PCP-Pintura-Estoque.xlsx")
 
 
 def main() -> int:
@@ -97,6 +100,23 @@ def main() -> int:
             except Exception:  # noqa: BLE001
                 pass
             return 1
+        # Pintura (abas Estoque e Tinta do PCP-Pintura-Estoque.xlsx) — pedido do
+        # usuário (17/11/2026). Só relê quando o arquivo muda; falha aqui não para o resto.
+        try:
+            caminho_pin = Path(PINTURA)
+            r_pin = sincronizar_pintura(
+                caminho_pin.read_bytes(), str(caminho_pin),
+                datetime.fromtimestamp(caminho_pin.stat().st_mtime, tz=timezone.utc), forcar="--forcar" in sys.argv,
+            )
+            if r_pin["alterado"]:
+                print(f"{agora} Pintura - planilha alterada, {r_pin['linhas']['estoque']} tintas no estoque, "
+                      f"{r_pin['linhas']['tinta']} no catálogo")
+        except Exception as e:  # noqa: BLE001
+            print(f"{agora} ERRO na Pintura - {type(e).__name__}: {e}")
+            try:
+                registrar_erro_pintura(f"{type(e).__name__}: {e}")
+            except Exception:  # noqa: BLE001
+                pass
         # Fotos da aba Gerencia que ainda faltam nos pedidos (depois da
         # propagação, pra pedido novo já receber a foto). Só lê se o arquivo mudou.
         try:

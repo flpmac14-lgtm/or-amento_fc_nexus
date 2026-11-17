@@ -32,13 +32,14 @@ import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { ROTA_TAREFAS, podeVerTarefas } from "@/lib/tarefas";
 import { ROTA_DOCUMENTOS, podeVerDocumentos } from "@/lib/documentos";
+import { ROTA_PINTURA, podeVerPintura } from "@/lib/pintura";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
 
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "producao" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "producao" | "pintura" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -79,6 +80,13 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
         <g {...p}>
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
           <path d="M8 13h8M8 16h5" />
+        </g>
+      )}
+      {nome === "pintura" && (
+        <g {...p}>
+          <rect x="3" y="3.5" width="15" height="6" rx="1.5" />
+          <path d="M18 6.5h2.5v5H11v3" />
+          <rect x="9.5" y="14.5" width="3" height="6.5" rx="1" />
         </g>
       )}
       {nome === "tarefas" && (
@@ -200,6 +208,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
+  // Pintura (espelho do PCP-Pintura-Estoque.xlsx): só o flpmac14 por enquanto — pedido do usuário (17/11/2026).
+  if (podeVerPintura(user.email)) principal.push({ href: ROTA_PINTURA, rotulo: "Pintura", icone: "pintura" });
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   const visoes = comDestaque(

@@ -1299,6 +1299,16 @@ export async function listarRecebimento(): Promise<RespostaControleObras> {
   return resposta.json();
 }
 
+// Pintura (PCP-Pintura-Estoque.xlsx, abas Estoque e Tinta) — só consulta.
+export async function listarPintura(): Promise<import("@/lib/pintura").RespostaPintura> {
+  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura`);
+  if (!resposta.ok) {
+    const corpo = await resposta.text().catch(() => "");
+    throw new Error(`Falha ao carregar a Pintura (${resposta.status}). ${corpo}`);
+  }
+  return resposta.json();
+}
+
 export async function listarControleObras(): Promise<RespostaControleObras> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/controle-obras`);
   if (!resposta.ok) {
