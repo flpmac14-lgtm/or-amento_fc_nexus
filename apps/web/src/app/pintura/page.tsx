@@ -13,7 +13,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell, { classeBotaoCabecalho } from "@/components/AppShell";
+import EscanerEtiqueta from "@/components/EscanerEtiqueta";
+import { chaveEtiqueta, type EtiquetaGs1 } from "@/lib/gs1";
 import {
+  buscarCodigosPintura,
   enviarFotoPintura,
   excluirMovimentoPintura,
   listarEstoquePintura,
@@ -28,6 +31,7 @@ import { emailParaLogin } from "@/lib/loginInterno";
 import {
   podeCorrigirPintura,
   podeVerPintura,
+  type CodigoPintura,
   type FotoPintura,
   type GrupoNecessidade,
   type ItemEstoquePintura,
@@ -174,6 +178,7 @@ function BuscaRapida<T>({
   placeholder,
   livre,
   autoFoco,
+  inicial,
 }: {
   opcoes: T[];
   textoBusca: (o: T) => string;
@@ -182,8 +187,9 @@ function BuscaRapida<T>({
   placeholder: string;
   livre?: boolean; // permite usar o texto digitado como valor novo
   autoFoco?: boolean;
+  inicial?: string;
 }) {
-  const [busca, setBusca] = useState("");
+  const [busca, setBusca] = useState(inicial ?? "");
   const termos = termosDe(busca);
   const achados = useMemo(
     () => (termos.length ? opcoes.filter((o) => casa(termos, textoBusca(o))) : opcoes).slice(0, 40),
@@ -380,7 +386,47 @@ function JanelaEntrada({
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<{ id: string; it?: string } | null>(null);
   const [fotos, setFotos] = useState<FotoPintura[]>([]);
+  const [escaneando, setEscaneando] = useState<"a" | "b" | "auto" | null>(null);
+  const [aviso, setAviso] = useState<{ tipo: "ok" | "novo" | "erro"; texto: string } | null>(null);
   const muda = (k: string, v: string) => setF((x) => ({ ...x, [k]: v }));
+
+  // Quadradinho lido: lote/validade/código vão pro componente; o produto vem do que o app já aprendeu.
+  async function aoLerEtiqueta(e: EtiquetaGs1, alvo: "a" | "b" | "auto") {
+    setEscaneando(null);
+    const chave = chaveEtiqueta(e);
+    let conhecido: CodigoPintura | undefined;
+    try {
+      const r = await buscarCodigosPintura([chave ?? "", e.gtin ?? ""]);
+      conhecido = (chave && r[chave]) || (e.gtin ? r[e.gtin] : undefined);
+    } catch {
+      // sem internet: segue só com lote/validade
+    }
+    const comp: "a" | "b" =
+      alvo !== "auto" ? alvo : conhecido?.componente ? (conhecido.componente.toLowerCase() as "a" | "b") : f.codigo_a ? "b" : "a";
+    setF((x) => ({
+      ...x,
+      [`lote_${comp}`]: e.lote ?? x[`lote_${comp}`] ?? "",
+      [`venc_${comp}`]: e.validade ?? x[`venc_${comp}`] ?? "",
+      [`codigo_${comp}`]: chave ?? "",
+      [`gtin_${comp}`]: e.gtin ?? "",
+      ...(conhecido?.un ? { [`un_${comp}`]: conhecido.un } : {}),
+      ...(conhecido && !x.produto
+        ? { produto: conhecido.produto, fabricante: conhecido.fabricante ?? "", cor: conhecido.cor ?? "" }
+        : {}),
+    }));
+    const parte = `lote ${e.lote ?? "?"}${e.validade ? `, validade ${dataBr(`${e.validade}-01`)}` : ""}`;
+    if (conhecido) {
+      setEscolhido(true);
+      setAviso({ tipo: "ok", texto: `✔ ${conhecido.produto} — componente ${comp.toUpperCase()}, ${parte}. Confira e ponha a quantidade.` });
+    } else if (f.produto) {
+      setAviso({ tipo: "novo", texto: `Componente ${comp.toUpperCase()}: ${parte}. Código ${chave} novo — fica aprendido ao lançar.` });
+    } else {
+      setAviso({
+        tipo: "novo",
+        texto: `Li ${parte}. O código ${chave} ainda é novo: escolha o produto abaixo só desta vez — da próxima, preenche sozinho.`,
+      });
+    }
+  }
 
   function escolher(o: OpcaoProduto | string) {
     if (typeof o === "string") setF((x) => ({ ...x, produto: o }));
@@ -417,6 +463,10 @@ function JanelaEntrada({
         local: f.local,
         mac: f.mac,
         obs: f.obs,
+        codigo_a: f.codigo_a || undefined,
+        gtin_a: f.gtin_a || undefined,
+        codigo_b: f.codigo_b || undefined,
+        gtin_b: f.gtin_b || undefined,
         por,
       });
       setFeito(r);
@@ -451,9 +501,36 @@ function JanelaEntrada({
 
   return (
     <Janela titulo="＋ Chegou tinta" aoFechar={aoFechar}>
+      {escaneando && (
+        <EscanerEtiqueta
+          titulo={escaneando === "auto" ? "Escanear etiqueta" : `Escanear componente ${escaneando.toUpperCase()}`}
+          aoLer={(e) => aoLerEtiqueta(e, escaneando)}
+          aoFechar={() => setEscaneando(null)}
+        />
+      )}
+      {aviso && (
+        <p
+          className={`mb-3 rounded-lg p-2.5 text-sm font-semibold ${
+            aviso.tipo === "ok"
+              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300"
+              : aviso.tipo === "novo"
+                ? "bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+                : "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+          }`}
+        >
+          {aviso.texto}
+        </p>
+      )}
       {!escolhido ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-stone-600 dark:text-slate-400">Digite parte do nome ou da cor (ex.: “lack”, “n6,5”, “interseal”):</p>
+          <button
+            type="button"
+            onClick={() => setEscaneando("auto")}
+            className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 text-base font-bold text-white shadow hover:bg-blue-500 active:scale-[0.98] dark:bg-cyan-500 dark:text-slate-950"
+          >
+            <span className="text-2xl leading-none">▣</span> Escanear etiqueta (quadradinho)
+          </button>
+          <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">ou digite parte do nome ou da cor (ex.: “lack”, “n6,5”, “interseal”):</p>
           <BuscaRapida
             autoFoco
             livre
@@ -503,6 +580,13 @@ function JanelaEntrada({
               <legend className="px-1 text-xs font-bold uppercase text-stone-500 dark:text-slate-400">
                 Componente {c.toUpperCase()} {c === "b" && <span className="font-normal normal-case">(catalisador — 0 se não tiver)</span>}
               </legend>
+              <button
+                type="button"
+                onClick={() => setEscaneando(c)}
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 py-2 text-sm font-semibold text-blue-700 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-300"
+              >
+                ▣ {f[`codigo_${c}`] ? `Lido: código ${f[`codigo_${c}`]} — escanear de novo` : `Escanear etiqueta do componente ${c.toUpperCase()}`}
+              </button>
               <div className="grid grid-cols-[1fr_5.5rem] gap-3">
                 <label className={rotulo}>
                   Quantidade
@@ -611,7 +695,32 @@ function JanelaSaida({
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<{ id: string; saldo_a?: number; saldo_b?: number } | null>(null);
   const [fotos, setFotos] = useState<FotoPintura[]>([]);
+  const [escaneando, setEscaneando] = useState(false);
+  const [buscaInicial, setBuscaInicial] = useState<string | undefined>(undefined);
+  const [avisoScan, setAvisoScan] = useState<string | null>(null);
   const n = Number(q.replace(",", ".")) || 0;
+
+  // Lata escaneada: acha a tinta pelo lote (A ou B) entre as que têm saldo.
+  function aoLerEtiqueta(e: EtiquetaGs1) {
+    setEscaneando(false);
+    const lote = normalizarBusca(e.lote ?? "");
+    const porA = itens.filter((i) => lote && normalizarBusca(String(i.lote_a ?? "")) === lote);
+    const porB = itens.filter((i) => lote && normalizarBusca(String(i.lote_b ?? "")) === lote);
+    const achados = [...porA, ...porB.filter((i) => !porA.includes(i))];
+    if (achados.length === 1) {
+      setItem(achados[0]);
+      setComp(porA.includes(achados[0]) ? "kit" : "b");
+      setAvisoScan(null);
+    } else {
+      setBuscaInicial(e.lote ?? "");
+      setAvisoScan(
+        achados.length
+          ? `Lote ${e.lote} aparece em ${achados.length} tintas — escolha abaixo.`
+          : `Lote ${e.lote ?? "?"} não está no estoque com saldo. Busque pelo nome.`,
+      );
+      if (!achados.length) setBuscaInicial("");
+    }
+  }
   const compEfetivo = temB ? comp : "a";
   const qa = compEfetivo === "b" ? 0 : n;
   const qb = compEfetivo === "a" ? 0 : n;
@@ -663,10 +772,23 @@ function JanelaSaida({
 
   return (
     <Janela titulo="− Saiu tinta" aoFechar={aoFechar}>
+      {escaneando && <EscanerEtiqueta titulo="Escanear a lata que saiu" aoLer={aoLerEtiqueta} aoFechar={() => setEscaneando(false)} />}
       {!item ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-stone-600 dark:text-slate-400">Digite produto, cor, lote, local ou nº do IT:</p>
+          <button
+            type="button"
+            onClick={() => setEscaneando(true)}
+            className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-4 text-base font-bold text-white shadow hover:bg-blue-500 active:scale-[0.98] dark:bg-cyan-500 dark:text-slate-950"
+          >
+            <span className="text-2xl leading-none">▣</span> Escanear a lata
+          </button>
+          {avisoScan && (
+            <p className="rounded-lg bg-amber-50 p-2.5 text-sm font-semibold text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">{avisoScan}</p>
+          )}
+          <p className="mt-1 text-sm text-stone-600 dark:text-slate-400">ou digite produto, cor, lote, local ou nº do IT:</p>
           <BuscaRapida
+            key={buscaInicial ?? "-"}
+            inicial={buscaInicial}
             autoFoco
             opcoes={itens}
             textoBusca={(i) => `${i.it ?? ""} ${i.produto ?? ""} ${i.fabricante ?? ""} ${i.cor ?? ""} ${i.lote_a ?? ""} ${i.local ?? ""}`}

@@ -275,6 +275,21 @@ def registrar(dados: dict) -> dict:
             )
             mid = cur.fetchone()[0]
             cur.execute("update pintura_movimentos set item = %s where id = %s", (f"N:{mid}", mid))
+            # Scanner do quadradinho: guarda o código de cada lata e aprende "código -> produto".
+            fab, cor = _texto(dados.get("fabricante"), "o fabricante"), _texto(dados.get("cor"), "a cor")
+            for comp, un in (("a", un_a), ("b", un_b)):
+                cod = _texto(dados.get(f"codigo_{comp}"), "o código")
+                if not cod:
+                    continue
+                cur.execute(f"update pintura_movimentos set codigo_{comp} = %s where id = %s", (cod, mid))
+                cur.execute(
+                    """insert into pintura_codigos (codigo, gtin, produto, fabricante, cor, componente, un, por)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s)
+                       on conflict (codigo) do update set gtin = coalesce(excluded.gtin, pintura_codigos.gtin),
+                         produto = excluded.produto, fabricante = excluded.fabricante, cor = excluded.cor,
+                         componente = excluded.componente, un = excluded.un, por = excluded.por, atualizado_em = now()""",
+                    (cod, _texto(dados.get(f"gtin_{comp}"), "o GTIN"), produto, fab, cor, comp.upper(), un, por),
+                )
             conn.commit()
         return {"id": str(mid), "it": it}
     if tipo == "saida":
@@ -298,6 +313,27 @@ def registrar(dados: dict) -> dict:
             conn.commit()
         return {"id": str(mid), "saldo_a": round(atual["qt_a"] - qa, 3), "saldo_b": round(atual["qt_b"] - qb, 3)}
     raise ValueError("Tipo de lançamento inválido.")
+
+
+def buscar_codigos(codigos: list[str]) -> dict:
+    """O que o app já aprendeu de cada código lido no quadradinho (código WEG ou GTIN)."""
+    codigos = [c for c in codigos if c][:10]
+    if not codigos:
+        return {}
+    with _conectar() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select codigo, gtin, produto, fabricante, cor, componente, un from pintura_codigos
+               where codigo = any(%s) or gtin = any(%s)""",
+            (codigos, codigos),
+        )
+        nomes = [d.name for d in cur.description]
+        linhas = [dict(zip(nomes, r)) for r in cur.fetchall()]
+    saida = {}
+    for c in codigos:
+        achado = next((l for l in linhas if l["codigo"] == c), None) or next((l for l in linhas if l["gtin"] == c), None)
+        if achado:
+            saida[c] = achado
+    return saida
 
 
 def excluir(movimento_id: str, por: str | None) -> bool:

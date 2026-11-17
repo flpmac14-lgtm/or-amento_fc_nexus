@@ -633,6 +633,15 @@ def pintura_remover_foto(foto_id: str) -> dict:
     return {"ok": True}
 
 
+@app.get("/pintura/codigos")
+def pintura_codigos(c: str = "") -> dict:
+    """Produto já aprendido pra cada código lido no quadradinho (?c=10004434,7899125301740)."""
+    try:
+        return {"codigos": pintura_movimentos.buscar_codigos([x.strip() for x in c.split(",") if x.strip()])}
+    except BancoNaoConfigurado as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @app.get("/pintura/necessidade")
 def pintura_necessidade() -> dict:
     """'Vai ter tinta?': pedidos ativos (Cor 1/Cor 2/Plano) × estoque."""
