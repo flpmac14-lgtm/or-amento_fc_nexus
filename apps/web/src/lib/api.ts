@@ -1352,15 +1352,6 @@ export async function removerFotoPintura(fotoId: string): Promise<void> {
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao apagar a foto");
 }
 
-// Produto já aprendido pra cada código lido no quadradinho da lata (código WEG ou GTIN).
-export async function buscarCodigosPintura(
-  codigos: string[],
-): Promise<Record<string, import("@/lib/pintura").CodigoPintura>> {
-  const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/codigos?c=${encodeURIComponent(codigos.filter(Boolean).join(","))}`);
-  if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao consultar o código da etiqueta");
-  return (await resposta.json()).codigos;
-}
-
 export async function necessidadePintura(): Promise<import("@/lib/pintura").RespostaNecessidade> {
   const resposta = await fetch(`${CALC_ENGINE_URL}/pintura/necessidade`);
   if (!resposta.ok) throw await erroDaResposta(resposta, "Falha ao calcular a necessidade de tinta");

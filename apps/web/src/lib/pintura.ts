@@ -137,16 +137,6 @@ export interface RespostaNecessidade {
   planos_lidos: number;
 }
 
-export interface CodigoPintura {
-  codigo: string;
-  gtin: string | null;
-  produto: string;
-  fabricante: string | null;
-  cor: string | null;
-  componente: "A" | "B" | null;
-  un: string | null;
-}
-
 export type NovoMovimentoPintura =
   | {
       tipo: "entrada";
@@ -164,10 +154,6 @@ export type NovoMovimentoPintura =
       local?: string;
       mac?: string;
       obs?: string;
-      codigo_a?: string; // código lido no quadradinho (o app aprende código -> produto)
-      gtin_a?: string;
-      codigo_b?: string;
-      gtin_b?: string;
       por: string | null;
     }
   | { tipo: "saida"; item: string; qt_a: number; qt_b: number; mac?: string; obs?: string; por: string | null };

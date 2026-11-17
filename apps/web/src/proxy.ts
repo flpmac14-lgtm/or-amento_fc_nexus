@@ -126,7 +126,8 @@ export async function proxy(request: NextRequest) {
     (request.nextUrl.pathname.startsWith(ROTA_DOCUMENTOS) || request.nextUrl.pathname.startsWith("/api/documentos")) &&
     podeVerDocumentos(user?.email);
   // Pintura (estoque de tinta) pro felipe — pedido do usuário, 17/11/2026.
-  const pintura = request.nextUrl.pathname.startsWith(ROTA_PINTURA) && podeVerPintura(user);
+  const pintura =
+    (request.nextUrl.pathname.startsWith(ROTA_PINTURA) || request.nextUrl.pathname.startsWith("/api/pintura/")) && podeVerPintura(user);
   if (user && soFollowUp && !apiQualidade && !registro && !apiFollowUp && !documentos && !pintura && !request.nextUrl.pathname.startsWith(ROTA_FOLLOW_UP)) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ erro: `Conta com acesso restrito (${user.app_metadata?.acesso ?? ACESSO_SO_FOLLOW_UP}).` }, { status: 403 });
