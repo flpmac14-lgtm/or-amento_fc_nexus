@@ -26,6 +26,7 @@ from app.orcamentos_salvos import _conectar
 
 _BRASILIA = timezone(timedelta(hours=-3))
 TEXTO_MAX = 300
+LOTE_IA = 8  # planos por chamada à IA (lote grande volta 503 com frequência)
 UNIDADES = ("GL", "LA", "BD", "QT", "L", "KG")
 
 
@@ -38,6 +39,7 @@ def _sem_acento(s) -> str:
 def norm_produto(s) -> str:
     t = _sem_acento(s)
     t = re.sub(r"\bn\s*-?\s*(\d{4})\b", r"n\1", t)  # norma Petrobras: "N-2680" = "N2680"
+    t = re.sub(r"(\d)([a-z])", r"\1 \2", t)  # "670HS" = "670 HS"
     return re.sub(r"[^a-z0-9]+", " ", t).strip()
 
 
@@ -50,9 +52,18 @@ def _tokens_distintos(s: str) -> set[str]:
     return {t for t in norm_produto(s).split() if t not in _GENERICAS and (len(t) >= 3 or any(c.isdigit() for c in t))}
 
 
+# Cor por extenso (como a IA às vezes devolve) -> sigla usada na planilha.
+_SIGLAS_COR = {"preto": "pt", "preta": "pt", "cinza": "cz", "amarelo": "am", "amarela": "am", "azul": "az",
+               "branco": "br", "branca": "br", "vermelho": "vm", "vermelha": "vm", "laranja": "lr", "verde": "vd",
+               "aluminio": "al", "marrom": "mr"}
+
+
 def norm_cor(s) -> str:
-    t = re.sub(r"[^a-z0-9]+", " ", _sem_acento(s)).split()
-    t = [x for x in t if x not in ("m", "munsell")]  # "AM-M. 5 Y 8/12" = "AM 5 Y 8/12"
+    t = _sem_acento(s)
+    t = re.sub(r"(\d)[,.]0\b", r"\1", t)  # "N1,0" = "N1"
+    t = re.sub(r"(\d)([a-z])", r"\1 \2", t)  # "5Y" = "5 Y"
+    t = re.sub(r"[^a-z0-9]+", " ", t).split()
+    t = [_SIGLAS_COR.get(x, x) for x in t if x not in ("m", "munsell")]  # "AM-M. 5 Y 8/12" = "AM 5 Y 8/12"
     return " ".join(t)
 
 
@@ -62,6 +73,12 @@ def _codigo_cor(n: str) -> str:
     if t and t[0].isalpha() and len(t[0]) <= 3 and len(t) > 1:
         t = t[1:]
     return " ".join(t) if any(c.isdigit() for c in " ".join(t)) else ""
+
+
+def cor_significativa(c) -> bool:
+    """Tem cara de cor: sigla conhecida (CZ, AM, RAL...) ou código com número."""
+    n = norm_cor(c)
+    return bool(n) and (any(ch.isdigit() for ch in n) or n.split()[0] in set(_SIGLAS_COR.values()) | {"ral"})
 
 
 def cor_bate(a, b) -> bool:
@@ -394,10 +411,18 @@ def _chamar_ia(planos: list[str]) -> list[dict]:
             },
         },
     }
-    r = httpx.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
-        headers={"x-goog-api-key": chave}, json=corpo, timeout=120,
-    )
+    import time
+
+    # 503/429 = Gemini sobrecarregado (passageiro): tenta de novo algumas vezes;
+    # se não der, o próximo ciclo de 15 min tenta outra vez (nada fica no cache).
+    for tentativa in range(4):
+        r = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
+            headers={"x-goog-api-key": chave}, json=corpo, timeout=120,
+        )
+        if r.status_code not in (429, 500, 503) or tentativa == 3:
+            break
+        time.sleep(10 * (tentativa + 1))
     r.raise_for_status()
     texto = r.json()["candidates"][0]["content"]["parts"][0]["text"]
     return json.loads(texto)["planos"]
@@ -434,21 +459,33 @@ def analisar_planos_novos(maximo: int = 60) -> str | None:
         resto = [(h, p) for h, p in novos.items() if h not in obvios][:maximo]
         if not resto or not os.environ.get("GOOGLE_API_KEY"):
             return f"{len(obvios)} plano(s) sem pintura" + (f", {len(resto)} aguardando IA (sem chave)" if resto else "")
-        respostas = {r["id"]: r for r in _chamar_ia([p for _, p in resto])}
         modelo = os.environ.get("PINTURA_IA_MODELO", "gemini-3.5-flash-lite")
-        gravados = 0
-        for i, (h, p) in enumerate(resto):
-            r = respostas.get(i)
-            if r is None:
+        gravados = chamadas = falhas = 0
+        # Lotes pequenos: o pedido com ~76 planos de uma vez voltava 503 (17/11/2026).
+        # Cada lote é gravado assim que volta; se um falhar, o próximo ciclo continua dali.
+        for ini in range(0, len(resto), LOTE_IA):
+            lote = resto[ini:ini + LOTE_IA]
+            try:
+                respostas = {r["id"]: r for r in _chamar_ia([p for _, p in lote])}
+            except Exception:  # noqa: BLE001 — Gemini sobrecarregado: segue com os outros lotes
+                falhas += 1
+                if falhas >= 2:
+                    break
                 continue
-            res = {"sem_pintura": bool(r.get("sem_pintura")),
-                   "tintas": [{"produto": t.get("produto"), "cor": t.get("cor"), "micras": t.get("micras")}
-                              for t in r.get("tintas") or [] if t.get("produto")]}
-            cur.execute("insert into pintura_planos_ia (hash, plano, resultado, modelo) values (%s, %s, %s, %s) "
-                        "on conflict do nothing", (h, p, Jsonb(res), modelo))
-            gravados += 1
-        conn.commit()
-    return f"IA leu {gravados} plano(s) novo(s) em 1 chamada" + (f", {len(obvios)} sem pintura" if obvios else "")
+            chamadas += 1
+            for i, (h, p) in enumerate(lote):
+                r = respostas.get(i)
+                if r is None:
+                    continue
+                res = {"sem_pintura": bool(r.get("sem_pintura")),
+                       "tintas": [{"produto": t.get("produto"), "cor": t.get("cor"), "micras": t.get("micras")}
+                                  for t in r.get("tintas") or [] if t.get("produto")]}
+                cur.execute("insert into pintura_planos_ia (hash, plano, resultado, modelo) values (%s, %s, %s, %s) "
+                            "on conflict do nothing", (h, p, Jsonb(res), modelo))
+                gravados += 1
+            conn.commit()
+    return (f"IA leu {gravados} plano(s) novo(s) em {chamadas} chamada(s)" + (f", {len(obvios)} sem pintura" if obvios else "")
+            + (f", {falhas} lote(s) com Gemini sobrecarregado (tenta no próximo ciclo)" if falhas else ""))
 
 
 # ---------------------------------------------------------------- vai ter tinta?
@@ -509,7 +546,7 @@ def necessidade() -> dict:
             if g["produto"]:
                 if not produto_bate(g["produto"], i["produto"] or "", i.get("petrobras")):
                     continue
-                if g["cor"] and i["cor"] and not cor_bate(g["cor"], i["cor"]):
+                if cor_significativa(g["cor"]) and i["cor"] and not cor_bate(g["cor"], i["cor"]):
                     continue
             elif not cor_bate(g["cor"], i["cor"]):
                 continue
