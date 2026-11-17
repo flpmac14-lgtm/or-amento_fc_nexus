@@ -167,6 +167,11 @@ function corNorm(s: string | null | undefined): string {
     .join(" ");
 }
 
+/** Mesma tinta = mesmo produto + mesma cor (pra somar as linhas/ITs no total). */
+function chaveTinta(i: { produto: string | null; cor: string | null }): string {
+  return `${tokens(i.produto).join(" ")}|${corNorm(i.cor)}`;
+}
+
 /** Produto do estoque/catálogo que bate com o lido na etiqueta (pra usar o mesmo nome e local). */
 function melhorOpcao(opcoes: OpcaoProduto[], produto: string | null, cor: string | null): OpcaoProduto | null {
   const lidos = tokens(produto);
@@ -1119,6 +1124,21 @@ export default function PaginaPintura() {
 
   const comSaldo = useMemo(() => estoque.filter((i) => i.qt_a > 0 || i.qt_b > 0), [estoque]);
 
+  // Cada entrada é uma linha com IT próprio; o total da tinta (produto + cor) soma todas as linhas.
+  const totais = useMemo(() => {
+    const m = new Map<string, { qt_a: number; qt_b: number; linhas: number; un_a: string | null }>();
+    for (const i of estoque) {
+      const k = chaveTinta(i);
+      const t = m.get(k) ?? { qt_a: 0, qt_b: 0, linhas: 0, un_a: i.un_a };
+      t.qt_a += Math.max(0, i.qt_a);
+      t.qt_b += Math.max(0, i.qt_b);
+      if (i.qt_a > 0 || i.qt_b > 0) t.linhas += 1;
+      m.set(k, t);
+    }
+    return m;
+  }, [estoque]);
+  const totalDe = (i: ItemEstoquePintura) => totais.get(chaveTinta(i));
+
   const resumo = useMemo(
     () => ({
       todos: estoque.length,
@@ -1374,6 +1394,16 @@ export default function PaginaPintura() {
                   <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
                     {e.venc_a && <Venc v={e.venc_a} s={e.sa} />}
                     {e.venc_b && e.sb !== "sem" && e.sb !== "ok" && <Venc v={e.venc_b} s={e.sb} />}
+                    {(totalDe(e)?.linhas ?? 0) > 1 && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 font-semibold text-blue-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+                        Total da tinta: {qtd(totalDe(e)!.qt_a)} {totalDe(e)!.un_a} ({totalDe(e)!.linhas} linhas)
+                      </span>
+                    )}
+                    {e.entrada_em && (
+                      <span className="ml-auto text-stone-500 dark:text-slate-400">
+                        inserido {dataHora(e.entrada_em)}
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -1397,6 +1427,10 @@ export default function PaginaPintura() {
                     <th className={th}>Venc. B</th>
                     <th className={`${th} border-l border-stone-200 dark:border-slate-700`}>MAC</th>
                     <th className={th} />
+                    <th className={`${th} border-l border-stone-200 dark:border-slate-700`} title="Soma do saldo A de todas as linhas (ITs) desta tinta">
+                      Total da tinta
+                    </th>
+                    <th className={th}>Inserido em</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1450,6 +1484,29 @@ export default function PaginaPintura() {
                           >
                             Baixa
                           </button>
+                        )}
+                      </td>
+                      <td className={`${td} border-l border-stone-100 whitespace-nowrap dark:border-slate-800`}>
+                        {(() => {
+                          const t = totalDe(e);
+                          return t && t.linhas > 1 ? (
+                            <span title={`${t.linhas} linhas com saldo desta tinta`}>
+                              <b className="tabular-nums text-blue-700 dark:text-cyan-300">{qtd(t.qt_a)}</b>{" "}
+                              <span className="text-[11px] text-stone-500">{t.un_a} · {t.linhas} lin.</span>
+                            </span>
+                          ) : (
+                            <span className="text-stone-300 dark:text-slate-600">—</span>
+                          );
+                        })()}
+                      </td>
+                      <td className={`${td} whitespace-nowrap text-xs text-stone-500 dark:text-slate-400`}>
+                        {e.entrada_em ? (
+                          <>
+                            {dataHora(e.entrada_em)}
+                            <span className="block text-[10px]">{e.entrada_por}</span>
+                          </>
+                        ) : (
+                          <span title="Veio da planilha original">planilha</span>
                         )}
                       </td>
                     </tr>
@@ -1692,6 +1749,13 @@ export default function PaginaPintura() {
                 ["Diluente", detalhe.diluente],
                 ["Petrobras", detalhe.petrobras],
                 ["MAC", detalhe.mac],
+                [
+                  "Total da tinta (todas as linhas)",
+                  (totalDe(detalhe)?.linhas ?? 0) > 1
+                    ? `${qtd(totalDe(detalhe)!.qt_a)} ${detalhe.un_a ?? ""} (A) · ${qtd(totalDe(detalhe)!.qt_b)} (B) — ${totalDe(detalhe)!.linhas} linhas`
+                    : null,
+                ],
+                ["Inserido no sistema em", detalhe.entrada_em ? `${dataHora(detalhe.entrada_em)} — ${detalhe.entrada_por ?? "?"}` : null],
                 ["Obs.", detalhe.obs],
               ] as [string, unknown][]
             )
