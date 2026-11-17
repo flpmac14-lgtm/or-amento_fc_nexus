@@ -123,7 +123,8 @@ export function comDestaque<T extends { valor: string }>(visoes: T[], destaque: 
 // Ordens de produção pra contas fora do total/PCP — pedido do usuário (16/11/2026):
 // o pedro ajuda a monitorar e imprimir as OPs (só olha; criar/editar segue em lib/acesso.ts::podePlanejarOP).
 // O marcelo já vê pelo perfil follow_up.
-const ORDENS_EXTRA = new Set(["pedro@fcnexus.local"]);
+// 17/11/2026: saymon (líder da Usinagem) também — pra ver quem está apontando (só olha).
+const ORDENS_EXTRA = new Set(["pedro@fcnexus.local", "saymon@fcnexus.local"]);
 
 export function veOrdensExtra(email: string | null | undefined): boolean {
   return ORDENS_EXTRA.has((email ?? "").trim().toLowerCase());
