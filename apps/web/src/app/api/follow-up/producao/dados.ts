@@ -64,15 +64,19 @@ export async function carregarOps(
   const ids = (ops ?? []).map((o) => o.id as string);
   if (!ids.length) return { ops: [], apontamentos: [] };
   const itemIds = [...new Set((ops ?? []).map((o) => o.item_id as string | null).filter(Boolean))] as string[];
-  const [et, ap, im] = await Promise.all([
-    comRetentativa(() => admin.from("prod_op_etapas").select(CAMPOS_ETAPA).in("op_id", ids).order("posicao")),
-    comRetentativa(() => admin.from("prod_apontamentos").select(CAMPOS_AP).in("op_id", ids).order("inicio")),
-    itemIds.length
-      ? comRetentativa(() => admin.from("follow_up_imagens").select("item_id, midia_sha256, ordem").in("item_id", itemIds).order("ordem"))
-      : Promise.resolve({ data: [] as { item_id: string; midia_sha256: string }[], error: null }),
+  // O Supabase devolve no máximo 1000 linhas por consulta (max_rows): com ~400 OPs × 9 etapas
+  // o painel recebia só parte das etapas e a etapa "sumia" (e o Editar OP apagava as que faltavam).
+  // Por isso lê em lotes de OPs e páginas de 1000 — bug achado na OP 0009 (18/11/2026).
+  const [etData, apData, imData] = await Promise.all([
+    lerTudo(ids, (lote, de, ate) => admin.from("prod_op_etapas").select(CAMPOS_ETAPA).in("op_id", lote).order("posicao").order("id").range(de, ate)),
+    lerTudo(ids, (lote, de, ate) => admin.from("prod_apontamentos").select(CAMPOS_AP).in("op_id", lote).order("inicio").order("id").range(de, ate)),
+    lerTudo(itemIds, (lote, de, ate) =>
+      admin.from("follow_up_imagens").select("item_id, midia_sha256, ordem").in("item_id", lote).order("ordem").order("midia_sha256").range(de, ate),
+    ),
   ]);
-  const erro = et.error ?? ap.error ?? im.error;
-  if (erro) throw new Error(erro.message);
+  const et = { data: etData as unknown as Etapa[] };
+  const ap = { data: (apData as unknown as Apontamento[]).sort((a, b) => a.inicio.localeCompare(b.inicio)) };
+  const im = { data: (imData as unknown as { item_id: string; midia_sha256: string; ordem: number }[]).sort((a, b) => a.ordem - b.ordem) };
   const foto = new Map<string, string>();
   const fotos = new Map<string, string[]>();
   for (const f of im.data ?? []) {
@@ -96,6 +100,29 @@ export async function carregarOps(
     })),
     apontamentos: ((ap.data ?? []) as Apontamento[]).map((a) => ({ ...a, qtde: a.qtde === null ? null : Number(a.qtde) })),
   };
+}
+
+/** Lê todas as linhas de um `.in(chaves)`: lotes de 150 chaves (URL curta) × páginas de 1000 (max_rows do Supabase). */
+async function lerTudo(
+  chaves: string[],
+  consulta: (lote: string[], de: number, ate: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<Record<string, unknown>[]> {
+  const PAGINA = 1000;
+  const lotes: string[][] = [];
+  for (let i = 0; i < chaves.length; i += 150) lotes.push(chaves.slice(i, i + 150));
+  const partes = await Promise.all(
+    lotes.map(async (lote) => {
+      const linhas: Record<string, unknown>[] = [];
+      for (let de = 0; ; de += PAGINA) {
+        const { data, error } = await comRetentativa(() => consulta(lote, de, de + PAGINA - 1));
+        if (error) throw new Error(error.message);
+        linhas.push(...((data ?? []) as Record<string, unknown>[]));
+        if ((data ?? []).length < PAGINA) break;
+      }
+      return linhas;
+    }),
+  );
+  return partes.flat();
 }
 
 /** "Hoje" de Brasília (a Vercel roda em UTC). */

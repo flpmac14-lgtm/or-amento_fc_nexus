@@ -534,16 +534,18 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
     return () => window.removeEventListener("keydown", esc);
   }, [fechar, corrigir]);
 
-  async function acao(corpo: Record<string, unknown>, confirmar?: string) {
-    if (confirmar && !window.confirm(confirmar)) return;
+  async function acao(corpo: Record<string, unknown>, confirmar?: string): Promise<boolean> {
+    if (confirmar && !window.confirm(confirmar)) return false;
     setOcupado(true);
     setErro("");
     try {
       await api("/api/follow-up/producao", { id: op.id, ...corpo });
       recarregar();
       if (corpo.acao === "excluir") fechar();
+      return true;
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setOcupado(false);
     }
@@ -559,8 +561,9 @@ function DetalheOP({ op, dados, agora, fechar, recarregar }: { op: OP; dados: Da
   async function salvarEdicao() {
     const v = validarEtapas(etapasEd, dados.cadastros);
     if (v) return setErro(v);
-    await acao({ acao: "editar", ...cab, prazo: cab.prazo || null, etapas: etapasParaEnvio(dados.cadastros, etapasEd), roteiro_origem: origemEd });
-    setEditando(false);
+    // Só fecha o editor se salvou — com erro, a tela continua com as alterações e mostra o motivo.
+    if (await acao({ acao: "editar", ...cab, prazo: cab.prazo || null, etapas: etapasParaEnvio(dados.cadastros, etapasEd), roteiro_origem: origemEd }))
+      setEditando(false);
   }
 
   const prevTot = op.etapas.reduce((s, e) => s + horasPrevistas(e, op.quantidade), 0);
