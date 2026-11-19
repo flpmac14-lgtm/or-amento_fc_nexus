@@ -383,7 +383,8 @@ def _normalizar_alteracoes(alteracoes: dict) -> dict:
     return normal
 
 
-def _marcas_status(atual: str | None, novo: str | None, dt_fazendo, dt_pausado, anterior: int, agora: datetime) -> dict:
+def _marcas_status(atual: str | None, novo: str | None, dt_fazendo, dt_pausado, anterior: int, agora: datetime,
+                   dt_feito=None) -> dict:
     """Datas que a troca de status grava (migration 0032 — pedido do usuário:
     mapear o tempo Fazendo → Feito / Pausado). Fazendo → Pausado → Fazendo
     soma o trecho já feito em tempo_anterior_min e recomeça o Fazendo."""
@@ -392,6 +393,10 @@ def _marcas_status(atual: str | None, novo: str | None, dt_fazendo, dt_pausado, 
     if novo == "Fazendo":
         if atual == "Pausado" and dt_fazendo and dt_pausado:
             anterior = (anterior or 0) + minutos_uteis(dt_fazendo, dt_pausado)
+        elif atual == "Feito" and dt_fazendo and (dt_pausado or dt_feito):
+            # Apontar de novo (outra peça da mesma posição, outro programa — pedido
+            # do usuário 19/11/2026): soma o tempo já feito em vez de zerar.
+            anterior = (anterior or 0) + minutos_uteis(dt_fazendo, dt_pausado or dt_feito)
         else:
             anterior = 0
         return {"dt_fazendo": agora, "dt_pausado": None, "tempo_anterior_min": anterior}
@@ -405,14 +410,14 @@ def _marcas_status(atual: str | None, novo: str | None, dt_fazendo, dt_pausado, 
 def _salvar(cur, ids: list[str], normal: dict, editado_por: str | None) -> None:
     agora = datetime.now(timezone.utc)
     cur.execute(
-        "select id, status, dt_fazendo, dt_pausado, tempo_anterior_min from croqui_corte_itens "
+        "select id, status, dt_fazendo, dt_pausado, tempo_anterior_min, dt_feito from croqui_corte_itens "
         "where id = any(%s::uuid[]) for update",
         (ids,),
     )
-    for item_id, status, dt_fazendo, dt_pausado, anterior in cur.fetchall():
+    for item_id, status, dt_fazendo, dt_pausado, anterior, dt_feito in cur.fetchall():
         sets = dict(normal)
         if "status" in normal:
-            sets.update(_marcas_status(status, normal["status"], dt_fazendo, dt_pausado, anterior, agora))
+            sets.update(_marcas_status(status, normal["status"], dt_fazendo, dt_pausado, anterior, agora, dt_feito))
         cur.execute(
             f"update croqui_corte_itens set {', '.join(f'{c} = %s' for c in sets)}, editado_em = %s, editado_por = %s "
             "where id = %s",

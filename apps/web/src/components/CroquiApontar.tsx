@@ -49,6 +49,17 @@ function valorChave(i: ItemCroquiCorte, c: Chave): string {
   return (v ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 }
 
+// Nº do programa: vários na mesma linha separados por vírgula ("1589, 1590"),
+// como a aba Corte já entende (subprogramas).
+function programas(v: string | null | undefined): string[] {
+  return (v ?? "").split(/[,;/]+/).map((x) => x.trim()).filter(Boolean);
+}
+function juntarProgramas(atual: string | null | undefined, novo: string): string {
+  const l = programas(atual);
+  for (const x of programas(novo)) if (!l.includes(x)) l.push(x);
+  return l.join(", ");
+}
+
 function naAba(i: ItemCroquiCorte, aba: Aba): boolean {
   if (aba === "todos") return true;
   if (aba === "fazendo") return i.status === "Fazendo";
@@ -89,6 +100,9 @@ export default function CroquiApontar({
 }) {
   const [aba, setAba] = useState<Aba>("afazer");
   const [busca, setBusca] = useState("");
+  // Filtros próprios de desenho e posição (pedido do usuário, 19/11/2026).
+  const [fDesenho, setFDesenho] = useState("");
+  const [fPos, setFPos] = useState("");
   const [agrupar, setAgrupar] = useState<Chave | "">("");
   const [foco, setFoco] = useState<{ chave: Chave; valor: string } | null>(null);
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
@@ -125,6 +139,8 @@ export default function CroquiApontar({
 
   const lista = useMemo(() => {
     const termo = normalizarBusca(busca);
+    const tDesenho = normalizarBusca(fDesenho);
+    const tPos = normalizarBusca(fPos);
     const l = itens.filter((i) => {
       if (foco) {
         if (valorChave(i, foco.chave) !== foco.valor) return false;
@@ -133,13 +149,15 @@ export default function CroquiApontar({
         const alvo = normalizarBusca([i.pedido, i.mac, i.descricao, i.desenho, i.mp, i.pos, i.n_programa, i.observacao].filter(Boolean).join(" "));
         if (!alvo.includes(termo)) return false;
       }
+      if (tDesenho && !normalizarBusca(i.desenho ?? "").includes(tDesenho)) return false;
+      if (tPos && !normalizarBusca(i.pos ?? "").includes(tPos)) return false;
       return true;
     });
     // Fazendo primeiro, depois Pausado, depois o resto (ordem do Pedido).
     const peso = (i: ItemCroquiCorte) => (i.status === "Fazendo" ? 0 : i.status === "Pausado" ? 1 : !i.status ? 2 : 3);
     l.sort((a, b) => peso(a) - peso(b) || a.pedido.localeCompare(b.pedido, "pt-BR", { numeric: true }));
     return l;
-  }, [itens, aba, busca, foco]);
+  }, [itens, aba, busca, foco, fDesenho, fPos]);
 
   const blocos = useMemo(() => {
     const visiveis = lista.slice(0, limite);
@@ -196,14 +214,23 @@ export default function CroquiApontar({
   }
 
   // Aponta: quem estiver sem projetista recebe o nome de quem apontou.
-  async function apontar(ids: string[], alteracoes: Alteracoes, rotulo: string) {
+  function apontar(ids: string[], alteracoes: Alteracoes, rotulo: string) {
+    return apontarGrupos([{ ids, alt: alteracoes }], rotulo);
+  }
+
+  // Cada grupo = mesmas alterações (ex.: programas diferentes por linha).
+  async function apontarGrupos(lista: { ids: string[]; alt: Alteracoes }[], rotulo: string) {
+    const ids = lista.flatMap((g) => g.ids);
     if (!ids.length || enviando) return;
     setEnviando(true);
     try {
-      const semProj = meuNome && !("projetista" in alteracoes) ? ids.filter((id) => !porId.get(id)?.projetista) : [];
-      const comProj = ids.filter((id) => !semProj.includes(id));
-      if (semProj.length) await aplicar(semProj, { ...alteracoes, projetista: meuNome }, rotulo);
-      if (comProj.length) await aplicar(comProj, alteracoes, rotulo);
+      for (const { ids: gIds, alt } of lista) {
+        if (!gIds.length) continue;
+        const semProj = meuNome && !("projetista" in alt) ? gIds.filter((id) => !porId.get(id)?.projetista) : [];
+        const comProj = gIds.filter((id) => !semProj.includes(id));
+        if (semProj.length) await aplicar(semProj, { ...alt, projetista: meuNome }, rotulo);
+        if (comProj.length) await aplicar(comProj, alt, rotulo);
+      }
       setSelecao((s) => {
         const n = new Set(s);
         for (const id of ids) n.delete(id);
@@ -217,17 +244,26 @@ export default function CroquiApontar({
   }
 
   function pedirTerminar(ids: string[]) {
-    const progs = [...new Set(ids.map((id) => porId.get(id)?.n_programa ?? "").filter(Boolean))];
-    setTerminar({ ids, programa: progs.length === 1 ? progs[0] : "" });
+    setTerminar({ ids, programa: "" });
+  }
+
+  // Programa novo é ACRESCENTADO ao que a linha já tem (1566 → 1566, 1590),
+  // nunca troca — a mesma posição pode sair em mais de um programa.
+  function gruposPrograma(ids: string[], novo: string, base: Alteracoes): { ids: string[]; alt: Alteracoes }[] {
+    if (!programas(novo).length) return [{ ids, alt: base }];
+    const m = new Map<string, string[]>();
+    for (const id of ids) {
+      const v = juntarProgramas(porId.get(id)?.n_programa, novo);
+      m.set(v, [...(m.get(v) ?? []), id]);
+    }
+    return [...m.entries()].map(([v, gIds]) => ({ ids: gIds, alt: { ...base, n_programa: v } }));
   }
 
   async function confirmarTerminar() {
     if (!terminar) return;
-    const alt: Alteracoes = { status: "Feito" };
-    if (terminar.programa.trim()) alt.n_programa = terminar.programa.trim();
-    const { ids } = terminar;
+    const { ids, programa } = terminar;
     setTerminar(null);
-    await apontar(ids, alt, "Feito");
+    await apontarGrupos(gruposPrograma(ids, programa, { status: "Feito" }), "Feito");
   }
 
   const outros = opcoesStatus.filter((s) => !PASSOS.has(s));
@@ -248,7 +284,18 @@ export default function CroquiApontar({
           </button>
         </>
       );
-    if (i.status === "Feito") return null;
+    if (i.status === "Feito")
+      return (
+        <button
+          type="button"
+          disabled={enviando}
+          onClick={() => apontarUma(i, "Fazendo")}
+          title="Outra peça desta posição vai sair em outro programa: volta pra Fazendo (o tempo já feito soma) e no Terminar o novo programa é acrescentado"
+          className={`${botao} border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200`}
+        >
+          ↺ Apontar de novo
+        </button>
+      );
     return (
       <button type="button" disabled={enviando} onClick={() => apontarUma(i, "Fazendo")} className={btnComecar}>
         ▶ {i.status === "Pausado" ? "Retomar" : "Começar"}
@@ -331,8 +378,11 @@ export default function CroquiApontar({
               </span>
             )}
             {i.n_programa && (
-              <span>
-                Programa <strong className="font-mono text-stone-800 dark:text-slate-200">{i.n_programa}</strong>
+              <span
+                className="rounded bg-sky-50 px-1.5 text-sky-800 dark:bg-sky-500/10 dark:text-sky-200"
+                title="Programa(s) já anexado(s) a esta linha — um novo é acrescentado, não troca"
+              >
+                📎 programa <strong className="font-mono">{programas(i.n_programa).join(" / ")}</strong>
               </span>
             )}
             {tempo !== null && (
@@ -420,6 +470,43 @@ export default function CroquiApontar({
           placeholder="Buscar pedido, MAC, desenho, pos, MP, programa…"
           className="min-w-[14rem] flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500"
         />
+        <input
+          value={fDesenho}
+          onChange={(e) => {
+            setFDesenho(e.target.value);
+            setFoco(null);
+            setLimite(LIMITE);
+            if (e.target.value) setAba("todos");
+          }}
+          placeholder="Desenho"
+          title="Filtrar pelo desenho (procura em todas as situações, inclusive Feito)"
+          className="w-40 rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500"
+        />
+        <input
+          value={fPos}
+          onChange={(e) => {
+            setFPos(e.target.value);
+            setFoco(null);
+            setLimite(LIMITE);
+            if (e.target.value) setAba("todos");
+          }}
+          placeholder="Posição"
+          title="Filtrar pela posição (ex.: 007 ou 002.006)"
+          className="w-28 rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-sm text-stone-900 outline-none focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500"
+        />
+        {(fDesenho || fPos) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFDesenho("");
+              setFPos("");
+            }}
+            className="text-sm text-stone-500 hover:text-red-600 dark:text-slate-400"
+            title="Limpar desenho e posição"
+          >
+            ✕
+          </button>
+        )}
         <label className="flex items-center gap-1.5 text-sm text-stone-600 dark:text-slate-400">
           Agrupar
           <select
@@ -517,17 +604,17 @@ export default function CroquiApontar({
                 onChange={(e) => setProgramaLote(e.target.value)}
                 placeholder="Nº programa"
                 className="w-28 rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm text-stone-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                title="Mesmo programa pra todas as selecionadas (otimização). Vários: 380, 381"
+                title="Acrescenta este programa em todas as selecionadas (o que já tinham fica). Vários: 380, 381"
               />
               <button
                 type="button"
                 disabled={enviando || !programaLote.trim()}
                 onClick={() => {
-                  apontar([...selecao], { n_programa: programaLote.trim() }, "Nº do programa").then(() => setProgramaLote(""));
+                  apontarGrupos(gruposPrograma([...selecao], programaLote, {}), "Nº do programa").then(() => setProgramaLote(""));
                 }}
                 className="rounded-lg border border-stone-300 px-2 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
-                Gravar
+                ＋ Programa
               </button>
             </span>
             {outros.length > 0 && (
@@ -593,6 +680,11 @@ export default function CroquiApontar({
                         · {formatarNumero(o.qtt, Number.isInteger(o.qtt) ? 0 : 2)} {o.un ?? ""}
                       </span>
                     )}
+                    {programas(o.n_programa).length > 0 && (
+                      <span className="rounded bg-sky-50 px-1 font-mono text-[11px] text-sky-800 dark:bg-sky-500/10 dark:text-sky-200" title="Programa já anexado">
+                        📎 {programas(o.n_programa).join(" / ")}
+                      </span>
+                    )}
                     <span className="ml-auto">
                       <Selo status={o.status} />
                     </span>
@@ -643,8 +735,27 @@ export default function CroquiApontar({
             <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">
               Grava <strong>Feito</strong> com a hora de agora. Se saiu num programa, informe o número (vale pra todas).
             </p>
+            {(() => {
+              const comProg = terminar.ids.map((id) => porId.get(id)).filter((x): x is ItemCroquiCorte => !!x && programas(x.n_programa).length > 0);
+              if (!comProg.length) return null;
+              return (
+                <div className="mt-2 rounded-lg bg-sky-50 px-2.5 py-2 text-xs text-sky-900 dark:bg-sky-500/10 dark:text-sky-100">
+                  <p className="font-semibold">📎 Já tem programa anexado — o novo é acrescentado:</p>
+                  <ul className="mt-1 flex max-h-28 flex-col gap-0.5 overflow-y-auto">
+                    {comProg.map((x) => (
+                      <li key={x.id} className="font-mono">
+                        {x.pedido}: {programas(x.n_programa).join(" / ")}
+                        {programas(terminar.programa).length > 0 && (
+                          <span className="text-sky-700 dark:text-sky-300"> → {juntarProgramas(x.n_programa, terminar.programa).replace(/, /g, " / ")}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
             <label className="mt-3 flex flex-col gap-1 text-xs font-semibold text-stone-700 dark:text-slate-300">
-              Nº do programa (opcional)
+              Nº do programa novo (opcional)
               <input
                 autoFocus
                 value={terminar.programa}
