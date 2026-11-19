@@ -132,7 +132,10 @@ export function contaTotem(user: Pick<User, "app_metadata"> | null | undefined):
 // Criar / liberar / encerrar OP e corrigir apontamento: o flpmac14 (e contas de
 // acesso total) e o marcelo (PCP, perfil follow_up). Conferido na rota
 // /api/follow-up/producao. Os outros perfis com a aba só olham.
+// 19/11/2026: o pedro (Qualidade) também cria OP — pedido do usuário.
+const PLANEJA_OP_EXTRA = new Set(["pedro@fcnexus.local"]);
 export function podePlanejarOP(user: Pick<User, "app_metadata" | "email"> | null | undefined): boolean {
   const p = perfilModulo(user);
-  return !contaTotem(user) && (p === "total" || p === "follow_up");
+  if (contaTotem(user)) return false;
+  return p === "total" || p === "follow_up" || PLANEJA_OP_EXTRA.has((user?.email ?? "").trim().toLowerCase());
 }
