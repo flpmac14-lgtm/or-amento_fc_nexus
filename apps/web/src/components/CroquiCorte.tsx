@@ -22,7 +22,6 @@ import {
 } from "@/lib/api";
 import { perfilModulo } from "@/lib/acesso";
 import { usuarioEfetivo } from "@/lib/verComo";
-import { minutosUteis } from "@/lib/jornada";
 import { duracao } from "@/lib/painel";
 import { formatarNumero } from "@/lib/format";
 import { compararValores, normalizarBusca } from "@/lib/followUp";
@@ -34,32 +33,16 @@ import FollowUpSino from "@/components/FollowUpSino";
 import { NumeroPrograma, usePdfsCorte } from "@/components/PdfPrograma";
 import { useLimparComF4 } from "@/lib/atalhoLimpar";
 import { repetirComAbaVisivel } from "@/lib/repetir";
-import { macBase } from "@/lib/almoxarifado";
+import { COR_STATUS, fotosDe, tempoMin, type FotosRef } from "@/lib/croquiCorte";
 import { urlImagemFollowUp } from "@/lib/api";
 import { GaleriaImagens } from "@/components/FollowUpDetalhe";
+import CroquiApontar from "@/components/CroquiApontar";
+
+// Modo Apontar (cartões + lote, pedido do usuário 19/11/2026) × Planilha.
+const CHAVE_MODO = "fcnexus.croquicorte.modo";
+type Modo = "apontar" | "planilha";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
-
-// Foto de referência (pedido do usuário, 04/11/2026): a imagem do Follow up na
-// 1ª coluna — da peça (PO = Pedido sem a posição), senão do desenho, senão da obra (MAC).
-type FotosRef = { grupos: ImagemFollowUp[][]; po: Record<string, number>; desenho: Record<string, number>; mac: Record<string, number> };
-function fotosDe(f: FotosRef | null, i: ItemCroquiCorte): ImagemFollowUp[] {
-  if (!f) return [];
-  const po = (i.pedido ?? "").trim().toUpperCase().replace(/\.[^.]*$/, "");
-  const g = f.po[po] ?? f.desenho[(i.desenho ?? "").trim().toUpperCase()] ?? f.mac[macBase(i.mac)];
-  return g === undefined ? [] : f.grupos[g] ?? [];
-}
-
-// Cores da formatação condicional da planilha (Status).
-const COR_STATUS: Record<string, string> = {
-  "Sem Corte": "#44B3E1",
-  Fazendo: "#FFFF00",
-  Pausado: "#FFC000",
-  Feito: "#DAF2D0",
-  Terceirizado: "#C4A7E7",
-  "Corte Manual": "#F8CBAD",
-  "Aguardando revisão": "#FF0000",
-};
 
 // Colunas que dá pra "puxar" como no Excel (arrastar o quadradinho do canto).
 const PUXAVEIS = new Set<Campo>(["status", "projetista", "n_programa", "observacao"]);
@@ -116,20 +99,6 @@ function dataHora(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-
-// Minutos de jornada trabalhados: etapas antes do último Fazendo + o trecho
-// atual, que termina agora (Fazendo), no Pausado (Pausado, ou Feito depois de
-// pausar) ou no Feito. Mesma regra de app/croqui_corte.py (migration 0032).
-function tempoMin(item: ItemCroquiCorte, agora: Date = new Date()): number | null {
-  const anterior = item.tempo_anterior_min ?? 0;
-  if (!item.dt_fazendo) return anterior || null;
-  let fim: string | Date | null = null;
-  if (item.status === "Fazendo") fim = agora;
-  else if (item.status === "Pausado") fim = item.dt_pausado;
-  else if (item.status === "Feito") fim = item.dt_pausado ?? item.dt_feito;
-  if (!fim) return anterior || null;
-  return anterior + minutosUteis(item.dt_fazendo, fim);
 }
 
 function exibir(item: ItemCroquiCorte, col: Coluna): string {
@@ -248,6 +217,16 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const tabela = useRef<HTMLDivElement>(null);
   const [fotos, setFotos] = useState<FotosRef | null>(null);
   const [galeria, setGaleria] = useState<{ imagens: ImagemFollowUp[]; indice: number; titulo: string } | null>(null);
+  const [modo, setModo] = useState<Modo>("planilha");
+
+  function trocarModo(m: Modo) {
+    setModo(m);
+    try {
+      localStorage.setItem(CHAVE_MODO, m);
+    } catch {
+      // sem persistência
+    }
+  }
 
   // Foto trocada no Follow up aparece aqui também (pedido do usuário 07/11/2026): relê a cada 3 min com a aba visível.
   useEffect(() => {
@@ -289,6 +268,14 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         if (data.user.email) setEditadoPor(emailParaLogin(data.user.email));
         const perfil = perfilModulo(usuarioEfetivo(data.user));
         setPodeCorrigir(perfil === "total" || perfil === "projeto");
+        // João e Honório abrem no modo Apontar; quem já escolheu, fica na escolha.
+        let salvo: string | null = null;
+        try {
+          salvo = localStorage.getItem(CHAVE_MODO);
+        } catch {
+          // sem persistência
+        }
+        setModo(salvo === "apontar" || salvo === "planilha" ? salvo : perfil === "projeto" ? "apontar" : "planilha");
       });
     const tique = setInterval(() => setTique((t) => t + 1), 60 * 1000);
     return () => {
@@ -321,6 +308,19 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   async function salvar(item: ItemCroquiCorte, campo: string, valor: string) {
     const atualizado = await acompanhar(editarItemCroquiCorte(item.id, { [campo]: valor }, editadoPor), `${item.pedido} — ${campo}`);
     trocarItens([atualizado]);
+  }
+
+  // Modo Apontar: grava várias linhas de uma vez (mesmo endpoint do arraste).
+  async function aplicarLote(ids: string[], alteracoes: Record<string, string | null>, rotulo: string) {
+    try {
+      const novos = await acompanhar(editarLoteCroquiCorte(ids, alteracoes, editadoPor), `${ids.length} linha(s) — ${rotulo}`);
+      trocarItens(novos);
+      const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      setAviso({ ok: true, texto: `✓ ${rotulo}: ${ids.length} peça(s) — ${hora}` });
+    } catch (e) {
+      setAviso({ ok: false, texto: `Não salvou (${rotulo}): ${(e as Error).message}` });
+      throw e;
+    }
   }
 
   async function salvarTudo() {
@@ -548,8 +548,69 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
     return exibir(item, col);
   }
 
+  const seletorModo = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="inline-flex rounded-lg border border-stone-300 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+        {(
+          [
+            { v: "apontar", r: "👆 Apontar" },
+            { v: "planilha", r: "📋 Planilha" },
+          ] as const
+        ).map((m) => (
+          <button
+            key={m.v}
+            type="button"
+            onClick={() => trocarModo(m.v)}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
+              modo === m.v ? "bg-green-600 text-white dark:bg-cyan-500 dark:text-slate-950" : "text-stone-600 hover:bg-stone-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            {m.r}
+          </button>
+        ))}
+      </div>
+      {aviso && (
+        <span className={`text-sm ${aviso.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}>{aviso.texto}</span>
+      )}
+    </div>
+  );
+
+  if (modo === "apontar") {
+    return (
+      <div className="flex flex-col gap-3">
+        {seletorModo}
+        {erro && (
+          <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">{erro}</div>
+        )}
+        {carregando && !itens.length ? (
+          <p className="py-10 text-center text-sm text-stone-500 dark:text-slate-400">Carregando… (o servidor pode levar até 1 minuto para acordar)</p>
+        ) : (
+          <CroquiApontar
+            itens={itens}
+            opcoesStatus={opcoesStatus}
+            opcoesProjetista={opcoesProjetista}
+            fotos={fotos}
+            editadoPor={editadoPor}
+            aplicar={aplicarLote}
+            abrirGaleria={(imagens, titulo) => setGaleria({ imagens, indice: 0, titulo })}
+          />
+        )}
+        {galeria && (
+          <GaleriaImagens
+            imagens={galeria.imagens}
+            indice={galeria.indice}
+            titulo={galeria.titulo}
+            onIndice={(indice) => setGaleria((g) => (g ? { ...g, indice } : g))}
+            onFechar={() => setGaleria(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {seletorModo}
       <div className={`${telaCheia ? "hidden" : ""} rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4`}>
         <h2 className="text-lg font-bold text-stone-900 dark:text-white">Croqui de corte</h2>
         <p className="mt-0.5 text-sm text-stone-600 dark:text-slate-400">
