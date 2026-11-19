@@ -705,6 +705,8 @@ export interface ItemCroquiCorte {
   tempo_anterior_min: number;
   linha_planilha: number;
   origem: "importacao_croqui" | "material_compra";
+  // migration 0078: o Pedido (PO+IT+POS) não existe mais na MACLM
+  fora_da_mae?: boolean;
   editado_em: string | null;
   editado_por: string | null;
   created_at: string;

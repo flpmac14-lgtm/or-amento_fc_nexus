@@ -243,6 +243,8 @@ def propagar(forcar: bool = False) -> dict:
                 atualizacoes,
             )
 
+        removidos, marcados = _tratar_orfaos(cur, mae)
+
         cur.execute("select coalesce(max(linha_planilha), 1) from croqui_corte_itens")
         proxima = cur.fetchone()[0] + 1
         inseridos = []
@@ -269,16 +271,56 @@ def propagar(forcar: bool = False) -> dict:
             )
         cur.execute(
             "update material_compra_status set propagado_sha256 = %s, propagado_itens = %s where id = 1",
-            (st[0] if st else None, itens_antes + len(inseridos)),
+            (st[0] if st else None, itens_antes - removidos + len(inseridos)),
         )
         conn.commit()
-    return {"atualizados": len(atualizacoes), "novos": len(inseridos)}
+    return {"atualizados": len(atualizacoes), "novos": len(inseridos), "orfaos_removidos": removidos,
+            "orfaos_marcados": marcados}
+
+
+# Trava de segurança: mãe lida pela metade não pode sair apagando a Croqui.
+_MAE_MINIMA = 5000
+_MAX_REMOVER = 300
+
+
+def _tratar_orfaos(cur, mae: dict) -> tuple[int, int]:
+    """Pedido da Croqui que não existe mais na MACLM (o PO+IT+POS mudou lá —
+    pedido do usuário, 19/11/2026: 4505189098-070.001 virou 070.007 e a antiga
+    ficou). Veio do Material de compra e ninguém apontou nada → apaga; tem
+    apontamento (ou veio da importação da planilha antiga) → só marca
+    fora_da_mae (migration 0078) pra aparecer com aviso."""
+    if len(mae) < _MAE_MINIMA:
+        return 0, 0
+    cur.execute(
+        "select id, pedido, origem, status, projetista, n_programa, observacao, dt_fazendo, dt_pausado, dt_feito, "
+        "fora_da_mae from croqui_corte_itens"
+    )
+    apagar, marcar, desmarcar = [], [], []
+    for item_id, pedido, origem, *apontado, fora in cur.fetchall():
+        if str(pedido).upper() in mae:
+            if fora:
+                desmarcar.append(item_id)
+            continue
+        if origem == "material_compra" and not any(apontado):
+            apagar.append(item_id)
+        elif not fora:
+            marcar.append(item_id)
+    if len(apagar) > _MAX_REMOVER:  # algo estranho na mãe: só marca, não apaga
+        marcar += apagar
+        apagar = []
+    if apagar:
+        cur.execute("delete from croqui_corte_itens where id = any(%s)", (apagar,))
+    if marcar:
+        cur.execute("update croqui_corte_itens set fora_da_mae = true where id = any(%s)", (marcar,))
+    if desmarcar:
+        cur.execute("update croqui_corte_itens set fora_da_mae = false where id = any(%s)", (desmarcar,))
+    return len(apagar), len(marcar)
 
 
 # --- leitura / edição no app --------------------------------------------------
 
 _COLUNAS_LISTA = ["id", "pedido", *FIXOS, *EDITAVEIS, "dt_fazendo", "dt_pausado", "dt_feito", "tempo_anterior_min",
-                  "linha_planilha", "origem", "editado_em", "editado_por", "created_at"]
+                  "linha_planilha", "origem", "fora_da_mae", "editado_em", "editado_por", "created_at"]
 
 
 def _json(v):

@@ -545,6 +545,13 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         </span>
       );
     }
+    if (col.campo === "pedido" && item.fora_da_mae) {
+      return (
+        <span title="Esse PO+IT+POS não existe mais no Material de compra (MACLM) — provavelmente foi corrigido lá">
+          {exibir(item, col)} <span className="text-red-600 dark:text-red-400">⚠</span>
+        </span>
+      );
+    }
     return exibir(item, col);
   }
 

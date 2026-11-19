@@ -110,7 +110,7 @@ export default function CroquiApontar({
   const grupos = useMemo(() => {
     const g = new Map<string, string[]>();
     for (const i of itens) {
-      if (i.status && FECHADOS.has(i.status)) continue;
+      if ((i.status && FECHADOS.has(i.status)) || i.fora_da_mae) continue;
       const v = valorChave(i, "dp");
       if (v) g.set(v, [...(g.get(v) ?? []), i.id]);
     }
@@ -294,6 +294,14 @@ export default function CroquiApontar({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm font-bold text-stone-900 dark:text-white">{i.pedido}</span>
             <Selo status={i.status} />
+            {i.fora_da_mae && (
+              <span
+                className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                title="Esse PO+IT+POS não existe mais no Material de compra (MACLM) — provavelmente foi corrigido lá"
+              >
+                ⚠ fora do Material de compra
+              </span>
+            )}
             {i.mac && <span className="font-mono text-xs text-stone-500 dark:text-slate-400">{i.mac}</span>}
             {i.projetista && <span className="text-xs text-stone-500 dark:text-slate-400">· {i.projetista}</span>}
           </div>
