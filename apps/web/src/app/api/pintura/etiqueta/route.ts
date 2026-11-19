@@ -20,9 +20,51 @@ const PROMPT =
   "'INTERSEAL 670 HS'; se só houver o B, o nome do produto ao qual ele pertence), fabricante (ex.: WEG, International, " +
   "Sumaré, Renner), cor curta como na planilha ('CZ N6,5', 'AM 5 Y 8/12', 'CZ RAL 7035'; siglas: CZ cinza, AM amarelo, " +
   "AZ azul, BR branco, PT preto, VM vermelho, LR laranja, VD verde, AL alumínio; null se não houver) e, para cada lata " +
-  "visível (sem repetir a mesma lata): componente ('A', 'B' ou null se a etiqueta não disser), lote, validade (AAAA-MM), " +
-  "conteudo_litros (número; ml/1000) e descricao curta (ex.: 'Catalisador PU 5013'). Diluente sozinho: produto = nome do " +
-  "diluente, componente null. Não invente: campo ilegível = null.";
+  "visível (sem repetir a mesma lata): componente ('A', 'B' ou null se a etiqueta não disser), lote, " +
+  "fabricacao e validade, conteudo_litros (número; ml/1000) e descricao curta (ex.: 'Catalisador PU 5013'). " +
+  "DATAS — muito importante: a etiqueta costuma trazer DUAS datas. 'fabricacao' = data de fabricação/produção " +
+  "(FAB, FABR., DT. FAB., PROD., MFG). 'validade' = data de VENCIMENTO (VAL, VALID., VALIDADE, VENC., VENCIMENTO, " +
+  "EXP, USE ATÉ, CONSUMIR ATÉ). NUNCA coloque a data de fabricação em 'validade'; a validade é sempre DEPOIS da " +
+  "fabricação (normalmente 12 a 36 meses depois). Copie cada data exatamente como impressa, com o ano completo se " +
+  "houver (ex.: '10/2028', '10/28', '15/10/2028'). Se a etiqueta só trouxer o prazo ('validade 24 meses'), deixe " +
+  "'validade' null e preencha 'validade_meses'. Diluente sozinho: produto = nome do diluente, componente null. " +
+  "Não invente: campo ilegível = null.";
+
+// "10/2028", "10/28", "15/10/2028", "2028-10", "10.2028" -> "2028-10".
+function normalizarMes(v: unknown): string | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const s = v.trim().replace(/[.\-\s]/g, "/");
+  let m = /^(\d{4})\/(\d{1,2})(\/\d{1,2})?$/.exec(s);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}`;
+  m = /^(?:(\d{1,2})\/)?(\d{1,2})\/(\d{2}|\d{4})$/.exec(s);
+  if (m) {
+    const mes = Number(m[2]);
+    if (mes < 1 || mes > 12) return null;
+    const ano = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    return `${ano}-${String(mes).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+function somarMeses(aaaamm: string, meses: number): string {
+  const [a, m] = aaaamm.split("-").map(Number);
+  const total = a * 12 + (m - 1) + meses;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+type Lata = { fabricacao?: unknown; validade?: unknown; validade_meses?: unknown; [k: string]: unknown };
+
+// Corrige a validade: normaliza o formato, calcula pelo prazo se só houver
+// fabricação + meses, e descarta/troca quando veio a data de fabricação.
+function ajustarValidade(l: Lata): Lata {
+  const fab = normalizarMes(l.fabricacao);
+  let val = normalizarMes(l.validade);
+  const meses = typeof l.validade_meses === "number" && l.validade_meses > 0 ? Math.round(l.validade_meses) : null;
+  // validade antes da fabricação = a IA trocou os campos; igual = pegou a fabricação nos dois.
+  if (fab && val && val <= fab) val = meses ? somarMeses(fab, meses) : val < fab ? fab : null;
+  if (!val && fab && meses) val = somarMeses(fab, meses);
+  return { ...l, fabricacao: fab, validade: val };
+}
 
 const SCHEMA = {
   type: "OBJECT",
@@ -37,7 +79,9 @@ const SCHEMA = {
         properties: {
           componente: { type: "STRING", nullable: true },
           lote: { type: "STRING", nullable: true },
+          fabricacao: { type: "STRING", nullable: true },
           validade: { type: "STRING", nullable: true },
+          validade_meses: { type: "NUMBER", nullable: true },
           conteudo_litros: { type: "NUMBER", nullable: true },
           descricao: { type: "STRING", nullable: true },
         },
@@ -93,7 +137,9 @@ export async function POST(request: NextRequest) {
   try {
     const j = await resposta.json();
     const texto = j.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text)?.text ?? "{}";
-    return NextResponse.json({ leitura: JSON.parse(texto) }, { headers: { "Cache-Control": "no-store" } });
+    const leitura = JSON.parse(texto);
+    if (Array.isArray(leitura?.latas)) leitura.latas = leitura.latas.map(ajustarValidade);
+    return NextResponse.json({ leitura }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return erro("A IA não devolveu uma leitura válida. Tente outra foto.", 502);
   }
