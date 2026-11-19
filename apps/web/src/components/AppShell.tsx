@@ -31,6 +31,8 @@ import { ROTA_CANAL_ESCUTA, podeVerCanalEscuta } from "@/lib/canalEscuta";
 import { perfilFinanceiro, podeVerFinanceiro } from "@/lib/financeiro";
 import { emailParaLogin } from "@/lib/loginInterno";
 import { ROTA_TAREFAS, podeVerTarefas } from "@/lib/tarefas";
+import { ROTA_AGENDA, podeVerAgenda } from "@/lib/agenda";
+import AgendaAviso from "@/components/AgendaAviso";
 import { ROTA_DOCUMENTOS, podeVerDocumentos } from "@/lib/documentos";
 import { ROTA_PINTURA, podeVerPintura } from "@/lib/pintura";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
@@ -39,7 +41,7 @@ import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerCom
 const CHAVE_RECOLHIDO = "fcnexus-menu-recolhido";
 const CHAVE_SUBMENU = "fcnexus-submenu-followup";
 
-type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "documentos" | "producao" | "pintura" | "sair";
+type Icone = "orcamento" | "followup" | "painel" | "financeiro" | "usuarios" | "escuta" | "tarefas" | "agenda" | "documentos" | "producao" | "pintura" | "sair";
 
 function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -94,6 +96,12 @@ function IconeMenu({ nome, className = "h-5 w-5" }: { nome: Icone; className?: s
           <rect x="3" y="4" width="5" height="16" rx="1.5" />
           <rect x="9.5" y="4" width="5" height="11" rx="1.5" />
           <rect x="16" y="4" width="5" height="7" rx="1.5" />
+        </g>
+      )}
+      {nome === "agenda" && (
+        <g {...p}>
+          <rect x="3.5" y="5" width="17" height="15" rx="2" />
+          <path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17h2" />
         </g>
       )}
       {nome === "escuta" && (
@@ -208,6 +216,8 @@ function montarMenu(real: User): Conta {
   if (podeVerFinanceiro(user.email)) principal.push({ href: "/financeiro", rotulo: "Financeiro", icone: "financeiro" });
   // Tarefas (Kanban pessoal): só o flpmac14 — pedido do usuário (09/11/2026).
   if (podeVerTarefas(user.email)) principal.push({ href: ROTA_TAREFAS, rotulo: "Tarefas", icone: "tarefas" });
+  // Agenda (lembretes por dia, avisa no dia): só o flpmac14 — pedido do usuário (19/11/2026).
+  if (podeVerAgenda(user.email)) principal.push({ href: ROTA_AGENDA, rotulo: "Agenda", icone: "agenda" });
   // Pintura (estoque de tinta, entradas/saídas, vai ter tinta?): flpmac14 e o felipe (perfil pintura) — pedido do usuário (17/11/2026).
   if (podeVerPintura(user)) principal.push({ href: ROTA_PINTURA, rotulo: "Pintura", icone: "pintura" });
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
@@ -264,6 +274,7 @@ export default function AppShell({
   // Sub-abas do Follow up no menu: aberto por padrão (lembrado), e qual aba está aberta.
   const [submenuAberto, setSubmenuAberto] = useState(true);
   const [abaAtual, setAbaAtual] = useState<ValorVisao | null>(null);
+  const [agenda, setAgenda] = useState(false); // aviso dos lembretes do dia (conta real)
 
   useEffect(() => {
     function mudou(e: Event) {
@@ -302,6 +313,7 @@ export default function AppShell({
         if (data.user) {
           setConta(montarMenu(data.user));
           setVerComo(podeVerFinanceiro(data.user.email) ? lerVerComo() : null);
+          setAgenda(podeVerAgenda(data.user.email));
         }
         setAbaAtual((a) => a ?? abaDoEndereco());
         // Menu recolhido no PC (lembrado entre visitas).
@@ -524,6 +536,7 @@ export default function AppShell({
         )}
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
+      {agenda && <AgendaAviso />}
     </div>
   );
 }
