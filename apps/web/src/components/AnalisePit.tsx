@@ -9,6 +9,32 @@ import { useRef, useState } from "react";
 import { analisarPit, type AnalisePit as Analise, type LeituraPit } from "@/lib/pit";
 
 const MAX_PDF = 4 * 1024 * 1024;
+const CACHE = "fcnexus.pit.leituras"; // leitura por arquivo (hash): o mesmo PIT de novo não chama a IA
+
+// Gastar pouco token do Gemini (pedido do usuário): guarda as últimas leituras no navegador.
+async function hashDe(arq: File): Promise<string> {
+  const h = await crypto.subtle.digest("SHA-256", await arq.arrayBuffer());
+  return Array.from(new Uint8Array(h), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+function lerCache(h: string): LeituraPit | null {
+  try {
+    return (JSON.parse(localStorage.getItem(CACHE) ?? "{}") as Record<string, LeituraPit>)[h] ?? null;
+  } catch {
+    return null;
+  }
+}
+function gravarCache(h: string, l: LeituraPit) {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE) ?? "{}") as Record<string, LeituraPit>;
+    delete c[h];
+    c[h] = l;
+    const chaves = Object.keys(c);
+    for (const k of chaves.slice(0, Math.max(0, chaves.length - 20))) delete c[k]; // só as 20 últimas
+    localStorage.setItem(CACHE, JSON.stringify(c));
+  } catch {
+    // sem armazenamento: só não guarda
+  }
+}
 
 // Excel (.xls/.xlsx/.xlsm) → texto "col | col" por aba, no navegador.
 async function excelParaTexto(arq: File): Promise<string> {
@@ -23,7 +49,7 @@ async function excelParaTexto(arq: File): Promise<string> {
   return partes.join("\n\n");
 }
 
-// PDF grande demais pra mandar inteiro: manda só o texto (PDF.js).
+// PDF → texto (PDF.js), bem mais barato que mandar o PDF pra IA.
 async function pdfParaTexto(arq: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -31,7 +57,20 @@ async function pdfParaTexto(arq: File): Promise<string> {
   const paginas: string[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const c = await (await doc.getPage(n)).getTextContent();
-    paginas.push(c.items.map((i) => ("str" in i ? i.str : "")).join(" "));
+    // Junta por linha (mesma altura na página) pra tabela não virar um texto corrido.
+    const linhas = new Map<number, { x: number; t: string }[]>();
+    for (const i of c.items) {
+      if (!("str" in i) || !i.str.trim()) continue;
+      const y = Math.round(i.transform[5] / 3);
+      linhas.set(y, [...(linhas.get(y) ?? []), { x: i.transform[4], t: i.str.trim() }]);
+    }
+    paginas.push(
+      [...linhas.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([, l]) => l.sort((a, b) => a.x - b.x).map((x) => x.t).join(" | "))
+        .join("
+"),
+    );
   }
   return paginas.join("\n\n");
 }
@@ -44,24 +83,33 @@ export default function AnalisePit() {
   const [fora, setFora] = useState<Set<string>>(new Set()); // pontos desmarcados (não vão pro Word)
   const [verItens, setVerItens] = useState(false);
   const [arrastando, setArrastando] = useState(false);
+  const [gasto, setGasto] = useState<string | null>(null);
 
   async function processar(arq: File) {
     setFalha(null);
     setAnalise(null);
     setFora(new Set());
+    setGasto(null);
     const ext = arq.name.toLowerCase().split(".").pop() ?? "";
     try {
+      const h = await hashDe(arq);
+      const guardada = lerCache(h);
+      if (guardada) {
+        setAnalise(analisarPit(guardada, arq.name));
+        setGasto("Este arquivo já tinha sido lido — sem nova chamada à IA.");
+        return;
+      }
       const form = new FormData();
-      form.set("nome", arq.name);
       if (["xls", "xlsx", "xlsm", "xlsb"].includes(ext)) {
         setEtapa("Lendo a planilha…");
         form.set("texto", await excelParaTexto(arq));
       } else if (ext === "pdf") {
-        if (arq.size <= MAX_PDF) form.set("arquivo", arq);
-        else {
-          setEtapa("PDF grande: extraindo o texto…");
-          form.set("texto", await pdfParaTexto(arq));
-        }
+        setEtapa("Extraindo o texto do PDF…");
+        const texto = await pdfParaTexto(arq).catch(() => "");
+        // Só manda o PDF em si se for escaneado (sem texto): custa bem mais token.
+        if (texto.replace(/\s/g, "").length >= 300) form.set("texto", texto);
+        else if (arq.size <= MAX_PDF) form.set("arquivo", arq);
+        else throw new Error("PDF escaneado muito grande (máx. 4 MB).");
       } else {
         throw new Error("Envie o PIT em Excel (.xls/.xlsx) ou PDF.");
       }
@@ -69,7 +117,9 @@ export default function AnalisePit() {
       const r = await fetch("/api/qualidade/pit", { method: "POST", body: form });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.erro ?? `Falha (${r.status}).`);
+      gravarCache(h, j.leitura as LeituraPit);
       setAnalise(analisarPit(j.leitura as LeituraPit, arq.name));
+      if (j.tokens?.entrada != null) setGasto(`IA: ${j.tokens.entrada} tokens de entrada + ${j.tokens.saida ?? 0} de saída.`);
     } catch (e) {
       setFalha(e instanceof Error ? e.message : String(e));
     } finally {
@@ -152,6 +202,7 @@ export default function AnalisePit() {
         <p className="text-xs text-stone-500 dark:text-slate-500">ou arraste o arquivo aqui</p>
         {etapa && <p className="text-sm text-stone-700 dark:text-slate-300">⏳ {etapa}</p>}
         {falha && <p className="text-sm font-medium text-red-600">{falha}</p>}
+        {gasto && <p className="text-xs text-stone-500 dark:text-slate-500">{gasto}</p>}
       </div>
 
       {analise && l && r && (
