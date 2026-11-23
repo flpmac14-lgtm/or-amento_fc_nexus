@@ -171,6 +171,8 @@ def historico(dias: int = 90) -> dict:
             "mps": prog.get("mps", []), "pecas": prog.get("pecas"), "itens": len(prog.get("itens", [])),
             "projetistas": prog.get("projetistas", []), "nri": prog.get("nri"),
             "maquina": prog.get("maquina") or maquina_padrao(programa), "minutos_corte": minutos,
+            # MAC das peças do programa — pedido do usuário (23/11/2026): pesquisar o histórico por MAC.
+            "macs": sorted({i["mac"] for i in prog.get("itens", []) if i.get("mac")}),
         })
     return {"historico": saida}
 

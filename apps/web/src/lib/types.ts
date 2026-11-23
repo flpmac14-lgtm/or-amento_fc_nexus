@@ -779,6 +779,7 @@ export interface HistoricoCorte {
   nri: string | null;
   maquina: MaquinaCorte;
   minutos_corte: number | null; // só em "Finalizado": tempo desde o último "Cortando"
+  macs?: string[]; // MAC das peças do programa (busca por MAC no histórico)
 }
 
 // Sininho do Follow up (migration 0019): gravada pela sincronização de 15 min.

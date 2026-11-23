@@ -44,6 +44,7 @@ export default function CorteHistorico() {
   const [operador, setOperador] = useState("");
   const [acao, setAcao] = useState("");
   const [programa, setPrograma] = useState("");
+  const [mac, setMac] = useState("");
   const [maquina, setMaquina] = useState<MaquinaCorte | "">("");
   const [comDesmarcadas, setComDesmarcadas] = useState(false);
 
@@ -78,9 +79,10 @@ export default function CorteHistorico() {
           (!operador || l.por === operador) &&
           (!acao || l.marca === acao) &&
           (!maquina || l.maquina === maquina) &&
-          (!programa || l.programa.startsWith(programa.replace(/\D/g, ""))),
+          (!programa || l.programa.startsWith(programa.replace(/\D/g, ""))) &&
+          (!mac.trim() || (l.macs ?? []).some((m) => m.toUpperCase().includes(mac.trim().toUpperCase()))),
       ),
-    [linhas, operador, acao, programa, maquina, comDesmarcadas],
+    [linhas, operador, acao, programa, mac, maquina, comDesmarcadas],
   );
 
   const resumo = useMemo(() => {
@@ -108,6 +110,7 @@ export default function CorteHistorico() {
     const cab = [
       "Data/hora",
       "Programa",
+      "MAC",
       "Máquina",
       "NRI",
       "Ação",
@@ -123,6 +126,7 @@ export default function CorteHistorico() {
       ...filtradas.map((l) => [
         dataHora(l.em),
         l.programa,
+        (l.macs ?? []).join(", "),
         infoMaquina(l.maquina).rotulo,
         l.nri ?? "",
         ROTULO[l.marca].texto,
@@ -264,6 +268,15 @@ export default function CorteHistorico() {
             className={`${classeCampo} w-24 font-mono`}
           />
         </label>
+        <label className="flex flex-col gap-1 text-xs text-stone-500 dark:text-slate-400">
+          MAC
+          <input
+            value={mac}
+            onChange={(e) => setMac(e.target.value)}
+            placeholder="ex.: 2617"
+            className={`${classeCampo} w-28 font-mono`}
+          />
+        </label>
         <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-600 dark:text-slate-400">
           <input
             type="checkbox"
@@ -291,6 +304,7 @@ export default function CorteHistorico() {
               {[
                 "Data/hora",
                 "Programa",
+                "MAC",
                 "Máquina",
                 "NRI",
                 "Ação",
@@ -320,6 +334,9 @@ export default function CorteHistorico() {
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-base font-bold">
                   {l.programa}
                   <BotaoPdfPrograma programa={l.programa} />
+                </td>
+                <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5 font-mono text-xs">
+                  {l.macs?.length ? l.macs.join(", ") : "—"}
                 </td>
                 <td className="border-b border-stone-100 dark:border-slate-800/80 px-3 py-1.5">
                   <span className={`whitespace-nowrap rounded px-2 py-0.5 text-xs font-bold ${infoMaquina(l.maquina).etiqueta}`}>
@@ -356,7 +373,7 @@ export default function CorteHistorico() {
             {filtradas.length === 0 && (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="px-3 py-10 text-center text-stone-500 dark:text-slate-500"
                 >
                   {carregando
