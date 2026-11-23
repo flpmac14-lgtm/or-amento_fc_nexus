@@ -68,8 +68,7 @@ async function pdfParaTexto(arq: File): Promise<string> {
       [...linhas.entries()]
         .sort((a, b) => b[0] - a[0])
         .map(([, l]) => l.sort((a, b) => a.x - b.x).map((x) => x.t).join(" | "))
-        .join("
-"),
+        .join("\n"),
     );
   }
   return paginas.join("\n\n");
