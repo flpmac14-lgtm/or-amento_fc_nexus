@@ -23,6 +23,9 @@ export const VISOES = [
   { valor: "backup", rotulo: "Backup Recebimento" },
   // Aba "Geral Data book" do Controle de databook.xlsm, filha da Controle de obras — pedido do usuário (13/10/2026).
   { valor: "databook", rotulo: "Data book" },
+  // PIT do cliente (Excel/PDF) → IA extrai os itens → pontos críticos → Word A4 — pedido do usuário (23/11/2026):
+  // só o lailto e o flpmac14 (lib/pit.ts::podeAnalisarPit).
+  { valor: "pit", rotulo: "Análise de PIT" },
   // Aba GERAL do CONTROLE DE RECEBIMENTO E ESTOQUE, só consulta — pedido do usuário (13/10/2026).
   { valor: "recebimento", rotulo: "Recebimento" },
   { valor: "referencia", rotulo: "Referência de preços" },
@@ -67,8 +70,12 @@ export type PerfilModulo = "total" | "follow_up" | "projeto" | "corte" | "usinag
 // completas já têm na tela principal.
 // comQualidade: aba QUALIDADE — a conta flpmac14 e o perfil "qualidade"
 // (lib/acesso.ts::podeVerQualidade); o perfil "qualidade" só vê ela.
-export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false, comFornecedores = false, comOrdens = false) {
-  const base = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade).filter((v) => v.valor !== "fornecedores");
+export function visoesDoPerfil(perfil: PerfilModulo, comReferenciaPrecos: boolean, comQualidade = false, comHoraExtra = false, comFornecedores = false, comOrdens = false, comPit = false) {
+  const semPit = visoesSemHoraExtra(perfil, comReferenciaPrecos, comQualidade).filter((v) => v.valor !== "fornecedores" && v.valor !== "pit");
+  // Análise de PIT logo depois do Data book (ou no fim, se a conta não tem o Data book).
+  const iDb = semPit.findIndex((v) => v.valor === "databook");
+  const pit = VISOES.find((v) => v.valor === "pit")!;
+  const base = !comPit ? semPit : iDb >= 0 ? [...semPit.slice(0, iDb + 1), pit, ...semPit.slice(iDb + 1)] : [...semPit, pit];
   const lista = comOrdens && !base.some((v) => v.valor === "ordens") ? [...base, VISOES.find((v) => v.valor === "ordens")!] : base;
   const comFn = comFornecedores ? [...lista, VISOES.find((v) => v.valor === "fornecedores")!] : lista;
   return comHoraExtra ? comFn : comFn.filter((v) => v.valor !== "funcionarios");

@@ -35,6 +35,7 @@ import { ROTA_AGENDA, podeVerAgenda } from "@/lib/agenda";
 import AgendaAviso from "@/components/AgendaAviso";
 import { ROTA_DOCUMENTOS, podeVerDocumentos } from "@/lib/documentos";
 import { ROTA_PINTURA, podeVerPintura } from "@/lib/pintura";
+import { podeAnalisarPit } from "@/lib/pit";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { EVENTO_VER_COMO, gravarVerComo, lerVerComo, usuarioEfetivo, type VerComo } from "@/lib/verComo";
 
@@ -223,7 +224,7 @@ function montarMenu(real: User): Conta {
   // Documentos (pastas + PDFs): flpmac14 e lailto, cada um com as suas — pedido do usuário (11 e 12/11/2026).
   if (podeVerDocumentos(user.email)) principal.push({ href: ROTA_DOCUMENTOS, rotulo: "Documentos", icone: "documentos" });
   const visoes = comDestaque(
-    visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user), veOrdensExtra(user.email)),
+    visoesDoPerfil(perfil, perfil === "follow_up", podeVerQualidade(user), podeSolicitarHoraExtra(user), podeVerFornecedores(user), veOrdensExtra(user.email), podeAnalisarPit(user.email)),
     recebimentoEmDestaque(user.email),
   );
   // Ordens de produção como item principal do menu, e não como sub-aba — pedido do usuário (13/11/2026).

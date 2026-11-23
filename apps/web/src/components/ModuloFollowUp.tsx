@@ -23,6 +23,7 @@ import Consulta from "@/components/Consulta";
 import { classeAbaSublinhada } from "@/components/AppShell";
 import CortadosQualidade from "@/components/CortadosQualidade";
 import Qualidade from "@/components/Qualidade";
+import AnalisePit from "@/components/AnalisePit";
 import Almoxarifado from "@/components/Almoxarifado";
 import Fornecedores from "@/components/Fornecedores";
 import OrdensProducao from "@/components/OrdensProducao";
@@ -50,6 +51,7 @@ export default function ModuloFollowUp({
   editaAlmoxarifado = false,
   recebimentoDestaque = false,
   comOrdens = false,
+  comPit = false,
 }: {
   comReferenciaPrecos?: boolean;
   perfil?: PerfilModulo;
@@ -57,6 +59,7 @@ export default function ModuloFollowUp({
   comHoraExtra?: boolean; // aba Funcionários: flpmac14, jeferson e diego
   editaAlmoxarifado?: boolean; // aba Almoxarifado: só leandro e flpmac14 marcam/fotografam; os outros só olham
   comOrdens?: boolean; // Ordens de produção pro pedro (só olhar/imprimir) — pedido do usuário, 16/11/2026
+  comPit?: boolean; // Análise de PIT: lailto e flpmac14 (pedido do usuário, 23/11/2026)
   recebimentoDestaque?: boolean; // carol: Recebimento em 1º e aberta ao entrar (pedido do usuário, 12/11/2026)
 }) {
   const soProjeto = perfil === "projeto" || perfil === "corte" || perfil === "usinagem" || perfil === "qualidade" || perfil === "consulta" || perfil === "pintura" || perfil === "almoxarifado";
@@ -83,7 +86,7 @@ export default function ModuloFollowUp({
   // Material de compra é grande (~57 mil linhas): só carrega na 1ª vez que a aba é aberta.
   const [materialAberto, setMaterialAberto] = useState(() => abaDoEndereco() === "material");
   const [croquiAberto, setCroquiAberto] = useState(() => abaDoEndereco() === "croqui");
-  const visoes = comDestaque(visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado, comOrdens), recebimentoDestaque);
+  const visoes = comDestaque(visoesDoPerfil(perfil, comReferenciaPrecos, comQualidade, comHoraExtra, editaAlmoxarifado, comOrdens, comPit), recebimentoDestaque);
   const visao = visoes.some((v) => v.valor === visaoEscolhida) ? visaoEscolhida : visoes[0].valor;
 
   function abrirVisao(v: ValorVisao) {
@@ -267,6 +270,7 @@ export default function ModuloFollowUp({
         <ApontamentoSetor key="pintura" config={CONFIG_PINTURA} somenteLeitura={perfil === "qualidade" || perfil === "follow_up"} />
       )}
       {visao === "qualidade" && <Qualidade key="principal" />}
+      {visao === "pit" && <AnalisePit />}
       {visao === "backup" && (
         <Qualidade
           key="backup"

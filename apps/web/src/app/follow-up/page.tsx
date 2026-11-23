@@ -10,11 +10,12 @@ import ModuloFollowUp from "@/components/ModuloFollowUp";
 import { acessoSoFollowUp, perfilModulo, podeEditarAlmoxarifado, podeSolicitarHoraExtra, podeVerQualidade } from "@/lib/acesso";
 import { recebimentoEmDestaque, veOrdensExtra, type PerfilModulo } from "@/lib/abasFollowUp";
 import { emailParaLogin } from "@/lib/loginInterno";
+import { podeAnalisarPit } from "@/lib/pit";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import { usuarioEfetivo } from "@/lib/verComo";
 
 export default function PaginaFollowUp() {
-  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean; almoxarifado: boolean; destaque: boolean; ordens: boolean } | null>(null);
+  const [conta, setConta] = useState<{ login: string; restrita: boolean; perfil: PerfilModulo; qualidade: boolean; horaExtra: boolean; almoxarifado: boolean; destaque: boolean; ordens: boolean; pit: boolean } | null>(null);
 
   useEffect(() => {
     criarClienteSupabaseNavegador()
@@ -32,6 +33,7 @@ export default function PaginaFollowUp() {
             almoxarifado: podeEditarAlmoxarifado(user),
             destaque: recebimentoEmDestaque(user.email),
             ordens: veOrdensExtra(user.email),
+            pit: podeAnalisarPit(user.email),
           });
         }
       });
@@ -50,6 +52,7 @@ export default function PaginaFollowUp() {
             editaAlmoxarifado={conta.almoxarifado}
             recebimentoDestaque={conta.destaque}
             comOrdens={conta.ordens}
+            comPit={conta.pit}
           />}
       </main>
     </AppShell>
