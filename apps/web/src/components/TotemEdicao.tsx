@@ -43,7 +43,8 @@ function descricao(a: ApEdit): string {
 const campo = "mt-1 w-full rounded-xl border border-white/20 bg-black/30 px-4 py-3 text-xl text-slate-100 outline-none focus:border-teal-400";
 const botaoLeve = "rounded-xl border-2 border-white/25 px-5 py-3 text-lg font-bold hover:bg-white/10 active:scale-95 disabled:opacity-40";
 
-export default function TotemEdicao({ fechar }: { fechar: () => void }) {
+// operador: aberto com o crachá já passado → só os apontamentos dele.
+export default function TotemEdicao({ fechar, operador = null }: { fechar: () => void; operador?: { nome: string; cracha: string } | null }) {
   const [senha, setSenha] = useState("");
   const [liberado, setLiberado] = useState(false);
   const [lista, setLista] = useState<ApEdit[]>([]);
@@ -75,14 +76,16 @@ export default function TotemEdicao({ fechar }: { fechar: () => void }) {
 
   const filtrados = useMemo(() => {
     const f = filtro.trim().toUpperCase();
-    if (!f) return lista;
-    return lista.filter((a) => `${a.operador_nome ?? ""} ${a.cracha ?? ""} ${descricao(a)}`.toUpperCase().includes(f));
-  }, [lista, filtro]);
+    const so = (c: string | null) => (c ?? "").replace(/\D/g, "");
+    const base = operador ? lista.filter((a) => so(a.cracha) === so(operador.cracha)) : lista;
+    if (!f) return base;
+    return base.filter((a) => `${a.operador_nome ?? ""} ${a.cracha ?? ""} ${descricao(a)}`.toUpperCase().includes(f));
+  }, [lista, filtro, operador]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0b1f24] text-slate-100">
       <div className="flex items-center gap-4 border-b border-white/10 bg-black/20 px-4 py-3 sm:px-8">
-        <p className="text-lg font-bold">Editar apontamentos</p>
+        <p className="text-lg font-bold">Editar apontamentos{operador ? ` — ${operador.nome}` : ""}</p>
         <button type="button" onClick={fechar} className={`ml-auto ${botaoLeve}`}>
           Fechar
         </button>
