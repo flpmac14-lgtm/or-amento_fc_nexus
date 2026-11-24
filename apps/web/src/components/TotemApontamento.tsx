@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
 import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
+import TotemEdicao from "@/components/TotemEdicao";
 import {
   SETORES_INTERNO,
   definirFeriadosApontamento,
@@ -79,6 +80,7 @@ export default function TotemApontamento() {
   const [sessao, setSessao] = useState<Sessao | null>(null);
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [editando, setEditando] = useState(false);
   const [ultimoToque, setUltimoToque] = useState(() => Date.now());
   const agora = useAgora(1000);
 
@@ -192,7 +194,8 @@ export default function TotemApontamento() {
 
   return (
     <div data-sem-botao-tema className="flex min-h-screen select-none flex-col bg-[#0b1f24] text-slate-100">
-      <Topo sessao={sessao} agora={agora} sair={sair} restante={tela.t === "cracha" || tela.t === "ok" ? null : restante} />
+      <Topo sessao={sessao} agora={agora} sair={sair} editar={() => setEditando(true)} restante={tela.t === "cracha" || tela.t === "ok" ? null : restante} />
+      {editando && <TotemEdicao fechar={() => setEditando(false)} />}
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-6 sm:px-8">
         {erro && (
           <div className="mx-auto mt-4 w-full max-w-5xl rounded-xl border border-red-400/50 bg-red-500/15 px-5 py-3 text-center text-xl font-semibold text-red-100" onClick={() => setErro("")}>
@@ -260,7 +263,7 @@ export default function TotemApontamento() {
 }
 
 // ---- Cabeçalho -----------------------------------------------------------------
-function Topo({ sessao, agora, sair, restante }: { sessao: Sessao | null; agora: Date; sair: () => void; restante: number | null }) {
+function Topo({ sessao, agora, sair, editar, restante }: { sessao: Sessao | null; agora: Date; sair: () => void; editar: () => void; restante: number | null }) {
   function telaCheia() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     else void document.documentElement.requestFullscreen?.().catch(() => {});
@@ -284,6 +287,11 @@ function Topo({ sessao, agora, sair, restante }: { sessao: Sessao | null; agora:
         <button type="button" onClick={telaCheia} className="hidden text-sm text-slate-500 underline-offset-4 hover:underline sm:inline">
           Tela cheia
         </button>
+        {!sessao && (
+          <button type="button" onClick={editar} className="text-xs text-slate-600 underline-offset-4 hover:text-slate-400 hover:underline">
+            editar apontamentos
+          </button>
+        )}
         {!sessao && (
           <button type="button" onClick={sairDaConta} className="text-xs text-slate-600 underline-offset-4 hover:text-slate-400 hover:underline">
             sair da conta
