@@ -88,16 +88,80 @@ async function concluirEtapa(admin: Admin, etapaId: string, apelido: string): Pr
   return encerrarSeConcluida(admin, et.op_id);
 }
 
-// Etapa liberada pra apontar (OP liberada e etapa não concluída).
-async function etapaLiberada(admin: Admin, etapaId: string): Promise<{ op_id: string } | string> {
+// Etapa liberada pra apontar (OP liberada e etapa não concluída — ou concluída, quando
+// aceitaConcluida: aí etapaDoOperador abre uma nova igual).
+async function etapaLiberada(admin: Admin, etapaId: string, aceitaConcluida = false): Promise<{ op_id: string } | string> {
   const { data: et } = await comRetentativa(() =>
     admin.from("prod_op_etapas").select("id, op_id, concluido_em, prod_ops!inner(status)").eq("id", etapaId).maybeSingle(),
   );
   const st = (et as unknown as { prod_ops: { status: string } } | null)?.prod_ops?.status;
   if (!et || !st) return "Etapa não encontrada.";
   if (st !== "liberada") return "Essa OP não está liberada para produção. Procure o PCP.";
-  if (et.concluido_em) return "Essa etapa já foi concluída.";
+  if (et.concluido_em && !aceitaConcluida) return "Essa etapa já foi concluída.";
   return { op_id: et.op_id as string };
+}
+
+// Uma etapa por operador e por vez — pedido do usuário (24/11/2026): a etapa é de quem
+// apontou nela primeiro. Se ela já foi concluída, ou se outro operador abre a mesma etapa,
+// conta como OUTRA etapa igual (outra Usinagem, outra Caldeiraria…), criada logo depois
+// dela na OP com "(2ª)", "(3ª)"… na descrição. Reaproveita uma dessas cópias se já houver
+// uma aberta dele (ou ainda sem apontamento), pra não criar uma nova a cada crachá.
+const SUFIXO_REPETICAO = / \(\d+ª\)$/;
+async function etapaDoOperador(admin: Admin, etapaId: string, operador: number): Promise<string> {
+  const { data: e } = await comRetentativa(() =>
+    admin.from("prod_op_etapas").select("id, op_id, posicao, operacao, operacao_desc, centro, centro_desc, descricao, concluido_em").eq("id", etapaId).maybeSingle(),
+  );
+  if (!e) throw new ErroUsuario("Etapa não encontrada.");
+  const raiz = (d: string | null) => (d ?? "").replace(SUFIXO_REPETICAO, "");
+  const { data: todas } = await comRetentativa(() =>
+    admin.from("prod_op_etapas").select("id, posicao, operacao, centro, descricao, concluido_em").eq("op_id", e.op_id).order("posicao"),
+  );
+  const irmas = (todas ?? []).filter((x) => x.operacao === e.operacao && x.centro === e.centro && raiz(x.descricao) === raiz(e.descricao));
+  const ids = irmas.map((x) => x.id as string);
+  const { data: aps } = ids.length
+    ? await comRetentativa(() => admin.from("prod_apontamentos").select("etapa_id, operador_codigo").in("etapa_id", ids))
+    : { data: [] };
+  const donos = new Map<string, Set<number>>();
+  for (const a of aps ?? []) {
+    const m = donos.get(a.etapa_id as string) ?? new Set<number>();
+    m.add(a.operador_codigo as number);
+    donos.set(a.etapa_id as string, m);
+  }
+  const livreParaMim = (id: string) => [...(donos.get(id) ?? [])].every((c) => c === operador);
+  // 1) a própria etapa escolhida, se aberta e sem outro operador;
+  if (!e.concluido_em && livreParaMim(e.id)) return e.id;
+  // 2) uma cópia aberta que já é dele; 3) uma cópia aberta ainda sem ninguém;
+  const abertas = irmas.filter((x) => !x.concluido_em && x.id !== e.id);
+  const minha = abertas.find((x) => donos.get(x.id)?.has(operador) && livreParaMim(x.id));
+  if (minha) return minha.id;
+  const vazia = abertas.find((x) => !donos.get(x.id)?.size);
+  if (vazia) return vazia.id;
+  // 4) nova etapa igual, logo depois da última irmã.
+  const usadas = new Set((todas ?? []).map((x) => x.posicao as number));
+  const base = Math.max(...irmas.map((x) => x.posicao as number));
+  let posicao = 0;
+  for (let p = base + 1; p < base + 10; p++) if (!usadas.has(p)) { posicao = p; break; }
+  if (!posicao) posicao = Math.max(...usadas) + 10;
+  const n = irmas.length + 1;
+  const { data: nova, error } = await comRetentativa(() =>
+    admin
+      .from("prod_op_etapas")
+      .insert({
+        op_id: e.op_id,
+        posicao,
+        operacao: e.operacao,
+        operacao_desc: e.operacao_desc,
+        centro: e.centro,
+        centro_desc: e.centro_desc,
+        descricao: `${raiz(e.descricao) || e.operacao_desc || "Etapa"} (${n}ª)`,
+        hr_preparo: 0,
+        hr_unitario: 0,
+      })
+      .select("id")
+      .single(),
+  );
+  if (error) throw new Error(error.message);
+  return nova.id as string;
 }
 
 // Editar apontamento no próprio totem — pedido do usuário (24/11/2026): a conta
@@ -239,9 +303,10 @@ export async function POST(request: NextRequest) {
 
     if (b.acao === "iniciar") {
       const tipo = b.tipo === "setup" ? "setup" : "producao";
-      const etapaId = String(b.etapa_id ?? "");
-      const et = await etapaLiberada(admin, etapaId);
+      const pedida = String(b.etapa_id ?? "");
+      const et = await etapaLiberada(admin, pedida, true);
       if (typeof et === "string") return erro(et);
+      const etapaId = await etapaDoOperador(admin, pedida, op.codigo);
       if (aberto && aberto.etapa_id === etapaId && aberto.tipo === tipo) return erro("Você já está apontando nessa etapa.");
       if (aberto) await fechar(admin, aberto, { fim_tipo: "troca" });
       const { data, error } = await comRetentativa(() =>

@@ -787,10 +787,9 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
             <button
               key={e.id}
               type="button"
-              disabled={concluida}
               onClick={() => setSel(e.id)}
               className={`flex items-center gap-4 rounded-xl border-2 px-4 py-3 text-left transition ${
-                concluida ? "border-transparent bg-white/[0.02] opacity-50" : ativo ? "border-teal-400 bg-teal-400/10" : "border-white/10 bg-white/[0.04] hover:border-white/30"
+                concluida && !ativo ? "border-transparent bg-white/[0.02] opacity-50" : ativo ? "border-teal-400 bg-teal-400/10" : "border-white/10 bg-white/[0.04] hover:border-white/30"
               }`}
             >
               <span className="w-12 shrink-0 font-mono text-2xl font-black text-slate-300">{e.posicao}</span>
@@ -817,6 +816,12 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
           {foraDeOrdem && (
             <p className="rounded-lg bg-amber-400/15 px-4 py-2 text-base text-amber-100">
               A etapa {prox!.posicao} ({prox!.operacao_desc}) ainda não foi concluída. Confira com o líder antes de começar esta.
+            </p>
+          )}
+          {/* 24/11/2026: etapa concluída ou de outro operador abre como uma nova etapa igual. */}
+          {(et.concluido_em || s.ocupadas.some((o) => o.etapa_id === et.id && o.operador_nome !== s.operador.apelido)) && (
+            <p className="rounded-lg bg-sky-400/15 px-4 py-2 text-base text-sky-100">
+              {et.concluido_em ? "Essa etapa já foi concluída" : "Outro operador está nessa etapa"} — vai abrir como uma nova etapa de {et.operacao_desc ?? "—"}.
             </p>
           )}
           {s.aberto?.tipo === "parada" && <p className="text-base text-slate-300">A parada aberta é encerrada ao iniciar.</p>}
