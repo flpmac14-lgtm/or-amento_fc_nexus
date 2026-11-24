@@ -18,7 +18,9 @@
 // (minutosApontamento), então um apontamento esquecido aberto não soma a noite.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, urlFoto, useAgora } from "@/components/ProducaoComum";
+import { criarClienteSupabaseNavegador } from "@/lib/supabase/client";
 import {
   SETORES_INTERNO,
   definirFeriadosApontamento,
@@ -263,6 +265,14 @@ function Topo({ sessao, agora, sair, restante }: { sessao: Sessao | null; agora:
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     else void document.documentElement.requestFullscreen?.().catch(() => {});
   }
+  // 24/11/2026 (pedido do usuário): sair da conta "apontamento" — link discreto, só na
+  // tela do crachá (sem operador identificado), pra ninguém deslogar o totem sem querer.
+  const router = useRouter();
+  async function sairDaConta() {
+    await criarClienteSupabaseNavegador().auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
   return (
     <div className="flex items-center gap-4 border-b border-white/10 bg-black/20 px-4 py-3 sm:px-8">
       <div>
@@ -274,6 +284,11 @@ function Topo({ sessao, agora, sair, restante }: { sessao: Sessao | null; agora:
         <button type="button" onClick={telaCheia} className="hidden text-sm text-slate-500 underline-offset-4 hover:underline sm:inline">
           Tela cheia
         </button>
+        {!sessao && (
+          <button type="button" onClick={sairDaConta} className="text-xs text-slate-600 underline-offset-4 hover:text-slate-400 hover:underline">
+            sair da conta
+          </button>
+        )}
         <div className="text-right">
           <p className="font-mono text-3xl font-bold tabular-nums">{hora(agora)}</p>
           <p className="text-xs capitalize text-slate-400">{agora.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}</p>
