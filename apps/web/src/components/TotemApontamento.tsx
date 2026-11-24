@@ -789,7 +789,11 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
               type="button"
               onClick={() => setSel(e.id)}
               className={`flex items-center gap-4 rounded-xl border-2 px-4 py-3 text-left transition ${
-                concluida && !ativo ? "border-transparent bg-white/[0.02] opacity-50" : ativo ? "border-teal-400 bg-teal-400/10" : "border-white/10 bg-white/[0.04] hover:border-white/30"
+                concluida && !ativo
+                  ? "border-transparent bg-white/[0.02] opacity-50"
+                  : concluida && ativo
+                    ? "border-amber-400 bg-amber-400/15" // reabrindo etapa concluída (24/11/2026): amarelo
+                    : ativo ? "border-teal-400 bg-teal-400/10" : "border-white/10 bg-white/[0.04] hover:border-white/30"
               }`}
             >
               <span className="w-12 shrink-0 font-mono text-2xl font-black text-slate-300">{e.posicao}</span>
@@ -820,7 +824,7 @@ function TelaOrdem({ s, op, ocupado, voltar, iniciar }: { s: Sessao; op: OP; ocu
           )}
           {/* 24/11/2026: etapa concluída ou de outro operador abre como uma nova etapa igual. */}
           {(et.concluido_em || s.ocupadas.some((o) => o.etapa_id === et.id && o.operador_nome !== s.operador.apelido)) && (
-            <p className="rounded-lg bg-sky-400/15 px-4 py-2 text-base text-sky-100">
+            <p className={`rounded-lg px-4 py-2 text-base ${et.concluido_em ? "bg-amber-400/20 font-semibold text-amber-100" : "bg-sky-400/15 text-sky-100"}`}>
               {et.concluido_em ? "Essa etapa já foi concluída" : "Outro operador está nessa etapa"} — vai abrir como uma nova etapa de {et.operacao_desc ?? "—"}.
             </p>
           )}
