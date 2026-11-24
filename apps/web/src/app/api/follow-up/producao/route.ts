@@ -17,7 +17,7 @@ import { CAMPOS_AP, cadastros, carregarOps, encerrarSeConcluida, recalcularPecas
 // GET ?tipo=roteiros     → roteiros padrão do FC Nexus (migration 0070), montados e salvos pelo PCP;
 // POST {acao: "criar" | "liberar" | "voltar" | "encerrar" | "reabrir" | "cancelar" | "excluir" | "editar" |
 //       "concluir_etapa" | "reabrir_etapa" | "corrigir_apontamento" | "fechar_apontamento" |
-//       "salvar_roteiro" | "excluir_roteiro" | "marcar_feriados" | "tirar_feriado"}.
+//       "salvar_roteiro" | "excluir_roteiro" | "marcar_feriados" | "tirar_feriado" | "gerar_padrao_lote"}.
 // Ver: qualquer conta logada (menos o totem). Gravar: podePlanejarOP (flpmac14 e marcelo/PCP).
 
 async function usuario() {
@@ -163,6 +163,37 @@ async function pedidos(admin: Admin, q: string) {
   };
 }
 
+type ItemAtivo = {
+  id: string;
+  po: string | null;
+  mac: string | null;
+  cliente: string | null;
+  desenho: string | null;
+  descricao: string | null;
+  quantidade: number | null;
+  prazo_contratual: string | null;
+  status: string | null;
+};
+/** Todos os pedidos ativos do Follow up (em páginas: o Supabase corta em 1000 linhas). */
+async function lerTudoItensAtivos(admin: Admin): Promise<ItemAtivo[]> {
+  const out: ItemAtivo[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await comRetentativa(() =>
+      admin
+        .from("follow_up_itens")
+        .select("id, po, mac, cliente, desenho, descricao, quantidade, prazo_contratual, status")
+        .eq("presente_na_ultima_importacao", true)
+        .eq("st", "A")
+        .order("prazo_contratual", { ascending: true, nullsFirst: false })
+        .order("id")
+        .range(de, de + 999),
+    );
+    if (error) throw new Error(error.message);
+    out.push(...((data ?? []) as ItemAtivo[]));
+    if (!data || data.length < 1000) return out;
+  }
+}
+
 type EtapaEntrada = EtapaModelo & { id?: string; operacao_desc?: string | null; centro_desc?: string | null };
 
 // Tira o "id" (o banco gera): no insert em lote o supabase-js manda chave ausente como null.
@@ -285,6 +316,65 @@ export async function POST(request: NextRequest) {
           quem,
         );
         return NextResponse.json({ ok: true, id: nova.id, numero: nova.numero });
+      }
+      // OP padrão em lote — pedido do usuário (24/11/2026): botão só do flpmac14 que gera a
+      // "Ordem de produção padrão" (liberada) pra todo pedido ativo do Follow up sem OP que
+      // ainda tem fabricação, Dobra incluída (pula "Pronto" e os que só faltam Jato/Pintura,
+      // que não entram na OP). simular=true só devolve a lista.
+      case "gerar_padrao_lote": {
+        if (!podeVerFinanceiro(user.email)) return erro("Só o flpmac14 gera OP em lote.", 403);
+        const etapas = limparEtapas(b.etapas);
+        if (typeof etapas === "string") return erro(etapas);
+        const { centros } = await cadastros(admin);
+        const fora = etapas.filter((e) => etapaForaDaOP(centros, e));
+        if (fora.length) return erro(`Etapa ${fora.map((e) => e.posicao).join(", ")}: ${MOTIVO_FORA_DA_OP}`);
+        const itens = await lerTudoItensAtivos(admin);
+        const comOp = new Set<string>();
+        for (let i = 0; i < itens.length; i += 150) {
+          const ids = itens.slice(i, i + 150).map((x) => x.id);
+          const { data, error } = await comRetentativa(() => admin.from("prod_ops").select("item_id").in("item_id", ids).neq("status", "cancelada"));
+          if (error) throw new Error(error.message);
+          for (const o of data ?? []) if (o.item_id) comOp.add(o.item_id as string);
+        }
+        const FABRICACAO = /ENGENHARIA|CORTE|MONTAGEM|SOLDA|USINAGEM|CALDEIRARIA|DOBRA|CALANDRA/i;
+        const alvo = itens.filter((x) => !comOp.has(x.id) && FABRICACAO.test(x.status ?? ""));
+        if (b.simular)
+          return NextResponse.json({ pedidos: alvo.map((x) => ({ id: x.id, mac: x.mac, po: x.po, cliente: x.cliente, desenho: x.desenho, status: x.status })) });
+        const criadas: number[] = [];
+        for (const it of alvo) {
+          const quantidade = Number(it.quantidade) > 0 ? Number(it.quantidade) : 1;
+          const { data: nova, error } = await comRetentativa(() =>
+            admin
+              .from("prod_ops")
+              .insert({
+                item_id: it.id,
+                po: it.po,
+                mac: it.mac,
+                cliente: it.cliente,
+                desenho: it.desenho,
+                descricao: it.descricao,
+                quantidade,
+                prazo: it.prazo_contratual,
+                prioridade: 2,
+                status: "liberada",
+                liberado_por: quem,
+                liberado_em: agora,
+                roteiro_origem: "Ordem de produção padrão",
+                criado_por: quem,
+              })
+              .select("id, numero")
+              .single(),
+          );
+          if (error) throw new Error(`${error.message} (já criadas: ${criadas.length})`);
+          const ins = await comRetentativa(() => admin.from("prod_op_etapas").insert(etapas.map((e) => ({ ...semId(e), op_id: nova.id }))));
+          if (ins.error) {
+            await admin.from("prod_ops").delete().eq("id", nova.id);
+            throw new Error(`${ins.error.message} (já criadas: ${criadas.length})`);
+          }
+          await registrarNoPedido(admin, it.id, `${numeroOP(nova.numero)} gerada (${quantidade} pç, ${etapas.length} etapas, ordem padrão em lote) e liberada pra produção`, quem);
+          criadas.push(nova.numero);
+        }
+        return NextResponse.json({ ok: true, criadas });
       }
       case "liberar":
         await mudar({ status: "liberada", liberado_por: quem, liberado_em: agora }, ["aguardando"]);

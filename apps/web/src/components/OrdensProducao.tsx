@@ -11,7 +11,7 @@ import OrdensProducaoGerencial from "@/components/OrdensProducaoGerencial";
 import OrdensProducaoRecursos from "@/components/OrdensProducaoRecursos";
 import OrdensProducaoRoteiros from "@/components/OrdensProducaoRoteiros";
 import OrdensProducaoCalendario from "@/components/OrdensProducaoCalendario";
-import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
+import OrdensProducaoNova, { EditorRoteiro, descCentro, etapasPadraoOP, etapasParaEnvio, validarEtapas, type EtapaEditor } from "@/components/OrdensProducaoNova";
 import {
   api,
   BarraEtapas,
@@ -118,6 +118,7 @@ export default function OrdensProducao() {
           <a href="/follow-up/totem" target="_blank" rel="noreferrer" className={classeBotao} title="Abre a tela dos totens da fábrica (pra testar ou deixar num PC)">
             🖥️ Abrir totem
           </a>
+          {dados.moverApontadas && <GerarPadraoLote cad={dados.cadastros} aoGerar={carregar} />}
           {dados.podeEditar && (
             <button type="button" className={classeBotaoPrimario} onClick={() => setSub("nova")}>
               ＋ Nova OP
@@ -1076,5 +1077,107 @@ function Apontamentos({ cad }: { cad: Cadastros }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OP padrão em lote — pedido do usuário (24/11/2026), só flpmac14: gera a "Ordem de
+// produção padrão" (liberada) pra todos os pedidos ativos do Follow up que ainda não têm OP
+// e ainda têm fabricação. Primeiro mostra a lista; só gera depois de confirmar.
+// ---------------------------------------------------------------------------
+type PedidoLote = { id: string; mac: string | null; po: string | null; cliente: string | null; desenho: string | null; status: string | null };
+function GerarPadraoLote({ cad, aoGerar }: { cad: Cadastros; aoGerar: () => void }) {
+  const [lista, setLista] = useState<PedidoLote[] | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState("");
+  const [feito, setFeito] = useState<number[] | null>(null);
+  const etapas = () => etapasParaEnvio(cad, etapasPadraoOP(cad).map((m) => ({ ...m, chave: "" })));
+
+  async function abrir() {
+    setOcupado(true);
+    setErro("");
+    setFeito(null);
+    try {
+      const r = await api<{ pedidos: PedidoLote[] }>("/api/follow-up/producao", { acao: "gerar_padrao_lote", simular: true, etapas: etapas() });
+      setLista(r.pedidos);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+      setLista([]);
+    } finally {
+      setOcupado(false);
+    }
+  }
+  async function gerar() {
+    setOcupado(true);
+    setErro("");
+    try {
+      const r = await api<{ criadas: number[] }>("/api/follow-up/producao", { acao: "gerar_padrao_lote", etapas: etapas() });
+      setFeito(r.criadas);
+      setLista(null);
+      aoGerar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+      aoGerar();
+    } finally {
+      setOcupado(false);
+    }
+  }
+  const fechar = () => (setLista(null), setFeito(null), setErro(""));
+
+  return (
+    <>
+      <button type="button" className={classeBotao} onClick={abrir} disabled={ocupado} title="Gera a Ordem de produção padrão pra todos os pedidos ativos que ainda não têm OP">
+        {ocupado && !lista ? "Procurando…" : "⚡ OP padrão pros pedidos sem OP"}
+      </button>
+      {(lista || feito) && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={() => !ocupado && fechar()}>
+          <div className={`${classeCartao} flex max-h-[85vh] w-full max-w-2xl flex-col p-4`} onClick={(e) => e.stopPropagation()}>
+            <h4 className="font-bold text-stone-800 dark:text-slate-100">Ordem de produção padrão em lote</h4>
+            {feito ? (
+              <p className="mt-3 text-sm text-stone-700 dark:text-slate-200">
+                {feito.length ? <>✅ {feito.length} OP(s) gerada(s) e liberada(s): {feito.map((n) => numeroOP(n)).join(", ")}.</> : "Nenhuma OP gerada."}
+              </p>
+            ) : lista && lista.length === 0 ? (
+              <p className="mt-3 text-sm text-stone-600 dark:text-slate-300">{erro ? "" : "Todos os pedidos ativos com fabricação já têm OP. 👍"}</p>
+            ) : (
+              <>
+                <p className="text-xs text-stone-500 dark:text-slate-400">
+                  {lista!.length} pedido(s) ativo(s) sem OP com fabricação pendente (fora os Prontos e os que só faltam Jato/Pintura). Cada um ganha a OP padrão ({etapasPadraoOP(cad).length} etapas), já liberada.
+                </p>
+                <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded border border-stone-200 dark:border-slate-700">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-stone-100 text-left text-stone-600 dark:bg-slate-800 dark:text-slate-300">
+                      <tr><th className="px-2 py-1">MAC</th><th className="px-2 py-1">PO</th><th className="px-2 py-1">Cliente</th><th className="px-2 py-1">Desenho</th><th className="px-2 py-1">Status</th></tr>
+                    </thead>
+                    <tbody>
+                      {lista!.map((p) => (
+                        <tr key={p.id} className="border-t border-stone-100 dark:border-slate-800">
+                          <td className="px-2 py-1 font-mono">{p.mac ?? "—"}</td>
+                          <td className="px-2 py-1">{p.po ?? "—"}</td>
+                          <td className="px-2 py-1">{p.cliente ?? "—"}</td>
+                          <td className="px-2 py-1">{p.desenho ?? "—"}</td>
+                          <td className="px-2 py-1 text-stone-500">{p.status ?? ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {erro && <p className="mt-2 text-sm text-red-600">{erro}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className={classeBotao} onClick={fechar} disabled={ocupado}>
+                {feito || !lista?.length ? "Fechar" : "Desistir"}
+              </button>
+              {!feito && !!lista?.length && (
+                <button type="button" className={classeBotaoPrimario} onClick={gerar} disabled={ocupado}>
+                  {ocupado ? "Gerando…" : `Gerar ${lista.length} OP(s)`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
