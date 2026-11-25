@@ -48,6 +48,8 @@ COLUNAS: list[tuple[str, int, str, str, str]] = [
     ("COMP", 1, "comp", "COMP", "numero"),
     ("DI", 1, "di", "DI", "numero"),
     ("L", 1, "l", "L", "texto"),
+    # Coluna K — a Croqui de corte mostra do lado da Mac (pedido do usuário, 25/11/2026).
+    ("MAC2", 1, "mac2", "MAC2", "codigo"),
 ]
 
 

@@ -684,6 +684,7 @@ export interface ItemCroquiCorte {
   pedido: string;
   // fixas (PROCV pelo Pedido na MACLM)
   mac: string | null;
+  mac2: string | null; // coluna K da MACLM
   descricao: string | null;
   desenho: string | null;
   mp: string | null;

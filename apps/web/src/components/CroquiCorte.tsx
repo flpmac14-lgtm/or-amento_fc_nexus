@@ -66,6 +66,8 @@ const COLUNAS: Coluna[] = [
   // Larguras enxutas (pedido do usuário): ver até o Projetista sem rolar; o
   // texto cortado aparece inteiro ao passar o mouse.
   { campo: "mac", rotulo: "Mac", tipo: "codigo", fixa: true, maxW: "max-w-[5.5rem]" },
+  // MAC2 = coluna K da MACLM, do lado da Mac (pedido do usuário, 25/11/2026).
+  { campo: "mac2", rotulo: "Mac2", tipo: "codigo", fixa: true, maxW: "max-w-[5.5rem]" },
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[11rem]" },
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[8rem]" },
   { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
@@ -358,7 +360,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
       if (projetista === "__vazio" ? i.projetista : projetista && i.projetista !== projetista) return false;
       if (termo) {
         const alvo = normalizarBusca(
-          [i.pedido, i.mac, i.descricao, i.desenho, i.mp, i.n_programa, i.observacao].filter(Boolean).join(" "),
+          [i.pedido, i.mac, i.mac2, i.descricao, i.desenho, i.mp, i.n_programa, i.observacao].filter(Boolean).join(" "),
         );
         if (!alvo.includes(termo)) return false;
       }

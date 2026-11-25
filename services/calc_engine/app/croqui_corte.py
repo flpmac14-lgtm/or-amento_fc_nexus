@@ -36,9 +36,9 @@ from app.orcamentos_salvos import _conectar
 ABA = "Croqui 2"
 FUSO = ZoneInfo("America/Sao_Paulo")
 
-FIXOS_TEXTO = ["mac", "descricao", "desenho", "mp", "l", "pos", "un"]
+FIXOS_TEXTO = ["mac", "mac2", "descricao", "desenho", "mp", "l", "pos", "un"]
 FIXOS_NUMERO = ["qt", "qt_1", "qtt"]
-FIXOS = ["mac", "descricao", "desenho", "mp", "l", "pos", "qt", "qt_1", "qtt", "un"]
+FIXOS = ["mac", "mac2", "descricao", "desenho", "mp", "l", "pos", "qt", "qt_1", "qtt", "un"]
 EDITAVEIS = ["status", "projetista", "n_programa", "observacao"]
 
 # Colunas da Croqui 2 (0-based): A Pedido ... Q UN
@@ -134,7 +134,7 @@ def ler_planilha(conteudo: bytes) -> list[dict]:
             continue
         item = {"pedido": pedido, "linha_planilha": linha + 1}
         for c in FIXOS_TEXTO:
-            item[c] = _texto(v(c))
+            item[c] = _texto(v(c)) if c in _COLUNAS_PLANILHA else None  # mac2 não existe na Croqui 2
         for c in FIXOS_NUMERO:
             item[c] = _numero(v(c))
         item["status"] = normalizar_status(v("status"))
@@ -187,7 +187,10 @@ def _mae(cur) -> tuple[dict[str, list], dict[str, int], list[str]] | None:
 def _fixos_da_mae(valores: list, ix: dict[str, int], desenho_atual: str | None) -> dict:
     m = lambda c: valores[ix[c]]  # noqa: E731
     return {
-        "mac": _texto(m("mac1")), "descricao": _texto(m("descricao")),
+        "mac": _texto(m("mac1")),
+        # MAC2 = coluna K da MACLM (25/11/2026); mãe antiga sem ela → vazio até o próximo sync.
+        "mac2": _texto(valores[ix["mac2"]]) if "mac2" in ix else None,
+        "descricao": _texto(m("descricao")),
         "desenho": _texto(m("desenho")) or _texto(m("desenho_cj")) or desenho_atual,
         "mp": _texto(m("mp")), "l": _texto(m("l")), "pos": _texto(m("pos")),
         "qt": _numero(m("qt")), "qt_1": _numero(m("qt_1")), "qtt": _numero(m("qtt")), "un": _texto(m("un")),
