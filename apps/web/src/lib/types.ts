@@ -687,6 +687,8 @@ export interface ItemCroquiCorte {
   mac2: string | null; // coluna K da MACLM
   descricao: string | null;
   desenho: string | null;
+  desenho_cj: string | null; // coluna S da MACLM
+  codigo: string | null; // coluna X da MACLM
   mp: string | null;
   l: string | null;
   pos: string | null;

@@ -76,6 +76,9 @@ const COLUNAS: Coluna[] = [
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[11rem]" },
   // Desenho inteiro e com largura ajustável (pedido do usuário, 26/11/2026).
   { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, redimensionavel: true },
+  // DesenhoCJ (coluna S) e Código (coluna X) da MACLM — pedido do usuário, 26/11/2026.
+  { campo: "desenho_cj", rotulo: "DesenhoCJ", tipo: "codigo", fixa: true, redimensionavel: true },
+  { campo: "codigo", rotulo: "Código", tipo: "codigo", fixa: true, redimensionavel: true },
   { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
   { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
   // Pos inteira, sem cortar (pedido do usuário: igual vem do Material de compra, ex. 001.001.003).
@@ -421,7 +424,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
       if (projetista === "__vazio" ? i.projetista : projetista && i.projetista !== projetista) return false;
       if (termo) {
         const alvo = normalizarBusca(
-          [i.pedido, i.mac, i.mac2, i.descricao, i.desenho, i.mp, i.n_programa, i.observacao].filter(Boolean).join(" "),
+          [i.pedido, i.mac, i.mac2, i.descricao, i.desenho, i.desenho_cj, i.codigo, i.mp, i.n_programa, i.observacao].filter(Boolean).join(" "),
         );
         if (!alvo.includes(termo)) return false;
       }
