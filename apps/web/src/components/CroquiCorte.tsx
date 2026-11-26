@@ -42,6 +42,7 @@ import { podeVerFinanceiro } from "@/lib/financeiro";
 
 // Modo Apontar (cartões + lote, pedido do usuário 19/11/2026) × Planilha.
 const CHAVE_MODO = "fcnexus.croquicorte.modo";
+const CHAVE_LARGURAS = "fcnexus.croquicorte.larguras";
 type Modo = "apontar" | "planilha";
 
 const RECARREGAR_A_CADA_MS = 5 * 60 * 1000;
@@ -60,6 +61,8 @@ interface Coluna {
   maxW?: string;
   // Coluna mínima (até 4 algarismos): sem cadeado no cabeçalho e menos espaço.
   estreita?: boolean;
+  // Largura ajustável arrastando a borda do cabeçalho (duplo clique volta ao automático).
+  redimensionavel?: boolean;
 }
 
 // Mesma ordem da aba Croqui 2 + quem editou por último.
@@ -71,7 +74,8 @@ const COLUNAS: Coluna[] = [
   // MAC2 = coluna K da MACLM, do lado da Mac (pedido do usuário, 25/11/2026).
   { campo: "mac2", rotulo: "Mac2", tipo: "codigo", fixa: true, maxW: "max-w-[5.5rem]" },
   { campo: "descricao", rotulo: "Descrição", tipo: "texto", fixa: true, maxW: "max-w-[11rem]" },
-  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, maxW: "max-w-[8rem]" },
+  // Desenho inteiro e com largura ajustável (pedido do usuário, 26/11/2026).
+  { campo: "desenho", rotulo: "Desenho", tipo: "codigo", fixa: true, redimensionavel: true },
   { campo: "mp", rotulo: "MP", tipo: "texto", fixa: true, maxW: "max-w-[6rem]" },
   { campo: "l", rotulo: "L", tipo: "texto", fixa: true, maxW: "max-w-[2.25rem]", estreita: true },
   // Pos inteira, sem cortar (pedido do usuário: igual vem do Material de compra, ex. 001.001.003).
@@ -225,6 +229,52 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const [fotos, setFotos] = useState<FotosRef | null>(null);
   const [galeria, setGaleria] = useState<{ imagens: ImagemFollowUp[]; indice: number; titulo: string } | null>(null);
   const [modo, setModo] = useState<Modo>("planilha");
+  // Larguras das colunas ajustáveis (px), lembradas neste navegador.
+  const [larguras, setLarguras] = useState<Record<string, number>>({});
+
+  function salvarLarguras(novo: Record<string, number>) {
+    setLarguras(novo);
+    try {
+      localStorage.setItem(CHAVE_LARGURAS, JSON.stringify(novo));
+    } catch {
+      // sem persistência
+    }
+  }
+
+  function iniciarAjuste(e: React.MouseEvent, campo: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+    const x0 = e.clientX;
+    const w0 = th.getBoundingClientRect().width;
+    let atual = w0;
+    const mover = (ev: MouseEvent) => {
+      atual = Math.max(70, Math.round(w0 + ev.clientX - x0));
+      setLarguras((l) => ({ ...l, [campo]: atual }));
+    };
+    const soltar = () => {
+      window.removeEventListener("mousemove", mover);
+      window.removeEventListener("mouseup", soltar);
+      document.body.classList.remove("cursor-col-resize", "select-none");
+      setLarguras((l) => {
+        const novo = { ...l, [campo]: atual };
+        try {
+          localStorage.setItem(CHAVE_LARGURAS, JSON.stringify(novo));
+        } catch {
+          // sem persistência
+        }
+        return novo;
+      });
+    };
+    document.body.classList.add("cursor-col-resize", "select-none");
+    window.addEventListener("mousemove", mover);
+    window.addEventListener("mouseup", soltar);
+  }
+
+  function estiloLargura(c: Coluna): React.CSSProperties | undefined {
+    const w = c.redimensionavel ? larguras[c.campo] : undefined;
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
+  }
 
   function trocarModo(m: Modo) {
     setModo(m);
@@ -278,6 +328,11 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         setSouAdmin(podeVerFinanceiro(usuarioEfetivo(data.user).email));
         // João e Honório abrem no modo Apontar; quem já escolheu, fica na escolha.
         let salvo: string | null = null;
+        try {
+          setLarguras(JSON.parse(localStorage.getItem(CHAVE_LARGURAS) ?? "{}") as Record<string, number>);
+        } catch {
+          // sem persistência
+        }
         try {
           salvo = localStorage.getItem(CHAVE_MODO);
         } catch {
@@ -785,9 +840,10 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
+                  style={estiloLargura(c)}
                   className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pt-2 pb-1 font-semibold ${
                     i === 0 ? "sticky left-16 z-20 bg-stone-100 dark:bg-slate-900" : ""
-                  }`}
+                  } ${c.redimensionavel ? "relative" : ""}`}
                 >
                   <button
                     type="button"
@@ -802,6 +858,20 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                     {c.fixa && !c.estreita && <IconeCadeado />}
                     <span className="text-[10px]">{ordem?.campo === c.campo ? (ordem.desc ? "▼" : "▲") : ""}</span>
                   </button>
+                  {c.redimensionavel && (
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      onMouseDown={(e) => iniciarAjuste(e, c.campo)}
+                      onDoubleClick={() => {
+                        const novo = { ...larguras };
+                        delete novo[c.campo];
+                        salvarLarguras(novo);
+                      }}
+                      title="Arraste pra ajustar a largura · duplo clique volta ao automático"
+                      className="absolute -right-1 top-0 bottom-0 z-30 w-3 cursor-col-resize after:absolute after:left-1/2 after:top-1.5 after:bottom-1.5 after:w-0.5 after:-translate-x-1/2 after:rounded after:bg-stone-300 hover:after:bg-green-600 dark:after:bg-slate-600 dark:hover:after:bg-cyan-400"
+                    />
+                  )}
                 </th>
               ))}
             </tr>
@@ -809,6 +879,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
               {COLUNAS.map((c, i) => (
                 <th
                   key={c.campo}
+                  style={estiloLargura(c)}
                   className={`border-b border-stone-200 dark:border-slate-800 ${c.estreita ? "px-0.5" : "px-1.5"} pb-1.5 ${
                     i === 0 ? "sticky left-16 z-20 bg-stone-100 dark:bg-slate-900" : ""
                   }`}
@@ -863,7 +934,11 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
                       PUXAVEIS.has(c.campo) ? "relative" : ""
                     } ${naFaixa(indice, c.campo) ? "outline-2 -outline-offset-2 outline-dashed outline-green-600 dark:outline-cyan-400" : ""} ${
                       i === 0 ? "sticky left-16 z-[1] bg-white dark:bg-slate-900 font-mono" : ""
-                    } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} whitespace-nowrap`}
+                    } ${c.tipo === "codigo" || c.tipo === "numero" ? "font-mono" : ""} ${c.tipo === "numero" ? "text-right" : ""} ${
+                      // Coluna ajustada mais estreita que o texto: quebra a linha em vez de cortar (sempre inteiro).
+                      estiloLargura(c) ? "whitespace-normal break-all" : "whitespace-nowrap"
+                    } ${c.campo === "desenho" ? "font-semibold text-stone-900 dark:text-slate-100" : ""}`}
+                    style={estiloLargura(c)}
                     title={c.maxW ? exibir(item, c) : undefined}
                   >
                     {c.maxW ? <div className={`${c.maxW} truncate`}>{celula(item, c)}</div> : celula(item, c)}
