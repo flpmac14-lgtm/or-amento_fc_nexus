@@ -37,6 +37,8 @@ import { COR_STATUS, fotosDe, tempoMin, type FotosRef } from "@/lib/croquiCorte"
 import { urlImagemFollowUp } from "@/lib/api";
 import { GaleriaImagens } from "@/components/FollowUpDetalhe";
 import CroquiApontar from "@/components/CroquiApontar";
+import CroquiRelatorioEdicoes from "@/components/CroquiRelatorioEdicoes";
+import { podeVerFinanceiro } from "@/lib/financeiro";
 
 // Modo Apontar (cartões + lote, pedido do usuário 19/11/2026) × Planilha.
 const CHAVE_MODO = "fcnexus.croquicorte.modo";
@@ -199,6 +201,9 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
   const [editadoPor, setEditadoPor] = useState<string | null>(null);
   // ✏️ / 🗑️ das datas — pedido do usuário: só o João e o Honório (e quem tem acesso total).
   const [podeCorrigir, setPodeCorrigir] = useState(false);
+  // Relatório de edições do João e do Honório — só flpmac14 (pedido do usuário, 26/11/2026).
+  const [souAdmin, setSouAdmin] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [corrigindo, setCorrigindo] = useState<{ item: ItemCroquiCorte; excluir: boolean } | null>(null);
   // Tempo de quem está Fazendo anda sozinho na tela.
   const [, setTique] = useState(0);
@@ -270,6 +275,7 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         if (data.user.email) setEditadoPor(emailParaLogin(data.user.email));
         const perfil = perfilModulo(usuarioEfetivo(data.user));
         setPodeCorrigir(perfil === "total" || perfil === "projeto");
+        setSouAdmin(podeVerFinanceiro(usuarioEfetivo(data.user).email));
         // João e Honório abrem no modo Apontar; quem já escolheu, fica na escolha.
         let salvo: string | null = null;
         try {
@@ -721,6 +727,17 @@ export default function CroquiCorte({ telaCheia = false }: { telaCheia?: boolean
         >
           {salvandoTudo ? "Salvando…" : "Salvar tudo"}
         </button>
+        {souAdmin && (
+          <button
+            type="button"
+            onClick={() => setRelatorioAberto(true)}
+            title="Últimas edições do João e do Honório (só você vê)"
+            className="rounded-lg border border-stone-300 dark:border-slate-700 px-3 py-1.5 text-sm text-stone-700 dark:text-slate-300 hover:border-green-600 dark:hover:border-cyan-500"
+          >
+            Relatório de edições
+          </button>
+        )}
+        {relatorioAberto && <CroquiRelatorioEdicoes itens={itens} fechar={() => setRelatorioAberto(false)} />}
         {aviso && (
           <span className={`text-sm ${aviso.ok ? "text-green-700 dark:text-cyan-300" : "text-red-600 dark:text-red-400"}`}>
             {aviso.texto}
